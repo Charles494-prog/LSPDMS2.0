@@ -19,7 +19,7 @@ return new class extends Migration
 
         Schema::create('delistment_histories', function (Blueprint $table) {
             $table->id();
-            $table->integer('record_id');
+$table->unsignedInteger('record_id');
             $table->foreignId('delisted_by_user_id')->nullable()->constrained('login_user')->nullOnDelete();
             $table->string('delisted_by', 255);
             $table->text('reason');
