@@ -4,13 +4,13 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, process.cwd(), '');
-    const viteHost = env.VITE_DEV_SERVER_HOST || 'localhost';
     const appOrigin = env.VITE_APP_ORIGIN || env.APP_URL || 'http://localhost';
+    const viteHost = env.VITE_DEV_SERVER_HOST || 'localhost';
 
     return {
         plugins: [
             laravel({
-                input: ['resources/css/app.css', 'resources/js/app.js', 'resources/js/messaging.js', 'resources/js/chat-notifications.js', 'resources/js/dashboard.js'],
+                input: ['resources/css/app.css', 'resources/js/app.js', 'resources/js/messaging.js', 'resources/js/assistant.js', 'resources/js/chat-notifications.js', 'resources/js/dashboard.js', 'resources/js/delistment-charts.js'],
                 refresh: true,
             }),
             tailwindcss(),

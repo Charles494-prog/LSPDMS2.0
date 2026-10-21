@@ -2,12 +2,16 @@
 
 namespace Tests\Feature;
 
-use App\Models\Record;
 use App\Models\GlobalVariable;
 use App\Models\MonthlyRecordSnapshot;
 use App\Models\R401Snapshot;
+use App\Models\Record;
 use App\Models\User;
+use App\Services\MonthlyResumenReport;
+use App\Services\R401DocxExporter;
+use App\Services\ResumenDocxExporter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -25,6 +29,8 @@ class FormGeneratorTest extends TestCase
             ->assertOk()
             ->assertSee('R4-02 Generator')
             ->assertSee('R4-03 Generator')
+            ->assertSee(route('forms.weekly.r4-02'), false)
+            ->assertSee(route('forms.weekly.r4-03'), false)
             ->assertSee('aria-label="Monthly generator sections"', false)
             ->assertSee('id="deliberation-tab"', false)
             ->assertSee('id="monthly-forms-tab"', false)
@@ -47,6 +53,8 @@ class FormGeneratorTest extends TestCase
             ->assertSee('id="notesRecordPagination"', false)
             ->assertSee('id="previousRecordsPage"', false)
             ->assertSee('id="nextRecordsPage"', false)
+            ->assertSee('new AbortController()', false)
+            ->assertSee('Save or clear the unsaved note before switching records.', false)
             ->assertSee('const recordsPerPage = 10;', false);
     }
 
@@ -303,7 +311,7 @@ class FormGeneratorTest extends TestCase
             'date_of_baptism' => '04/03/2020',
             'doctrinator' => 'Maria Evangelist',
         ];
-        $path = app(\App\Services\R401DocxExporter::class)->generate([
+        $path = app(R401DocxExporter::class)->generate([
             'district' => 'Sample District',
             'dcode' => 'D-7',
             'locale' => 'Sample Local',
@@ -328,7 +336,7 @@ class FormGeneratorTest extends TestCase
             $this->assertStringContainsString('MIN-001', $documentXml);
             $this->assertStringContainsString('Page Two Manggagawa', $documentXml);
             $this->assertStringContainsString('MIN-002', $documentXml);
-            $document = new \DOMDocument();
+            $document = new \DOMDocument;
             $this->assertTrue($document->loadXML($documentXml, LIBXML_NONET));
             $xpath = new \DOMXPath($document);
             $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
@@ -487,11 +495,11 @@ class FormGeneratorTest extends TestCase
             ->get(route('forms.monthly.r4-01', ['purok' => 2, 'kalagayan' => 'MS']))
             ->assertOk()
             ->assertViewHas('reportRows', function (array $rows): bool {
-            $this->assertSame(['Jacquelyn Gascon'], array_column($rows, 'name'));
-            $this->assertSame(['C+'], array_column($rows, 'code'));
-            $this->assertSame('2-8', $rows[0]['purok_grupo']);
+                $this->assertSame(['Jacquelyn Gascon'], array_column($rows, 'name'));
+                $this->assertSame(['C+'], array_column($rows, 'code'));
+                $this->assertSame('2-8', $rows[0]['purok_grupo']);
 
-            return true;
+                return true;
             });
     }
 
@@ -532,7 +540,7 @@ class FormGeneratorTest extends TestCase
             ['2026-07-01', 1, 57, ['MS' => ['B' => 1]]],
             ['2026-07-01', 2, 19, ['MS' => ['B' => 2, 'E' => 3]]],
         ] as [$month, $purok, $msCount, $movementCounts]) {
-            \App\Models\MonthlyRecordSnapshot::query()->create([
+            MonthlyRecordSnapshot::query()->create([
                 'month' => $month,
                 'purok_number' => $purok,
                 'ms_count' => $msCount,
@@ -577,9 +585,9 @@ class FormGeneratorTest extends TestCase
                 return true;
             });
 
-        $report = app(\App\Services\MonthlyResumenReport::class)
-            ->generate(\Illuminate\Support\Carbon::createFromFormat('Y-m', '2026-07'));
-        $docxPath = app(\App\Services\ResumenDocxExporter::class)
+        $report = app(MonthlyResumenReport::class)
+            ->generate(Carbon::createFromFormat('Y-m', '2026-07'));
+        $docxPath = app(ResumenDocxExporter::class)
             ->generate($report, 'Sample Local', 'LOC-1', [
                 'head_lsp' => 'Head LSP Person',
                 'ksp_pd' => 'KSP Person',
@@ -587,7 +595,7 @@ class FormGeneratorTest extends TestCase
             ]);
         try {
             $docx = new \PharData($docxPath);
-            $document = new \DOMDocument();
+            $document = new \DOMDocument;
             $this->assertTrue($document->loadXML($docx['word/document.xml']->getContent(), LIBXML_NONET));
             $xpath = new \DOMXPath($document);
             $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
@@ -761,7 +769,7 @@ class FormGeneratorTest extends TestCase
             ['2026-06-01', 20, []],
             ['2026-07-01', 19, ['MS' => ['B' => 2, 'E' => 3]]],
         ] as [$month, $count, $movementCounts]) {
-            \App\Models\MonthlyRecordSnapshot::query()->create([
+            MonthlyRecordSnapshot::query()->create([
                 'month' => $month,
                 'purok_number' => 2,
                 'ms_count' => $count,
@@ -875,8 +883,8 @@ class FormGeneratorTest extends TestCase
             ],
         ]);
 
-        $report = app(\App\Services\MonthlyResumenReport::class)
-            ->generate(\Illuminate\Support\Carbon::createFromFormat('Y-m-d', '2026-10-01'), true);
+        $report = app(MonthlyResumenReport::class)
+            ->generate(Carbon::createFromFormat('Y-m-d', '2026-10-01'), true);
         $purok2a = collect($report['rows'])->firstWhere('purok_label', 'Purok 2A');
         $purok2b = collect($report['rows'])->firstWhere('purok_label', 'Purok 2B');
         $this->assertSame(0, $purok2a['ms']['C-']);
@@ -989,8 +997,8 @@ class FormGeneratorTest extends TestCase
                 return true;
             });
 
-        $archiveReport = app(\App\Services\MonthlyResumenReport::class)
-            ->generate(\Illuminate\Support\Carbon::parse('2026-10-01'), true);
+        $archiveReport = app(MonthlyResumenReport::class)
+            ->generate(Carbon::parse('2026-10-01'), true);
         $this->assertSame(2, $archiveReport['rows'][0]['ms']['A']);
         $this->assertSame(3, $archiveReport['rows'][0]['ms']['B']);
         $this->assertSame(1, $archiveReport['rows'][0]['ms']['D']);
@@ -1030,8 +1038,8 @@ class FormGeneratorTest extends TestCase
             'session_generated' => true,
         ]);
 
-        $report = app(\App\Services\MonthlyResumenReport::class)
-            ->generate(\Illuminate\Support\Carbon::parse('2026-10-01'), true, true);
+        $report = app(MonthlyResumenReport::class)
+            ->generate(Carbon::parse('2026-10-01'), true, true);
 
         $this->assertSame(2, $report['totals']['ms_total']);
         $this->assertSame(2, $report['totals']['uwp_total']);
@@ -1157,6 +1165,66 @@ class FormGeneratorTest extends TestCase
 
                 return true;
             });
+    }
+
+    public function test_r4_01_can_use_the_secretary_assigned_to_each_purok(): void
+    {
+        $user = $this->makeSecretary(['form_generator_allow' => true]);
+        $purokSecretary = $this->makeSecretary([
+            'first_name' => 'Purok',
+            'last_name' => 'Secretary',
+        ]);
+        GlobalVariable::query()->create([
+            'locale' => 'Sample Local',
+            'lcode' => 'ABC-12',
+            'district' => 'Sample District',
+            'dcode' => 'D-7',
+            'kalihim_ms' => 'Global MS Secretary',
+            'ksp_pd' => 'KSP Name',
+            'r401_use_purok_secretary' => true,
+        ]);
+        DB::table('puroks')->insert([
+            'purok_number' => 1,
+            'purok_name' => 'Sample Purok',
+            'secretary' => $purokSecretary->id,
+            'manggagawa' => 'Sample Manggagawa',
+            'ministerial_id' => 'MIN-001',
+            'grupo_start' => 1,
+            'grupo_end' => 24,
+            'full_purok' => false,
+        ]);
+        Record::query()->create([
+            'full_name' => 'Sample Member',
+            'registry' => '1234567890123',
+            'gender' => 'Female',
+            'purok' => '1',
+            'grupo' => '1',
+            'kapisanan' => 'Kadiwa',
+            'status' => 'MS',
+        ]);
+
+        $session = ['login_user' => ['id' => $user->id]];
+        $preview = $this->withSession($session)
+            ->get(route('forms.monthly.r4-01', ['purok' => 1, 'kalagayan' => 'MS']))
+            ->assertOk()
+            ->assertSee('PUROK SECRETARY')
+            ->assertDontSee('GLOBAL MS SECRETARY')
+            ->getContent();
+
+        $this->assertStringContainsString('PUROK SECRETARY', $preview);
+
+        $download = $this->withSession($session)
+            ->get(route('forms.monthly.r4-01.download', ['purok' => 1, 'kalagayan' => 'MS']))
+            ->assertOk()
+            ->assertDownload();
+        $archive = new \ZipArchive;
+        $this->assertSame(true, $archive->open($download->baseResponse->getFile()->getPathname()));
+        $document = $archive->getFromName('word/document.xml');
+        $this->assertNotFalse($document);
+        $this->assertStringContainsString('PUROK SECRETARY', $document);
+        $this->assertStringNotContainsString('GLOBAL MS SECRETARY', $document);
+        $archive->close();
+        @unlink($download->baseResponse->getFile()->getPathname());
     }
 
     public function test_secretary_can_search_append_and_delete_dated_record_notes(): void

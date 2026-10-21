@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Choose a new password - {{ config('app.name', 'LSPDMS') }}</title>
+    @include('components.brand-meta')
     <style>
         * { box-sizing: border-box; }
         body { display: grid; min-height: 100vh; place-items: center; margin: 0; padding: 1rem; background: #f3f6fa; color: #10233a; font-family: Arial, sans-serif; }
@@ -17,6 +18,7 @@
     </style>
 </head>
 <body>
+<x-flash-toast :message="session('status')" />
 <main>
     <h1>Choose a new password</h1>
     <p>Choose a strong password. Reset links expire after one hour.</p>

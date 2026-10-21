@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\DelistmentHistory;
 use App\Models\GlobalVariable;
+use App\Models\Purok;
 use App\Models\Record;
 use App\Models\User;
 use App\Services\DelistmentDocxExporter;
@@ -87,6 +88,8 @@ class DelistmentController extends Controller
         return view('de-listment', [
             'members' => $members,
             'missingRecords' => $missingRecords,
+            'requireBaptismDate' => $requireBaptismDate,
+            'puroks' => Purok::query()->orderBy('purok_number')->get(),
             'delistedRecords' => DelistmentHistory::query()
                 ->with('record:id,full_name,registry')
                 ->orderByDesc('delisted_at')
@@ -94,6 +97,107 @@ class DelistmentController extends Controller
                 ->get(),
             'entryYearsRequirement' => $globalVariables?->entry_years_requirement ?? 1,
         ]);
+    }
+
+    public function addMkMember(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'full_name' => ['required', 'string', 'max:150'],
+            'registry' => ['required', 'string', 'max:100'],
+            'is_rfid' => ['sometimes', 'boolean'],
+            'gender' => ['required', 'in:Male,Female'],
+            'purok_id' => ['required', 'integer', 'exists:puroks,id'],
+            'grupo' => ['nullable', 'integer', 'min:1'],
+            'kapisanan' => ['required', 'in:Buklod,Kadiwa,Binhi,Suliranin'],
+            'date_of_baptism' => ['nullable', 'date', 'before_or_equal:today'],
+            'date_of_birth' => ['nullable', 'date', 'before_or_equal:today'],
+            'evangelist' => ['nullable', 'string', 'max:150'],
+            'date_of_entry' => ['nullable', 'date', 'before_or_equal:today'],
+            'is_married' => ['sometimes', 'boolean'],
+        ]);
+
+        $registry = mb_strtoupper(trim($validated['registry']));
+        $name = mb_strtoupper(trim($validated['full_name']));
+        $isRfid = (bool) ($validated['is_rfid'] ?? false);
+        if (! $isRfid && preg_match('/^[A-Z0-9]{13}$/', $registry) !== 1) {
+            throw ValidationException::withMessages([
+                'registry' => 'Enter exactly 13 letters or numbers, or select the RFID option.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($validated, $registry, $name): JsonResponse {
+            $duplicate = Record::query()
+                ->where(function ($query) use ($registry, $name): void {
+                    $query->whereRaw('UPPER(TRIM(registry)) = ?', [$registry])
+                        ->orWhereRaw('UPPER(TRIM(full_name)) = ?', [$name]);
+                })
+                ->lockForUpdate()
+                ->first();
+            if ($duplicate && mb_strtoupper(trim((string) $duplicate->registry)) === $registry) {
+                throw ValidationException::withMessages([
+                    'registry' => 'A record with this registry or RFID already exists.',
+                ]);
+            }
+            if ($duplicate) {
+                throw ValidationException::withMessages([
+                    'full_name' => 'A record with this name already exists. Check for an existing record before adding another.',
+                ]);
+            }
+
+            $purok = Purok::query()->findOrFail($validated['purok_id']);
+            $grupo = $validated['grupo'] ?? null;
+            if ($grupo !== null && ($grupo < $purok->grupo_start || $grupo > $purok->grupo_end)) {
+                throw ValidationException::withMessages([
+                    'grupo' => "Enter a group number from {$purok->grupo_start} to {$purok->grupo_end} for this Purok.",
+                ]);
+            }
+
+            $isMarried = (bool) ($validated['is_married'] ?? false);
+            if (isset($validated['date_of_birth'])) {
+                $kapisanan = $isMarried
+                    ? 'B'
+                    : (Carbon::parse($validated['date_of_birth'])->age < 18 ? 'binhi' : 'K');
+            } else {
+                $kapisanan = match ($isMarried ? 'Buklod' : $validated['kapisanan']) {
+                    'Buklod' => 'B',
+                    'Kadiwa' => 'K',
+                    'Binhi' => 'binhi',
+                    default => 'Suliranin',
+                };
+                $isMarried = $isMarried || $validated['kapisanan'] === 'Buklod';
+            }
+
+            $record = Record::query()->create([
+                'full_name' => $name,
+                'registry' => $registry,
+                'gender' => $validated['gender'] === 'Male' ? 'L' : 'B',
+                'purok' => (string) $purok->purok_number,
+                'grupo' => $grupo === null ? null : (string) $grupo,
+                'kapisanan' => $kapisanan,
+                'date_of_baptism' => $validated['date_of_baptism'] ?? null,
+                'date_of_birth' => $validated['date_of_birth'] ?? null,
+                'evangelist' => isset($validated['evangelist']) ? trim($validated['evangelist']) : null,
+                'date_of_entry' => $validated['date_of_entry'] ?? now()->timezone('Asia/Manila')->toDateString(),
+                'is_married' => $isMarried,
+                'status' => 'MK',
+                'monthly_code' => null,
+            ]);
+
+            return response()->json([
+                'message' => 'MK member added.',
+                'data' => [
+                    'id' => $record->id,
+                    'name' => $record->full_name,
+                    'registry' => $record->registry,
+                    'kalagayan' => 'MK',
+                    'eligible' => true,
+                    'endorsed' => false,
+                    'reported' => false,
+                    'entryDate' => $record->date_of_entry?->format('Y-m-d'),
+                    'baptism' => $record->date_of_baptism?->format('Y-m-d') ?? '',
+                ],
+            ], 201);
+        });
     }
 
     public function exportCategory(

@@ -15,17 +15,24 @@ class TarhetaStatusController extends Controller
     public function index()
     {
         $records = Record::query()
-            ->select(['id', 'full_name', 'status', 'tarheta_status'])
+            ->select(['id', 'full_name', 'status', 'tarheta_status', 'filing_status', 'filing_number'])
             ->orderBy('full_name')
             ->get()
-            ->map(fn (Record $record): array => [
-                'id' => $record->id,
-                'name' => trim((string) $record->full_name) ?: 'Unnamed record',
-                'status' => mb_strtoupper(trim((string) $record->status)),
-                'tarheta_status' => mb_strtoupper(trim((string) $record->tarheta_status)),
-                'matched' => mb_strtoupper(trim((string) $record->status))
-                    === mb_strtoupper(trim((string) $record->tarheta_status)),
-            ]);
+            ->map(function (Record $record): array {
+                $status = mb_strtoupper(trim((string) $record->status));
+                $tarhetaStatus = mb_strtoupper(trim((string) $record->tarheta_status));
+                $filingStatus = mb_strtoupper(trim((string) $record->filing_status));
+
+                return [
+                    'id' => $record->id,
+                    'name' => trim((string) $record->full_name) ?: 'Unnamed record',
+                    'status' => $status,
+                    'tarheta_status' => $tarhetaStatus,
+                    'filing_status' => $filingStatus,
+                    'filing_number' => (string) ($record->filing_number ?? ''),
+                    'matched' => $status === $tarhetaStatus && $status === $filingStatus,
+                ];
+            });
         $total = $records->count();
         $matched = $records->where('matched', true)->count();
 
@@ -40,22 +47,31 @@ class TarhetaStatusController extends Controller
     public function update(Request $request, Record $record): JsonResponse
     {
         $validated = $request->validate([
-            'tarheta_status' => ['required', Rule::in(self::STATUSES)],
+            'tarheta_status' => ['sometimes', 'nullable', Rule::in(self::STATUSES)],
+            'filing_status' => ['sometimes', 'nullable', Rule::in(self::STATUSES)],
+            'filing_number' => ['sometimes', 'nullable', 'string', 'max:100'],
         ]);
+        abort_if($validated === [], 422, 'Provide at least one status or filing number to update.');
 
         $record = DB::transaction(function () use ($record, $validated): Record {
             $record = Record::query()->lockForUpdate()->findOrFail($record->id);
-            $record->tarheta_status = $validated['tarheta_status'];
+            $record->fill($validated);
             $record->save();
 
             return $record;
         });
 
+        $status = mb_strtoupper(trim((string) $record->status));
+        $tarhetaStatus = mb_strtoupper(trim((string) $record->tarheta_status));
+        $filingStatus = mb_strtoupper(trim((string) $record->filing_status));
+
         return response()->json([
             'message' => 'Tarheta status saved.',
-            'matches' => mb_strtoupper(trim((string) $record->status))
-                === mb_strtoupper(trim((string) $record->tarheta_status)),
-            'tarheta_status' => mb_strtoupper(trim((string) $record->tarheta_status)),
+            'matches' => $status === $tarhetaStatus && $status === $filingStatus,
+            'status' => $status,
+            'tarheta_status' => $tarhetaStatus,
+            'filing_status' => $filingStatus,
+            'filing_number' => (string) ($record->filing_number ?? ''),
         ]);
     }
 }

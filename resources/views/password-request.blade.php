@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Forgot password - {{ config('app.name', 'LSPDMS') }}</title>
+    @include('components.brand-meta')
     <style>
         * { box-sizing: border-box; }
         body { display: grid; min-height: 100vh; place-items: center; margin: 0; padding: 1rem; background: #f3f6fa; color: #10233a; font-family: Arial, sans-serif; }
@@ -24,6 +25,7 @@
     </style>
 </head>
 <body>
+<x-flash-toast :message="session('status')" />
 <main>
     @if ($isSentScreen)
     <section class="confirmation" aria-live="polite">
@@ -61,7 +63,6 @@
     @else
     <h1>Reset your password</h1>
     <p>Enter the email address for your verified account. If it matches an active account, we’ll send a password reset link.</p>
-    @if (session('status')) <p class="message">{{ session('status') }}</p> @endif
     <form method="POST" action="{{ route('password.email') }}">
         @csrf
         <label for="email">Email address</label>

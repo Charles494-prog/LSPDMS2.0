@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\GlobalVariable;
+use App\Services\SystemSmtpConfiguration;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -155,6 +156,7 @@ class PasswordResetController extends Controller
         );
 
         try {
+            app(SystemSmtpConfiguration::class)->apply();
             Mail::html(
                 view('emails.password-reset', [
                     'url' => $url,

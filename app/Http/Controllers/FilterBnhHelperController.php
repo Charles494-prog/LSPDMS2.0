@@ -126,11 +126,12 @@ class FilterBnhHelperController extends Controller
     {
         [$puroks, $records] = $this->filteredData($request);
         $qualified = $records->filter(fn (Record $record): bool => $record->is_valid1 && $record->is_valid2);
-        $rows = $this->matrixRows($puroks, $qualified);
+        $minuses = $records->reject(fn (Record $record): bool => $record->is_valid1 && $record->is_valid2);
 
         return response()->json([
-            'rows' => $rows,
+            'rows' => $this->resumenRows($puroks, $qualified, $minuses),
             'totals' => $this->countTotals($qualified),
+            'minuses_totals' => $this->countTotals($minuses),
         ]);
     }
 
@@ -152,16 +153,22 @@ class FilterBnhHelperController extends Controller
 
     public function downloadCountsWord(Request $request): StreamedResponse
     {
+        $display = $request->validate([
+            'show_qualified' => ['sometimes', 'boolean'],
+            'show_minuses' => ['sometimes', 'boolean'],
+        ]);
+        $showQualified = (bool) ($display['show_qualified'] ?? true);
+        $showMinuses = (bool) ($display['show_minuses'] ?? true);
+        abort_if(! $showQualified && ! $showMinuses, 422, 'Select at least one count to include in the Resumen.');
+
         [$puroks, $records] = $this->filteredData($request);
-        $rows = $this->matrixRows(
-            $puroks,
-            $records->filter(fn (Record $record): bool => $record->is_valid1 && $record->is_valid2)
-        );
-        $totals = $this->countTotals($records->filter(fn (Record $record): bool => $record->is_valid1 && $record->is_valid2));
+        $qualified = $records->filter(fn (Record $record): bool => $record->is_valid1 && $record->is_valid2);
+        $minuses = $records->reject(fn (Record $record): bool => $record->is_valid1 && $record->is_valid2);
 
         return $this->wordDownload('BNH Helper Form Resumen', 'bnh-helper-form-resumen.doc', 'filter-bnh-helper.word-counts', [
-            'rows' => $rows,
-            'totals' => $totals,
+            'rows' => $this->resumenRows($puroks, $qualified, $minuses),
+            'showQualified' => $showQualified,
+            'showMinuses' => $showMinuses,
             'filters' => $this->filterLabels($request),
         ]);
     }
@@ -367,6 +374,32 @@ class FilterBnhHelperController extends Controller
         ], $overall);
 
         return $rows;
+    }
+
+    /**
+     * @param  Collection<int, Purok>  $puroks
+     * @param  Collection<int, Record>  $qualified
+     * @param  Collection<int, Record>  $minuses
+     * @return list<array<string, mixed>>
+     */
+    private function resumenRows(Collection $puroks, Collection $qualified, Collection $minuses): array
+    {
+        $qualifiedRows = $this->matrixRows($puroks, $qualified);
+        $minusesById = [];
+
+        foreach ($this->matrixRows($puroks, $minuses) as $row) {
+            $minusesById[$row['id']] = $row;
+        }
+
+        return array_map(static function (array $row) use ($minusesById): array {
+            $minusRow = $minusesById[$row['id']];
+
+            return array_merge($row, [
+                'minuses_male' => $minusRow['male'],
+                'minuses_female' => $minusRow['female'],
+                'minuses_total' => $minusRow['total'],
+            ]);
+        }, $qualifiedRows);
     }
 
     /**

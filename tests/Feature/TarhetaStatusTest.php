@@ -18,11 +18,15 @@ class TarhetaStatusTest extends TestCase
             'full_name' => 'Member Needs Tarheta Update',
             'status' => 'UWP',
             'tarheta_status' => 'MS',
+            'filing_status' => 'UWP',
+            'filing_number' => 'F-001',
         ]);
         Record::query()->create([
             'full_name' => 'Member Already Matching',
             'status' => 'MK',
             'tarheta_status' => 'MK',
+            'filing_status' => 'MK',
+            'filing_number' => 'F-002',
         ]);
 
         $this->withSession(['login_user' => ['id' => $user->id]])
@@ -35,6 +39,10 @@ class TarhetaStatusTest extends TestCase
             ->assertSee('name="csrf-token"', false)
             ->assertSee('tarheta-choice')
             ->assertSee('Show already-matched records')
+            ->assertSee('Monitor filing status')
+            ->assertSee('Filing status')
+            ->assertSee('Filing number')
+            ->assertSee('filing-number-input')
             ->assertSee('tarhetaProgress')
             ->assertSee('tarhetaSearch')
             ->assertDontSee('tarheta-save')
@@ -50,6 +58,8 @@ class TarhetaStatusTest extends TestCase
             'id' => $mismatch->id,
             'status' => 'UWP',
             'tarheta_status' => 'UWP',
+            'filing_status' => 'UWP',
+            'filing_number' => 'F-001',
         ]);
 
         $this->withSession(['login_user' => ['id' => $user->id]])
@@ -67,6 +77,7 @@ class TarhetaStatusTest extends TestCase
             'full_name' => 'Tarheta Validation Member',
             'status' => 'MS',
             'tarheta_status' => 'UWP',
+            'filing_status' => 'MS',
         ]);
 
         $this->withSession(['login_user' => ['id' => $user->id]])
@@ -91,8 +102,8 @@ class TarhetaStatusTest extends TestCase
     {
         $user = $this->makeInquireUser();
         Record::query()->create(['full_name' => 'Null Pair', 'status' => null, 'tarheta_status' => null]);
-        Record::query()->create(['full_name' => 'Existing Match', 'status' => 'MS', 'tarheta_status' => 'MS']);
-        Record::query()->create(['full_name' => 'Status Mismatch', 'status' => 'UWP', 'tarheta_status' => 'MS']);
+        Record::query()->create(['full_name' => 'Existing Match', 'status' => 'MS', 'tarheta_status' => 'MS', 'filing_status' => 'MS']);
+        Record::query()->create(['full_name' => 'Status Mismatch', 'status' => 'UWP', 'tarheta_status' => 'MS', 'filing_status' => 'UWP']);
 
         $this->withSession(['login_user' => ['id' => $user->id]])
             ->get(route('tarheta-status'))
@@ -103,6 +114,40 @@ class TarhetaStatusTest extends TestCase
             ->assertSee('66.7%')
             ->assertSee('data-matched="1"', false)
             ->assertSee('data-matched="0"', false);
+    }
+
+    public function test_filing_status_and_number_are_saved_and_all_three_statuses_must_match(): void
+    {
+        $user = $this->makeInquireUser();
+        $record = Record::query()->create([
+            'full_name' => 'Inactive Filing Mismatch',
+            'status' => 'INACTIVE',
+            'tarheta_status' => 'INACTIVE',
+            'filing_status' => 'MS',
+            'filing_number' => '0007',
+        ]);
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->get(route('tarheta-status'))
+            ->assertOk()
+            ->assertSee('data-status="INACTIVE" data-tarheta-status="INACTIVE" data-filing-status="MS" data-matched="0"', false)
+            ->assertSee('value="0007"', false);
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->putJson(route('tarheta-status.update', $record), [
+                'filing_status' => 'INACTIVE',
+                'filing_number' => '0008',
+            ])
+            ->assertOk()
+            ->assertJsonPath('matches', true)
+            ->assertJsonPath('filing_status', 'INACTIVE')
+            ->assertJsonPath('filing_number', '0008');
+
+        $this->assertDatabaseHas('records', [
+            'id' => $record->id,
+            'filing_status' => 'INACTIVE',
+            'filing_number' => '0008',
+        ]);
     }
 
     private function makeInquireUser(): User

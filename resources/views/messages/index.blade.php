@@ -3,6 +3,7 @@
 @section('title', 'Messages')
 
 @push('styles')
+@include('messages.partials.assistant-styles')
 <style>
     .messages-page { display:grid; grid-template-columns:minmax(230px, 300px) minmax(0, 1fr); width:100%; height:100%; min-height:0; flex:1; background:var(--surface); border:1px solid var(--border); border-radius:14px; overflow:hidden; }
     .messages-sidebar { display:flex; flex-direction:column; min-width:0; min-height:0; overflow:hidden; border-right:1px solid var(--border); }
@@ -20,10 +21,14 @@
     .message-person-name,.message-person-preview { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .message-person-name { font-weight:650; }
     .message-person-preview { margin-top:.2rem; color:var(--text-muted); font-size:.82rem; }
+    .message-person.bot-contact { border-bottom-color:color-mix(in srgb,var(--accent) 30%,var(--border)); }
+    .message-person.bot-contact .message-avatar { border:1px solid #000; background:#000; }
+    .message-person.bot-contact .message-avatar img { padding:5px; object-fit:contain; }
+    .assistant-contact-badge { flex:none; padding:.2rem .38rem; border-radius:999px; background:color-mix(in srgb,var(--accent) 12%,var(--surface)); color:var(--accent); font-size:.62rem; font-weight:800; letter-spacing:.04em; }
     .message-person.suspended { opacity:.72; cursor:not-allowed; }
     .message-person.suspended:hover { background:transparent; }
     .message-person.suspended .message-person-preview { white-space:normal; }
-    .account-status { display:inline-block; margin-top:.25rem; color:#b42318; font-size:.76rem; font-weight:650; }
+    .account-status { display:inline-block; margin-top:.25rem; color:var(--danger); font-size:.76rem; font-weight:650; }
     .messages-main { position:relative; display:flex; flex-direction:column; min-width:0; min-height:0; overflow:hidden; }
     .messages-heading { display:flex; align-items:center; gap:.7rem; min-height:68px; padding:.85rem 1.2rem; border-bottom:1px solid var(--border); }
     .messages-heading h2 { margin:0; font-size:1rem; }
@@ -66,6 +71,7 @@
     .messages-compose button:disabled { opacity:.5; cursor:wait; }
     .messages-attach { width:42px; height:42px; padding:.6rem!important; background:var(--bg)!important; border:1px solid var(--border)!important; color:var(--text)!important; }
     .messages-alert { padding:.6rem 1rem; color:var(--danger); font-size:.85rem; }
+    .messages-sidebar-alert { padding:.65rem .8rem; border-bottom:1px solid var(--border); background:color-mix(in srgb,var(--danger) 9%,var(--surface)); }
     .messages-count { display:grid; min-width:20px; height:20px; place-items:center; padding:0 .35rem; border-radius:999px; background:#e02424; color:#fff; text-align:center; font-size:.7rem; font-weight:750; line-height:1; }
     .messages-back { display:none; flex:none; width:36px; height:36px; place-items:center; border:1px solid var(--border); border-radius:50%; background:var(--surface); color:var(--text); cursor:pointer; font-size:1.2rem; }
     .chat-frame-page .messages-page { border:0; border-radius:0; }
@@ -95,6 +101,7 @@
 @section('content')
 <section class="messages-page" id="messagesApp"
     data-user-id="{{ $authenticatedUser['id'] }}"
+    data-bot-avatar="{{ asset('images/LSP_logo_white.png') }}?v={{ filemtime(public_path('images/LSP_logo_white.png')) }}"
     data-accounts-url="{{ route('messages.accounts') }}"
     data-conversations-url="{{ route('messages.conversations') }}"
     data-create-url="{{ route('messages.conversations.create') }}"
@@ -111,10 +118,14 @@
             <h2>Direct messages</h2>
             <input class="messages-search" type="search" id="accountSearch" placeholder="Search name, email, or role…" autocomplete="off" aria-label="Search registered accounts">
         </div>
+        <div class="messages-alert messages-sidebar-alert" id="messagesSidebarAlert" role="alert" hidden></div>
         <div class="account-search-results" id="accountSearchResults" aria-live="polite" hidden></div>
-        <div class="messages-list" id="conversationList" aria-live="polite"></div>
+        <div class="messages-list" id="conversationList" aria-live="polite">
+            <div class="messages-empty">Loading your conversations…</div>
+        </div>
     </aside>
-    <section class="messages-main" aria-label="Conversation">
+    <section class="messages-main" id="messagesMain" aria-label="Conversation">
+        @include('messages.partials.assistant-panel', ['embedded' => true])
         <div class="messages-notice" id="messageNotice" role="status" hidden></div>
         <header class="messages-heading" id="conversationHeading"><div class="messages-empty">Search registered accounts to start a private conversation.</div></header>
         <div class="messages-status{{ $reverbConfigured ? '' : ' offline' }}" id="realtimeStatus" role="status">
@@ -146,4 +157,5 @@
 
 @push('scripts')
 @vite('resources/js/messaging.js')
+@vite('resources/js/assistant.js')
 @endpush

@@ -5,9 +5,11 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>@yield('title', 'Messages') - {{ config('app.name', 'LSPDMS') }}</title>
+    @include('components.brand-meta')
     @vite('resources/css/app.css')
     <style>
         :root {
+            color-scheme: light;
             --bg: #f6f8fa;
             --surface: #fff;
             --border: #e3e8ee;
@@ -17,12 +19,14 @@
             --danger: #dc2626;
         }
         html[data-theme="dark"] {
+            color-scheme: dark;
             --bg: #0b1220;
             --surface: #141b2d;
             --border: #263043;
             --text: #e5e9f0;
             --text-muted: #93a0b4;
             --accent: #3b93ff;
+            --danger: #f87171;
         }
         * { box-sizing: border-box; }
         html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
@@ -32,6 +36,7 @@
     @stack('styles')
 </head>
 <body class="chat-frame-page">
+    <x-flash-toast :message="session('status')" />
     <main class="chat-frame-content">
         @yield('content')
     </main>

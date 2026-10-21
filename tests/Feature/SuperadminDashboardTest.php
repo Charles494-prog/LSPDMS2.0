@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\GlobalVariable;
 use App\Models\Purok;
+use App\Models\R402Hakbang;
 use App\Models\Record;
 use App\Models\RecordAuditLog;
 use App\Models\User;
@@ -236,7 +237,7 @@ class SuperadminDashboardTest extends TestCase
             ->assertDontSee('CHARLESS 2 Secretary');
     }
 
-    public function test_user_access_and_tungkulin_are_saved_to_login_user(): void
+    public function test_head_secretary_role_can_only_be_assigned_through_confirmed_transfer(): void
     {
         $admin = User::query()->create([
             'gmail' => 'admin@example.test',
@@ -248,23 +249,54 @@ class SuperadminDashboardTest extends TestCase
             'gmail' => 'secretary@example.test',
             'password' => 'secret-password',
             'tungkulin' => 'Secretary',
-            'is_verified' => false,
+            'is_verified' => true,
         ]);
+
+        $this->withSession(['login_user' => ['id' => $admin->id]])
+            ->get(route('superadmin-dashboard'))
+            ->assertOk()
+            ->assertSee('id="headSecretaryTransferPassword"', false)
+            ->assertSee('head-secretary-transfer-controls', false);
 
         $this->withSession(['login_user' => ['id' => $admin->id]])
             ->putJson(route('superadmin.users.update', $user), [
                 'is_verified' => 1,
                 'tungkulin' => 'Head Secretary',
             ])
-            ->assertOk()
-            ->assertJsonPath('data.is_verified', true)
-            ->assertJsonPath('data.tungkulin', 'Head Secretary');
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('tungkulin');
 
-        $this->assertDatabaseHas('login_user', [
-            'id' => $user->id,
-            'is_verified' => 1,
-            'tungkulin' => 'Head Secretary',
-        ]);
+        $this->withSession(['login_user' => ['id' => $admin->id]])
+            ->postJson(route('superadmin.users.transfer-head-secretary'), [
+                'target_user_id' => $user->id,
+                'confirmation' => true,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('current_password');
+
+        $this->withSession(['login_user' => ['id' => $admin->id]])
+            ->postJson(route('superadmin.users.transfer-head-secretary'), [
+                'target_user_id' => $user->id,
+                'current_password' => 'incorrect-password',
+                'confirmation' => true,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('current_password');
+
+        $this->assertDatabaseHas('login_user', ['id' => $admin->id, 'tungkulin' => 'Head Secretary']);
+        $this->assertDatabaseHas('login_user', ['id' => $user->id, 'tungkulin' => 'Secretary']);
+
+        $this->withSession(['login_user' => ['id' => $admin->id]])
+            ->postJson(route('superadmin.users.transfer-head-secretary'), [
+                'target_user_id' => $user->id,
+                'current_password' => 'secret-password',
+                'confirmation' => true,
+            ])
+            ->assertOk()
+            ->assertJsonPath('target_user.id', $user->id);
+
+        $this->assertDatabaseHas('login_user', ['id' => $admin->id, 'tungkulin' => 'Secretary']);
+        $this->assertDatabaseHas('login_user', ['id' => $user->id, 'is_verified' => 1, 'tungkulin' => 'Head Secretary']);
     }
 
     public function test_permissions_can_only_be_saved_for_verified_users(): void
@@ -296,6 +328,7 @@ class SuperadminDashboardTest extends TestCase
                     'Inquire_Allow' => 0,
                     'tarheta_status_allow' => 1,
                     'filter_bnh_helper_allow' => 1,
+                    'chatbot_records_allow' => 1,
                 ]],
             ])
             ->assertOk();
@@ -308,6 +341,7 @@ class SuperadminDashboardTest extends TestCase
             'Inquire_Allow' => 0,
             'tarheta_status_allow' => 1,
             'filter_bnh_helper_allow' => 1,
+            'chatbot_records_allow' => 1,
         ]);
 
         $this->withSession(['login_user' => ['id' => $admin->id]])
@@ -316,7 +350,9 @@ class SuperadminDashboardTest extends TestCase
             ->assertSee('Allow Tarheta<br>Status Checker', false)
             ->assertSee('data-permission="tarheta_status_allow" checked', false)
             ->assertSee('Allow Filter &amp;<br>BNH Helper', false)
-            ->assertSee('data-permission="filter_bnh_helper_allow" checked', false);
+            ->assertSee('data-permission="filter_bnh_helper_allow" checked', false)
+            ->assertSee('Allow chatbot<br>record lookups', false)
+            ->assertSee('data-permission="chatbot_records_allow" checked', false);
 
         $this->withSession(['login_user' => ['id' => $admin->id]])
             ->putJson(route('superadmin.permissions.update'), [
@@ -328,6 +364,7 @@ class SuperadminDashboardTest extends TestCase
                     'Inquire_Allow' => 1,
                     'tarheta_status_allow' => 1,
                     'filter_bnh_helper_allow' => 1,
+                    'chatbot_records_allow' => 1,
                 ]],
             ])
             ->assertUnprocessable();
@@ -643,7 +680,7 @@ class SuperadminDashboardTest extends TestCase
             ->assertRedirect('/login');
     }
 
-    public function test_disabling_current_users_access_tells_the_browser_to_log_out_immediately(): void
+    public function test_head_secretary_access_cannot_be_disabled_from_admin_portal(): void
     {
         $headSecretary = User::query()->create([
             'gmail' => 'head@example.test',
@@ -654,9 +691,13 @@ class SuperadminDashboardTest extends TestCase
 
         $this->withSession(['login_user' => ['id' => $headSecretary->id]])
             ->putJson(route('superadmin.users.update', $headSecretary), ['is_verified' => 0])
-            ->assertOk()
-            ->assertJsonPath('data.is_verified', false)
-            ->assertJsonPath('data.revoked_current_session', true);
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('is_verified');
+
+        $this->assertDatabaseHas('login_user', [
+            'id' => $headSecretary->id,
+            'is_verified' => 1,
+        ]);
     }
 
     public function test_baptism_cutoff_is_required_when_enabled_and_entry_years_are_always_required(): void
@@ -846,7 +887,7 @@ class SuperadminDashboardTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('data.status', 'UWP');
 
-        $msHakbang = \App\Models\R402Hakbang::query()->where('status', 'MS')->firstOrFail();
+        $msHakbang = R402Hakbang::query()->where('status', 'MS')->firstOrFail();
         $this->withSession($session)
             ->putJson(route('superadmin.r4-02.hakbangs.update', $msHakbang), [
                 'status' => 'MS',

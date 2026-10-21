@@ -4,10 +4,11 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Verify Code - {{ config('app.name', 'LSPDMS') }}</title>
+        @include('components.brand-meta')
         <style>
             :root { --blue: #0a6bd6; --deep-blue: #0a4a8a; --muted: #6b8299; }
             * { box-sizing: border-box; }
-            body { min-height: 100vh; margin: 0; display: grid; place-items: center; padding: 1rem; background: linear-gradient(180deg, #fff, #f4f9ff); color: #0d2339; font-family: Montserrat, Arial, sans-serif; }
+            body { min-height: 100vh; margin: 0; display: grid; place-items: center; padding: 1rem; background: #f4f7fb; color: #0d2339; font-family: Montserrat, Arial, sans-serif; }
             .card { width: min(100%, 420px); padding: 2.2rem 1.9rem; background: #fff; border: 1px solid rgba(25, 81, 145, .1); border-radius: 20px; box-shadow: 0 24px 48px rgba(15, 76, 129, .1); }
             h1 { margin: 0 0 .6rem; color: var(--deep-blue); font-size: 1.6rem; }
             p { color: var(--muted); font-size: .9rem; line-height: 1.6; }
@@ -27,12 +28,10 @@
         </style>
     </head>
     <body>
+        <x-flash-toast :message="session('status')" />
         <main class="card">
             <h1>Verify your login</h1>
             <p>Enter the six-digit verification code sent to your Gmail address.</p>
-            @if (session('status'))
-                <p>{{ session('status') }}</p>
-            @endif
             @error('code')
                 <p class="error">{{ $message }}</p>
             @enderror

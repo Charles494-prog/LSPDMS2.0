@@ -9,6 +9,8 @@ if (root) {
     const csrf = root.dataset.csrf;
     const endpoint = (template, id) => template.replace('__ID__', id);
     const listElement = document.getElementById('conversationList');
+    const messagesMain = document.getElementById('messagesMain');
+    const assistantPanel = document.getElementById('builtInHelpChatbot');
     const searchResultsElement = document.getElementById('accountSearchResults');
     const heading = document.getElementById('conversationHeading');
     const feed = document.getElementById('messageFeed');
@@ -23,6 +25,7 @@ if (root) {
     const sendButton = document.getElementById('sendButton');
     const searchInput = document.getElementById('accountSearch');
     const alertBox = document.getElementById('messagesAlert');
+    const sidebarAlertBox = document.getElementById('messagesSidebarAlert');
     const typingStatus = document.getElementById('typingStatus');
     const realtimeStatus = document.getElementById('realtimeStatus');
     const messageNotice = document.getElementById('messageNotice');
@@ -30,7 +33,9 @@ if (root) {
     const conversations = new Map();
     const subscribedConversations = new Set();
     const processedIncomingIds = new Set();
+    const assistantHiddenStates = new Map();
     let selected = null;
+    let assistantSelected = false;
     let typingTimer = null;
     let noticeTimer = null;
     let typingCooldown = false;
@@ -92,6 +97,8 @@ if (root) {
     function showError(message = '') {
         alertBox.textContent = message;
         alertBox.hidden = !message;
+        sidebarAlertBox.textContent = message;
+        sidebarAlertBox.hidden = !message;
     }
 
     function showNotice(message) {
@@ -126,12 +133,31 @@ if (root) {
         conversations.clear();
         items.forEach(item => conversations.set(Number(item.id), item));
         listElement.replaceChildren();
+        const bot = document.createElement('button');
+        bot.className = `message-person bot-contact${assistantSelected ? ' selected' : ''}`;
+        bot.type = 'button';
+        bot.setAttribute('aria-label', 'Open LSPBot, your LSPDMS Guide and AI Assistant');
+        bot.addEventListener('click', openAssistant);
+        bot.append(makeAvatar('LSPBot', root.dataset.botAvatar));
+        const botDetails = document.createElement('span');
+        botDetails.className = 'message-person-body';
+        const botName = document.createElement('span');
+        botName.className = 'message-person-name';
+        botName.textContent = 'LSPBot';
+        const botPreview = document.createElement('span');
+        botPreview.className = 'message-person-preview';
+        botPreview.textContent = 'Your LSPDMS guide · Ask me a question';
+        botDetails.append(botName, botPreview);
+        const botBadge = document.createElement('span');
+        botBadge.className = 'assistant-contact-badge';
+        botBadge.textContent = 'BOT';
+        bot.append(botDetails, botBadge);
+        listElement.append(bot);
         if (!items.length) {
             const empty = document.createElement('div');
             empty.className = 'messages-empty';
             empty.textContent = 'No conversations yet. Search an account above to begin.';
             listElement.append(empty);
-            return;
         }
         items.forEach(item => {
             const button = document.createElement('button');
@@ -170,6 +196,38 @@ if (root) {
         renderConversationList(items);
         return items;
     }
+
+    function openAssistant() {
+        assistantSelected = true;
+        selected = null;
+        messagesPage.classList.add('conversation-open');
+        messagesMain.classList.add('assistant-active');
+        for (const child of messagesMain.children) {
+            if (child !== assistantPanel) {
+                if (!assistantHiddenStates.has(child)) assistantHiddenStates.set(child, child.hidden);
+                child.hidden = true;
+            }
+        }
+        assistantPanel.hidden = false;
+        listElement.querySelectorAll('.message-person').forEach(button => button.classList.remove('selected'));
+        listElement.querySelectorAll('.bot-contact').forEach(button => button.classList.add('selected'));
+        showError();
+        document.getElementById('assistantInput')?.focus();
+    }
+
+    function closeAssistant() {
+        assistantSelected = false;
+        messagesMain.classList.remove('assistant-active');
+        assistantPanel.hidden = true;
+        assistantHiddenStates.forEach((wasHidden, child) => { child.hidden = wasHidden; });
+        assistantHiddenStates.clear();
+        listElement.querySelectorAll('.bot-contact').forEach(button => button.classList.remove('selected'));
+    }
+
+    document.getElementById('assistantBack')?.addEventListener('click', () => {
+        closeAssistant();
+        messagesPage.classList.remove('conversation-open');
+    });
 
     function appendMessage(message, { pending = false, progress = null, localImage = null } = {}) {
         if (feed.querySelector(`[data-message-id="${message.id}"]`)) return;
@@ -309,6 +367,7 @@ if (root) {
             setComposerEnabled(false);
             return;
         }
+        closeAssistant();
         selected = Number(id);
         messagesPage.classList.add('conversation-open');
         showError();

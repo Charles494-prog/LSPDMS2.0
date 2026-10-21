@@ -4,8 +4,11 @@ namespace Tests\Feature;
 
 use App\Models\DelistmentHistory;
 use App\Models\GlobalVariable;
+use App\Models\Purok;
 use App\Models\Record;
+use App\Models\RecordAuditLog;
 use App\Models\User;
+use App\Services\DelistmentDocxExporter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -30,6 +33,11 @@ class DelistmentTest extends TestCase
         $this->withSession(['login_user' => ['id' => 1]])
             ->get(route('de-listment'))
             ->assertOk()
+            ->assertSee('Add MK member')
+            ->assertSee('id="add-mk-dialog"', false)
+            ->assertSee('function syncMkKapisanan()', false)
+            ->assertSee("mkKapisanan.value = 'Buklod'", false)
+            ->assertSee("age < 18 ? 'Binhi' : 'Kadiwa'", false)
             ->assertSee('View delistment history')
             ->assertSee('Download history (DOCX)')
             ->assertSee('id="delisted-history-dialog"', false)
@@ -80,8 +88,17 @@ class DelistmentTest extends TestCase
             ->get(route('de-listment'))
             ->assertOk()
             ->assertDontSee('Sample Member')
+            ->assertSee('delistment-charts-', false)
+            ->assertDontSee('cdn.jsdelivr.net/npm/chart.js', false)
+            ->assertSee('eligibilityChart.data.datasets[0].data = cats.map(c => c.count)', false)
             ->assertSee('chart-members-dialog')
             ->assertSee('one-year-confirmed')
+            ->assertSee('id="pending-card"', false)
+            ->assertSee('id="pending-total"', false)
+            ->assertSee("status: 'pending'", false)
+            ->assertSee('background: var(--delist-surface)', false)
+            ->assertDontSee('linear-gradient(125deg', false)
+            ->assertDontSee('radial-gradient(circle', false)
             ->assertSee('const PAGE_SIZE = 20;', false)
             ->assertSee('data-entry-years="1"', false)
             ->assertSee('id="delist-dialog"', false)
@@ -184,7 +201,7 @@ class DelistmentTest extends TestCase
             ->assertOk()
             ->assertDownload('R2-10 - Not eligible - Endorsed (review required).docx');
 
-        $exportPath = app(\App\Services\DelistmentDocxExporter::class)->generate('Not eligible - Endorsed', [[
+        $exportPath = app(DelistmentDocxExporter::class)->generate('Not eligible - Endorsed', [[
             'name' => $wronglyEndorsed->full_name,
             'registry' => $wronglyEndorsed->registry,
             'kalagayan' => 'MS',
@@ -229,7 +246,7 @@ class DelistmentTest extends TestCase
             ->assertOk()
             ->assertDownload('De-Listment History.docx');
 
-        $exportPath = app(\App\Services\DelistmentDocxExporter::class)->generate('De-Listment History', [[
+        $exportPath = app(DelistmentDocxExporter::class)->generate('De-Listment History', [[
             'name' => 'History Export Member',
             'registry' => 'HISTORY123456',
             'delisted_at' => 'Oct 01, 2026 06:30 PM',
@@ -316,7 +333,7 @@ class DelistmentTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.status', 'INACTIVE');
 
-        $audit = \App\Models\RecordAuditLog::query()
+        $audit = RecordAuditLog::query()
             ->where('record_id', $mk->id)
             ->where('action', 'updated')
             ->latest('id')
@@ -473,6 +490,139 @@ class DelistmentTest extends TestCase
                 ]],
             ])
             ->assertUnprocessable();
+    }
+
+    public function test_mk_member_can_be_added_from_delistment_without_a_monthly_code(): void
+    {
+        $user = User::query()->create([
+            'gmail' => 'mk-adder@example.test',
+            'first_name' => 'Test',
+            'last_name' => 'Secretary',
+            'password' => 'password',
+            'is_verified' => true,
+            'Delistment_allow' => true,
+        ]);
+        $purok = Purok::query()->create([
+            'purok_number' => 4,
+            'purok_name' => 'Purok Four',
+            'grupo_start' => 1,
+            'grupo_end' => 12,
+        ]);
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->postJson(route('de-listment.mk.store'), [
+                'full_name' => 'MK Test Member',
+                'registry' => 'MKTEST1234567',
+                'gender' => 'Male',
+                'purok_id' => $purok->id,
+                'grupo' => 3,
+                'kapisanan' => 'Kadiwa',
+                'is_married' => false,
+                'evangelist' => 'Test Evangelist',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.kalagayan', 'MK')
+            ->assertJsonPath('data.name', 'MK TEST MEMBER');
+
+        $record = Record::query()->where('registry', 'MKTEST1234567')->sole();
+        $this->assertSame('MK', $record->status);
+        $this->assertNull($record->monthly_code);
+        $this->assertSame('4', $record->purok);
+        $this->assertSame('3', $record->grupo);
+        $this->assertSame('L', $record->gender);
+        $this->assertSame('K', $record->kapisanan);
+        $this->assertSame('Test Evangelist', $record->evangelist);
+        $this->assertSame(now('Asia/Manila')->toDateString(), $record->date_of_entry->format('Y-m-d'));
+    }
+
+    public function test_mk_kapisanan_is_automatically_derived_from_marital_status_and_age(): void
+    {
+        $this->travelTo(now()->setDate(2026, 10, 21)->startOfDay());
+        $user = User::query()->create([
+            'gmail' => 'mk-kapisanan@example.test',
+            'first_name' => 'Test',
+            'last_name' => 'Secretary',
+            'password' => 'password',
+            'is_verified' => true,
+            'Delistment_allow' => true,
+        ]);
+        $purok = Purok::query()->create([
+            'purok_number' => 5,
+            'grupo_start' => 1,
+            'grupo_end' => 12,
+        ]);
+        $payload = [
+            'gender' => 'Female',
+            'purok_id' => $purok->id,
+            'kapisanan' => 'Kadiwa',
+        ];
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->postJson(route('de-listment.mk.store'), $payload + [
+                'full_name' => 'Married Adult',
+                'registry' => 'MARRIED123456',
+                'date_of_birth' => '2003-07-08',
+                'is_married' => true,
+            ])
+            ->assertCreated();
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->postJson(route('de-listment.mk.store'), $payload + [
+                'full_name' => 'Unmarried Minor',
+                'registry' => 'MINOR12345678',
+                'date_of_birth' => '2009-10-21',
+                'is_married' => false,
+            ])
+            ->assertCreated();
+
+        $this->assertDatabaseHas('records', [
+            'registry' => 'MARRIED123456',
+            'kapisanan' => 'B',
+            'is_married' => 1,
+            'status' => 'MK',
+            'monthly_code' => null,
+        ]);
+        $this->assertDatabaseHas('records', [
+            'registry' => 'MINOR12345678',
+            'kapisanan' => 'binhi',
+            'is_married' => 0,
+            'status' => 'MK',
+            'monthly_code' => null,
+        ]);
+    }
+
+    public function test_mk_add_rejects_invalid_registry_numbers_and_existing_registry_duplicates(): void
+    {
+        $user = User::query()->create([
+            'gmail' => 'mk-adder@example.test',
+            'first_name' => 'Test',
+            'last_name' => 'Secretary',
+            'password' => 'password',
+            'is_verified' => true,
+            'Delistment_allow' => true,
+        ]);
+        $purok = Purok::query()->create([
+            'purok_number' => 1,
+            'grupo_start' => 1,
+            'grupo_end' => 10,
+        ]);
+        $this->record(['registry' => 'EXIST12345678']);
+
+        $payload = [
+            'full_name' => 'Another MK Member',
+            'gender' => 'Female',
+            'purok_id' => $purok->id,
+            'kapisanan' => 'Binhi',
+        ];
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->postJson(route('de-listment.mk.store'), $payload + ['registry' => 'not-valid'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('registry');
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->postJson(route('de-listment.mk.store'), $payload + ['registry' => 'EXIST12345678'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('registry');
     }
 
     private function record(array $attributes = []): Record

@@ -21,9 +21,10 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
         <title>@yield('title', 'Dashboard') - {{ config('app.name', 'LSPDMS') }}</title>
-        <link rel="icon" type="image/png" href="{{ asset('../public/LSPIcon.png') }}">
+        @include('components.brand-meta')
         <style>
             :root {
+                color-scheme: light;
                 --bg: #f6f8fa;
                 --surface: #ffffff;
                 --border: #e3e8ee;
@@ -39,17 +40,9 @@
                 --sidebar-width: 268px;
                 --sidebar-width-collapsed: 76px;
 
-                /* Sidebar gradient: deep navy fading to near-black, with a
-                   soft accent-blue glow bleeding in from the top corner. */
-                --sidebar-gradient: linear-gradient(165deg, #17233d 0%, #101828 42%, #0a0f1a 100%);
-                --sidebar-glow: radial-gradient(circle at 15% 0%, rgba(59,147,255,0.25), transparent 55%);
-
-                /* Topbar gradient: barely-there cool tint instead of flat white,
-                   plus a thin accent line along the bottom edge. */
-                --topbar-gradient: linear-gradient(120deg, #ffffff 0%, #f3f7fd 55%, #eaf1fb 100%);
-                --topbar-accent-line: linear-gradient(90deg, var(--accent), rgba(10,107,214,0) 65%);
             }
             html[data-theme="dark"] {
+                color-scheme: dark;
                 --bg: #0b1220;
                 --surface: #141b2d;
                 --border: #263043;
@@ -57,16 +50,12 @@
                 --text-muted: #93a0b4;
                 --accent: #3b93ff;
                 --accent-hover: #63acff;
+                --danger: #f87171;
                 --sidebar-bg: #0a0f1a;
                 --sidebar-text: #93a0b4;
                 --sidebar-text-active: #ffffff;
                 --sidebar-active-bg: rgba(255,255,255,0.06);
 
-                --sidebar-gradient: linear-gradient(165deg, #131c30 0%, #0a0f1a 45%, #060910 100%);
-                --sidebar-glow: radial-gradient(circle at 15% 0%, rgba(59,147,255,0.18), transparent 55%);
-
-                --topbar-gradient: linear-gradient(120deg, #141b2d 0%, #161f34 55%, #182339 100%);
-                --topbar-accent-line: linear-gradient(90deg, var(--accent), rgba(59,147,255,0) 65%);
             }
             * { box-sizing: border-box; }
             body {
@@ -82,7 +71,7 @@
             .sidebar {
                 width: var(--sidebar-width);
                 flex-shrink: 0;
-                background: var(--sidebar-gradient);
+                background: var(--sidebar-bg);
                 position: fixed;
                 top: 0; bottom: 0; left: 0;
                 display: flex;
@@ -91,13 +80,6 @@
                 transition: transform 0.2s ease, width 0.2s ease;
                 z-index: 40;
                 box-shadow: 1px 0 0 rgba(255,255,255,0.04) inset, 4px 0 24px rgba(0,0,0,0.18);
-            }
-            .sidebar::before {
-                content: "";
-                position: absolute;
-                inset: 0;
-                background: var(--sidebar-glow);
-                pointer-events: none;
             }
             .sidebar.collapsed { width: var(--sidebar-width-collapsed); }
             .sidebar-top {
@@ -109,7 +91,8 @@
                 border-bottom: 1px solid rgba(255,255,255,0.08);
                 margin-bottom: 0.6rem;
             }
-            .sidebar-brand { color: #ffffff; font-weight: 700; font-size: 1.1rem; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; }
+            .sidebar-brand { display: flex; align-items: center; flex: 1; min-width: 0; overflow: hidden; }
+            .sidebar-brand img { display: block; width: 132px; max-width: 100%; max-height: 62px; object-fit: contain; object-position: left center; }
             .sidebar.collapsed .sidebar-brand { display: none; }
             .collapse-btn {
                 background: rgba(255,255,255,0.06);
@@ -143,9 +126,8 @@
             .sidebar a svg { flex-shrink: 0; width: 21px; height: 21px; }
             .sidebar a:hover { background: var(--sidebar-active-bg); color: var(--sidebar-text-active); }
             .sidebar a.active {
-                background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+                background: var(--accent);
                 color: #ffffff;
-                box-shadow: 0 4px 14px rgba(10,107,214,0.35);
             }
             .sidebar.collapsed a span.label { display: none; }
             .sidebar.collapsed a { justify-content: center; padding: 0.8rem; }
@@ -173,7 +155,7 @@
                 position: sticky;
                 top: 0;
                 z-index: 20;
-                background: var(--topbar-gradient);
+                background: var(--surface);
                 border-bottom: 1px solid var(--border);
                 padding: 0.9rem 1.5rem;
                 display: flex;
@@ -181,14 +163,6 @@
                 justify-content: space-between;
                 gap: 1rem;
                 box-shadow: 0 1px 0 rgba(15,23,42,0.04), 0 6px 18px rgba(15,23,42,0.05);
-            }
-            .topbar::after {
-                content: "";
-                position: absolute;
-                left: 0; right: 0; bottom: -1px;
-                height: 2px;
-                background: var(--topbar-accent-line);
-                opacity: 0.7;
             }
             .topbar-title { font-weight: 700; font-size: 1.05rem; }
             .menu-toggle {
@@ -242,6 +216,15 @@
             .user-dropdown a:hover, .user-dropdown button:hover { background: var(--bg); }
             .user-dropdown svg { width: 17px; height: 17px; flex-shrink: 0; color: var(--text-muted); }
             .user-dropdown .divider { height: 1px; background: var(--border); margin: 0.3rem 0.2rem; }
+            .theme-switch-row { display:flex; align-items:center; justify-content:space-between; gap:.75rem; padding:.55rem .7rem; color:var(--text); font-size:.86rem; font-weight:600; }
+            .theme-switch { position:relative; display:inline-flex; width:42px; height:24px; flex:none; }
+            .theme-switch input { position:absolute; width:1px; height:1px; opacity:0; }
+            .theme-switch-track { position:absolute; inset:0; border:1px solid var(--border); border-radius:999px; background:var(--border); cursor:pointer; transition:background .15s,border-color .15s; }
+            .theme-switch-track::before { position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%; background:var(--surface); content:""; transition:transform .15s; }
+            .theme-switch input:checked + .theme-switch-track { border-color:var(--accent); background:var(--accent); }
+            .theme-switch input:checked + .theme-switch-track::before { transform:translateX(18px); }
+            .theme-switch input:focus-visible + .theme-switch-track { outline:3px solid color-mix(in srgb,var(--accent) 35%,transparent); outline-offset:2px; }
+            .theme-switch-status { padding:0 .7rem .45rem; color:var(--text-muted); font-size:.72rem; }
             .user-dropdown button.logout-item { color: var(--danger); }
             .user-dropdown button.logout-item svg { color: var(--danger); }
 
@@ -303,8 +286,8 @@
                 place-items: center;
                 border: 2px solid var(--surface);
                 border-radius: 50%;
-                background: linear-gradient(135deg, #1687f8, #0754b8);
-                box-shadow: 0 8px 24px rgba(10, 107, 214, 0.4);
+                background: var(--accent);
+                box-shadow: 0 2px 8px rgba(10, 107, 214, 0.22);
                 color: #fff;
                 cursor: pointer;
                 transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
@@ -369,11 +352,14 @@
         @stack('styles')
     </head>
     <body class="{{ request()->routeIs('inquire-modify') ? 'has-smart-helper' : '' }}{{ request()->routeIs('messages.*') ? ' has-messages-page' : '' }}">
+        <x-flash-toast :message="session('status')" />
         <div class="overlay" id="sidebarOverlay"></div>
 
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-top">
-                <div class="sidebar-brand">LSPDMS v1.0</div>
+                <a class="sidebar-brand" href="{{ route('home') }}" aria-label="LSPDMS home">
+                    <img src="{{ asset('images/LSP_logo_white.png') }}" alt="LSPDMS — LSP's Data Management System">
+                </a>
                 <button class="collapse-btn" id="collapseToggle" aria-label="Collapse sidebar">
                     <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l-6 6 6 6"/></svg>
                 </button>
@@ -482,6 +468,14 @@
                             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['profile'] !!}</svg>
                             Profile
                         </a>
+                        <div class="theme-switch-row">
+                            <span id="themeSwitchLabel">Dark mode</span>
+                            <label class="theme-switch" aria-label="Toggle dark mode">
+                                <input type="checkbox" id="themeSwitch" role="switch" aria-labelledby="themeSwitchLabel" @checked(($authenticatedUser['dark_mode'] ?? false))>
+                                <span class="theme-switch-track"></span>
+                            </label>
+                        </div>
+                        <div class="theme-switch-status" id="themeSwitchStatus" role="status" aria-live="polite"></div>
                         <div class="divider"></div>
                         <form method="POST" action="{{ url('/logout') }}">
                             @csrf
@@ -495,12 +489,6 @@
             </header>
 
             <main class="content">
-                @if (session('status'))
-                    <div style="background: var(--surface); border:1px solid var(--border); border-left:3px solid var(--accent); padding:0.8rem 1rem; border-radius:8px; margin-bottom:1.2rem; font-size:0.9rem;">
-                        {{ session('status') }}
-                    </div>
-                @endif
-
                 @yield('content')
             </main>
         </div>
@@ -562,6 +550,43 @@
             chatMinimize?.addEventListener('click', () => {
                 setChatOpen(false);
                 chatLauncher?.focus();
+            });
+            const themeSwitch = document.getElementById('themeSwitch');
+            const themeSwitchStatus = document.getElementById('themeSwitchStatus');
+            let themeSaveController = null;
+            themeSwitch?.addEventListener('change', async () => {
+                themeSaveController?.abort();
+                themeSaveController = new AbortController();
+                const darkMode = themeSwitch.checked;
+                const previousTheme = document.documentElement.dataset.theme;
+                document.documentElement.dataset.theme = darkMode ? 'dark' : 'light';
+                const chatDocument = chatFrame?.contentDocument;
+                if (chatDocument?.documentElement) chatDocument.documentElement.dataset.theme = darkMode ? 'dark' : 'light';
+                themeSwitch.disabled = true;
+                themeSwitchStatus.textContent = 'Saving…';
+                try {
+                    const response = await fetch(@json(route('settings.update')), {
+                        method: 'PUT',
+                        credentials: 'same-origin',
+                        signal: themeSaveController.signal,
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        },
+                        body: JSON.stringify({ dark_mode: darkMode ? 1 : 0 }),
+                    });
+                    const result = await response.json().catch(() => ({}));
+                    if (!response.ok) throw new Error(result.message || 'Could not save the theme preference.');
+                    themeSwitchStatus.textContent = 'Saved';
+                } catch (error) {
+                    document.documentElement.dataset.theme = previousTheme;
+                    if (chatDocument?.documentElement) chatDocument.documentElement.dataset.theme = previousTheme;
+                    themeSwitch.checked = previousTheme === 'dark';
+                    themeSwitchStatus.textContent = error.name === 'AbortError' ? '' : error.message;
+                } finally {
+                    themeSwitch.disabled = false;
+                }
             });
             document.addEventListener('keydown', event => {
                 if (event.key === 'Escape' && chatWindow && !chatWindow.hidden) setChatOpen(false);

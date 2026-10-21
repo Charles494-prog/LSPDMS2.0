@@ -8,7 +8,7 @@
     .fbnh-card { min-width:0; padding:1.4rem; border:1px solid var(--border); border-radius:16px; background:var(--surface); box-shadow:0 5px 18px rgba(15,23,42,.045); }
     .fbnh-card h2 { margin:0; font-size:1.15rem; line-height:1.35; letter-spacing:-.015em; }
     .fbnh-subtitle { margin:.35rem 0 0; color:var(--text-muted); font-size:.9rem; line-height:1.5; }
-    .fbnh-filter-card { padding:clamp(1.15rem,2.4vw,1.8rem); background:linear-gradient(135deg,color-mix(in srgb,var(--fbnh-accent) 5%,var(--surface)),var(--surface) 62%); }
+    .fbnh-filter-card { padding:clamp(1.15rem,2.4vw,1.8rem); background:var(--surface); }
     .fbnh-page-heading { align-items:center; margin-bottom:1.35rem; }
     .fbnh-eyebrow { display:inline-flex; align-items:center; gap:.4rem; margin-bottom:.45rem; color:var(--fbnh-accent); font-size:.72rem; font-weight:800; letter-spacing:.11em; text-transform:uppercase; }
     .fbnh-page-title { margin:0; font-size:clamp(1.35rem,2.5vw,1.75rem)!important; }
@@ -51,8 +51,22 @@
     .fbnh-count-link:hover { background:color-mix(in srgb,var(--fbnh-accent) 10%,transparent); }
     .fbnh-total-row { font-weight:800; background:color-mix(in srgb,var(--fbnh-accent) 8%,var(--surface)); }
     .fbnh-purok-total-row { font-weight:750; background:color-mix(in srgb,var(--bg) 62%,var(--surface)); }
+    .fbnh-resumen-toolbar { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:1rem; margin:1.25rem 0 .85rem; padding:.9rem 1rem; border:1px solid var(--border); border-radius:12px; background:color-mix(in srgb,var(--bg) 55%,var(--surface)); }
+    .fbnh-resumen-options { display:flex; flex-wrap:wrap; align-items:center; gap:.55rem 1.1rem; margin:0; padding:0; border:0; }
+    .fbnh-resumen-options legend { float:left; margin-right:1rem; color:var(--text-muted); font-size:.75rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase; }
+    .fbnh-resumen-options label { display:inline-flex; align-items:center; gap:.5rem; min-height:32px; font-size:.84rem; font-weight:700; cursor:pointer; }
+    .fbnh-resumen-options input { width:17px; height:17px; margin:0; accent-color:var(--fbnh-accent); }
+    .fbnh-resumen-options input:focus-visible { outline:3px solid color-mix(in srgb,var(--fbnh-accent) 35%,transparent); outline-offset:2px; }
+    .fbnh-counts-table { width:28rem; min-width:28rem; table-layout:fixed; }
+    .fbnh-counts-table[data-count-mode="both"] { width:40rem; min-width:40rem; }
+    .fbnh-counts-table th:first-child,.fbnh-counts-table td:first-child { width:9.5rem; }
+    .fbnh-counts-table th,.fbnh-counts-table td { padding:.65rem .5rem; }
+    .fbnh-counts-table thead tr:first-child th { text-align:center; }
+    .fbnh-counts-table thead tr:first-child th:first-child { text-align:left; }
+    .fbnh-counts-table .fbnh-summary-group { color:var(--fbnh-accent); background:color-mix(in srgb,var(--fbnh-accent) 7%,var(--surface)); }
+    .fbnh-counts-table .fbnh-summary-minus { color:var(--text-muted); background:color-mix(in srgb,var(--bg) 84%,var(--surface)); }
     .fbnh-status { min-height:1.2rem; margin-top:.65rem; color:var(--text-muted); font-size:.82rem; }
-    .fbnh-status[data-error="true"] { color:#dc2626; }
+    .fbnh-status[data-error="true"] { color:var(--danger); }
     .fbnh-check { width:18px; height:18px; accent-color:var(--fbnh-accent); cursor:pointer; }
     .fbnh-verdict { display:inline-block; padding:.35rem .6rem; border-radius:999px; font-size:.72rem; font-weight:850; letter-spacing:.025em; }
     .fbnh-verdict.qualified { color:#067647; background:#dcfae6; }
@@ -196,16 +210,27 @@
         <div class="fbnh-head">
             <div>
                 <h2>BNH Helper Form Resumen</h2>
-                <p class="fbnh-subtitle">Autocount of qualified members, grouped by gender. Qualification requires both checks.</p>
+                <p class="fbnh-subtitle">Qualified members have both BNH checks. Total minuses is the selected MS, UWP, and/or MK count minus those qualified members.</p>
             </div>
             <div class="fbnh-actions">
                 <a class="fbnh-button fbnh-button-primary" id="fbnhDownloadCounts" href="#">Download Resumen</a>
             </div>
         </div>
+        <div class="fbnh-resumen-toolbar">
+            <fieldset class="fbnh-resumen-options">
+                <legend>Show counts</legend>
+                <label><input type="radio" name="fbnhCountMode" id="fbnhShowQualified" value="qualified"> Qualified for BNH</label>
+                <label><input type="radio" name="fbnhCountMode" id="fbnhShowMinuses" value="minuses"> Total minuses</label>
+                <label><input type="radio" name="fbnhCountMode" id="fbnhShowBoth" value="both" checked> Both</label>
+            </fieldset>
+        </div>
         <div class="fbnh-table-wrap">
-            <table class="fbnh-table">
-                <thead><tr><th>Purok-Grupo</th><th class="number">L</th><th class="number">B</th><th class="number">Total</th></tr></thead>
-                <tbody id="fbnhCountsBody"><tr><td colspan="4" class="fbnh-empty">Loading qualified counts…</td></tr></tbody>
+            <table class="fbnh-table fbnh-counts-table">
+                <thead id="fbnhCountsHead">
+                    <tr><th rowspan="2">Purok-Grupo</th><th class="fbnh-summary-group" colspan="3">Qualified for BNH</th><th class="fbnh-summary-minus" colspan="3">Total minuses</th></tr>
+                    <tr><th class="number">L</th><th class="number">B</th><th class="number">Total</th><th class="number">L</th><th class="number">B</th><th class="number">Total</th></tr>
+                </thead>
+                <tbody id="fbnhCountsBody"><tr><td colspan="7" class="fbnh-empty">Loading counts…</td></tr></tbody>
             </table>
         </div>
         <div class="fbnh-status" id="fbnhCountsStatus" role="status"></div>
@@ -241,6 +266,9 @@
     const statusCheckboxes = Array.from(document.querySelectorAll('.fbnh-status-option'));
     const availableStatusCheckboxes = statusCheckboxes.filter(checkbox => !checkbox.disabled);
     const searchInput = document.getElementById('fbnhSearch');
+    const showQualifiedRadio = document.getElementById('fbnhShowQualified');
+    const showMinusesRadio = document.getElementById('fbnhShowMinuses');
+    const showBothRadio = document.getElementById('fbnhShowBoth');
     const csrf = app.dataset.csrf;
     let currentPage = 1;
     let lastPage = 1;
@@ -456,22 +484,68 @@
 
     async function loadQualifiedCounts() {
         const body = document.getElementById('fbnhCountsBody');
+        const head = document.getElementById('fbnhCountsHead');
+        const showQualified = showQualifiedRadio.checked || showBothRadio.checked;
+        const showMinuses = showMinusesRadio.checked || showBothRadio.checked;
+        const countMode = showBothRadio.checked ? 'both' : showQualified ? 'qualified' : 'minuses';
+        document.querySelector('.fbnh-counts-table').dataset.countMode = countMode;
+        const columnCount = 1 + (showQualified ? 3 : 0) + (showMinuses ? 3 : 0);
         body.replaceChildren();
+        head.replaceChildren();
+        const groupHeader = document.createElement('tr');
+        const labelHeader = document.createElement('th');
+        labelHeader.textContent = 'Purok-Grupo';
+        labelHeader.rowSpan = 2;
+        groupHeader.append(labelHeader);
+        if (showQualified) {
+            const qualifiedHeader = document.createElement('th');
+            qualifiedHeader.className = 'fbnh-summary-group';
+            qualifiedHeader.colSpan = 3;
+            qualifiedHeader.textContent = 'Qualified for BNH';
+            groupHeader.append(qualifiedHeader);
+        }
+        if (showMinuses) {
+            const minusesHeader = document.createElement('th');
+            minusesHeader.className = 'fbnh-summary-minus';
+            minusesHeader.colSpan = 3;
+            minusesHeader.textContent = 'Total minuses';
+            groupHeader.append(minusesHeader);
+        }
+        head.append(groupHeader);
+        const countHeader = document.createElement('tr');
+        for (const show of [showQualified, showMinuses]) {
+            if (!show) continue;
+            for (const label of ['L', 'B', 'Total']) {
+                const th = document.createElement('th');
+                th.className = 'number';
+                th.textContent = label;
+                countHeader.append(th);
+            }
+        }
+        head.append(countHeader);
+
         try {
             const data = await requestJson(`${app.dataset.countsUrl}?${query()}`);
             for (const item of data.rows) {
                 const row = document.createElement('tr');
                 row.className = item.type === 'grand_total' ? 'fbnh-total-row' : (item.type === 'purok_total' ? 'fbnh-purok-total-row' : '');
                 cell(row, item.label);
-                cell(row, String(item.male), 'number');
-                cell(row, String(item.female), 'number');
-                cell(row, String(item.total), 'number');
+                if (showQualified) {
+                    cell(row, String(item.male), 'number');
+                    cell(row, String(item.female), 'number');
+                    cell(row, String(item.total), 'number');
+                }
+                if (showMinuses) {
+                    cell(row, String(item.minuses_male), 'number');
+                    cell(row, String(item.minuses_female), 'number');
+                    cell(row, String(item.minuses_total), 'number');
+                }
                 body.append(row);
             }
             if (!data.rows.length) {
                 const row = document.createElement('tr');
                 const empty = cell(row, 'No configured Purok groups found.', 'fbnh-empty');
-                empty.colSpan = 4;
+                empty.colSpan = columnCount;
                 body.prepend(row);
             }
             setStatus('fbnhCountsStatus');
@@ -479,14 +553,17 @@
             setStatus('fbnhCountsStatus', error.message, true);
             const row = document.createElement('tr');
             const message = cell(row, error.message, 'fbnh-empty');
-            message.colSpan = 4;
+            message.colSpan = columnCount;
             body.append(row);
         }
     }
 
     function updateDownloadLinks() {
         document.getElementById('fbnhDownloadList').href = `${app.dataset.wordUrl}?${query({ q: searchInput.value.trim() })}`;
-        document.getElementById('fbnhDownloadCounts').href = `${app.dataset.countsWordUrl}?${query()}`;
+        document.getElementById('fbnhDownloadCounts').href = `${app.dataset.countsWordUrl}?${query({
+            show_qualified: showQualifiedRadio.checked || showBothRadio.checked ? '1' : '0',
+            show_minuses: showMinusesRadio.checked || showBothRadio.checked ? '1' : '0',
+        })}`;
     }
 
     function updateFilterSummary() {
@@ -527,6 +604,10 @@
     }
 
     document.getElementById('fbnhReload').addEventListener('click', reloadData);
+    [showQualifiedRadio, showMinusesRadio, showBothRadio].forEach(radio => radio.addEventListener('change', () => {
+        updateDownloadLinks();
+        loadQualifiedCounts();
+    }));
     allPuroksCheckbox.addEventListener('change', () => {
         purokCheckboxes.forEach(checkbox => { checkbox.checked = allPuroksCheckbox.checked; });
         refreshFilters();

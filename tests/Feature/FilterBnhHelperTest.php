@@ -58,6 +58,11 @@ class FilterBnhHelperTest extends TestCase
             ->assertSee('Purok Group Filter')
             ->assertSee('BNH Form Helper')
             ->assertSee('BNH Helper Form Resumen')
+            ->assertSee('fbnhShowQualified', false)
+            ->assertSee('fbnhShowMinuses', false)
+            ->assertSee('fbnhShowBoth', false)
+            ->assertSee('name="fbnhCountMode"', false)
+            ->assertSee('type="radio"', false)
             ->assertSee('fbnhPanelMatrix', false)
             ->assertSee('fbnhPanelList', false)
             ->assertSee('fbnhPanelResumen', false)
@@ -424,6 +429,62 @@ class FilterBnhHelperTest extends TestCase
         $this->assertStringContainsString('BNH Helper Form Resumen', $countsWord->streamedContent());
         $this->assertStringContainsString('Total 2a', $countsWord->streamedContent());
         $this->assertStringNotContainsString('2b-7', $countsWord->streamedContent());
+    }
+
+    public function test_resumen_shows_qualified_and_unqualified_counts_for_the_selected_statuses(): void
+    {
+        [$purok2a] = $this->makeSplitPuroks();
+        foreach ([
+            ['Qualified One', true, true],
+            ['Unqualified Two', true, false],
+            ['Unqualified Three', false, false],
+        ] as [$name, $isValid1, $isValid2]) {
+            $this->makeRecord([
+                'full_name' => $name,
+                'purok' => '2',
+                'grupo' => '1',
+                'gender' => 'Male',
+                'status' => 'MS',
+                'is_valid1' => $isValid1,
+                'is_valid2' => $isValid2,
+            ]);
+        }
+
+        $this->withSession(['login_user' => ['id' => 9003]])
+            ->getJson(route('filter-bnh-helper.qualified-counts', [
+                'purok_id' => $purok2a->id,
+                'status' => 'MS',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('rows.0.total', 1)
+            ->assertJsonPath('rows.0.minuses_male', 2)
+            ->assertJsonPath('rows.0.minuses_total', 2)
+            ->assertJsonPath('rows.2.total', 1)
+            ->assertJsonPath('rows.2.minuses_total', 2)
+            ->assertJsonPath('totals.total', 1)
+            ->assertJsonPath('minuses_totals.total', 2);
+
+        $minusesWord = $this->withSession(['login_user' => ['id' => 9003]])
+            ->get(route('filter-bnh-helper.counts-word', [
+                'purok_id' => $purok2a->id,
+                'status' => 'MS',
+                'show_qualified' => 0,
+                'show_minuses' => 1,
+            ]));
+
+        $minusesWord->assertOk();
+        $this->assertStringContainsString('TOTAL MINUSES', $minusesWord->streamedContent());
+        $this->assertStringNotContainsString('QUALIFIED FOR BNH', $minusesWord->streamedContent());
+        $this->assertStringContainsString('<td class="number">2</td>', $minusesWord->streamedContent());
+
+        $this->withSession(['login_user' => ['id' => 9003]])
+            ->get(route('filter-bnh-helper.counts-word', [
+                'purok_id' => $purok2a->id,
+                'status' => 'MS',
+                'show_qualified' => 0,
+                'show_minuses' => 0,
+            ]))
+            ->assertUnprocessable();
     }
 
     /**

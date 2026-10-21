@@ -30,6 +30,7 @@ class User extends Authenticatable
         'Inquire_Allow',
         'tarheta_status_allow',
         'filter_bnh_helper_allow',
+        'chatbot_records_allow',
     ];
 
     protected $hidden = [
@@ -49,6 +50,7 @@ class User extends Authenticatable
             'Inquire_Allow' => 'boolean',
             'tarheta_status_allow' => 'boolean',
             'filter_bnh_helper_allow' => 'boolean',
+            'chatbot_records_allow' => 'boolean',
         ];
     }
 

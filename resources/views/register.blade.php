@@ -4,13 +4,14 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Create an account · {{ config('app.name', 'LSPDMS') }}</title>
+    @include('components.brand-meta')
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root { --blue:#0a6bd6; --deep:#0a4a8a; --ink:#0d2339; --muted:#6b8299; --line:rgba(12,60,110,.14); --soft:#eaf3ff; }
         * { box-sizing:border-box; }
-        body { min-height:100vh; margin:0; display:grid; place-items:center; padding:1.5rem; color:var(--ink); background:linear-gradient(180deg,#fff 0%,#f4f9ff 100%); font-family:Montserrat, sans-serif; }
+        body { min-height:100vh; margin:0; display:grid; place-items:center; padding:1.5rem; color:var(--ink); background:#f4f7fb; font-family:Montserrat, sans-serif; }
         .card { width:min(100%,480px); padding:2rem; border:1px solid var(--line); border-radius:20px; background:#fff; box-shadow:0 24px 48px rgba(15,76,129,.1); }
         h1 { margin:0; color:var(--deep); font-size:1.35rem; }
         .intro { margin:.45rem 0 1.5rem; color:var(--muted); font-size:.9rem; line-height:1.55; }
@@ -30,6 +31,7 @@
     </style>
 </head>
 <body>
+    <x-flash-toast :message="session('status')" />
     <main class="card">
         <h1>Create your LSPDMS account</h1>
         <p class="intro">Submit your details to request an account. The Head Secretary must grant access before you can sign in.</p>

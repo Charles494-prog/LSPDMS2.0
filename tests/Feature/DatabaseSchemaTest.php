@@ -7,6 +7,7 @@ use App\Models\Record;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -29,6 +30,7 @@ class DatabaseSchemaTest extends TestCase
             'gmail',
             'password',
             'tungkulin',
+            'head_secretary_slot',
             'is_verified',
             'remember_token',
             'remember_token_expires_at',
@@ -42,6 +44,7 @@ class DatabaseSchemaTest extends TestCase
             'Delistment_allow',
             'Inquire_Allow',
             'filter_bnh_helper_allow',
+            'chatbot_records_allow',
         ]));
         $this->assertTrue(Schema::hasColumns('puroks', [
             'id',
@@ -79,7 +82,7 @@ class DatabaseSchemaTest extends TestCase
             'log_section',
         ]));
         $this->assertFalse(Schema::hasColumn('records', 'r2_10_eligibility'));
-        $this->assertFalse(Schema::hasColumn('records', 'filing_status'));
+        $this->assertTrue(Schema::hasColumns('records', ['filing_status', 'filing_number']));
         $this->assertFalse(Schema::hasColumn('puroks', 'created_at'));
         $this->assertFalse(Schema::hasColumn('puroks', 'updated_at'));
         $this->assertTrue(Schema::hasColumns('monthly_record_movement_histories', [
@@ -110,6 +113,7 @@ class DatabaseSchemaTest extends TestCase
             'baptism_requirement',
             'entry_years_requirement',
             'dateofbaptism_requirement_boolean',
+            'r401_use_purok_secretary',
         ]));
         $this->assertSame('date', Schema::getColumnType('global_variables', 'baptism_requirement'));
         $this->assertSame('integer', Schema::getColumnType('global_variables', 'entry_years_requirement'));
@@ -174,5 +178,23 @@ class DatabaseSchemaTest extends TestCase
         $this->assertInstanceOf(HasMany::class, $user->secretaryPuroks());
         $this->assertInstanceOf(BelongsTo::class, $purok->secretaryUser());
         $this->assertSame('login_user', $purok->secretaryUser()->getRelated()->getTable());
+    }
+
+    public function test_database_rejects_a_second_head_secretary_role(): void
+    {
+        User::query()->create([
+            'gmail' => 'first-head@example.test',
+            'password' => 'secret-password',
+            'tungkulin' => 'Head Secretary',
+            'is_verified' => true,
+        ]);
+
+        $this->expectException(QueryException::class);
+        User::query()->create([
+            'gmail' => 'second-head@example.test',
+            'password' => 'secret-password',
+            'tungkulin' => 'Secretary Head',
+            'is_verified' => true,
+        ]);
     }
 }

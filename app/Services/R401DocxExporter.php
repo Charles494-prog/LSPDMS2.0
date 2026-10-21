@@ -112,6 +112,7 @@ class R401DocxExporter
                 'assigned_number' => $pageData['assigned_number'] ?? '',
                 'page_number' => $pageData['page_number'] ?? 1,
                 'signatures' => array_replace($header['signatures'] ?? [], [
+                    0 => $pageData['kalihim_name'] ?? ($header['signatures'][0] ?? ''),
                     2 => $pageData['maysakop_name'] ?? '',
                 ]),
             ]);

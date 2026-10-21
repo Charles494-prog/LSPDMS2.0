@@ -19,6 +19,7 @@ class GlobalVariable extends Model
         'head_lsp',
         'kalihim_ms',
         'kalihim_uwp',
+        'r401_use_purok_secretary',
         'baptism_requirement',
         'entry_years_requirement',
         'dateofbaptism_requirement_boolean',
@@ -34,6 +35,7 @@ class GlobalVariable extends Model
             'dateofbaptism_requirement_boolean' => 'boolean',
             'require_otp' => 'boolean',
             'allow_forgot_password' => 'boolean',
+            'r401_use_purok_secretary' => 'boolean',
         ];
     }
 }

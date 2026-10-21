@@ -63,7 +63,7 @@
         padding: .8rem 1.15rem;
         border: 0;
         border-radius: 10px;
-        background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+        background: var(--accent);
         box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 28%, transparent);
         color: #fff;
         font-size: .93rem;

@@ -72,6 +72,20 @@ class DashboardTest extends TestCase
         $this->withSession(['login_user' => ['id' => 1]])
             ->get(route('dashboard'))
             ->assertOk()
+            ->assertSee('Breakdown Per CFO Group')
+            ->assertSee('Breakdown of CFO per Kalagayan')
+            ->assertDontSee('id="pie-chart"', false)
+            ->assertDontSee('id="pie-legend"', false)
+            ->assertSee('class="panel span-4 cfo-panel"', false)
+            ->assertSee('Chart.defaults.animation = false', false)
+            ->assertSee('grid-template-columns:minmax(100px, 150px)', false)
+            ->assertSee("el('button', 'purok-row')", false)
+            ->assertDontSee('id="purok-chart"', false)
+            ->assertSee('id="cfo-status-seg"', false)
+            ->assertSee('id="cfo-group-seg"', false)
+            ->assertSee("['ALL', ...CFO_STATUS_KEYS]", false)
+            ->assertSee("['ALL', ...CFO_GROUPS]", false)
+            ->assertSee('purok-row-name', false)
             ->assertViewHas('dashboardMetrics', function (array $metrics): bool {
                 $this->assertSame(5, $metrics['recordCount']);
                 $this->assertSame(4, $metrics['activeCount']);
@@ -166,9 +180,16 @@ class DashboardTest extends TestCase
             ]);
         }
 
-        $this->withSession(['login_user' => ['id' => 1]])
+        $this->withSession([
+            'login_user' => ['id' => 1],
+            'status' => 'Dashboard changes saved.',
+        ])
             ->get(route('dashboard'))
             ->assertOk()
+            ->assertSee('id="appFlashToast"', false)
+            ->assertSee('Dashboard changes saved.')
+            ->assertSee('safe-area-inset-left', false)
+            ->assertSee('height:260px', false)
             ->assertViewHas('dashboardMetrics', function (array $metrics): bool {
                 $this->assertSame(['MS', 'MK', 'UWP'], array_keys($metrics['kalagayanCounts']));
                 $this->assertSame(['MS' => 1, 'MK' => 1, 'UWP' => 2], $metrics['kalagayanCounts']);

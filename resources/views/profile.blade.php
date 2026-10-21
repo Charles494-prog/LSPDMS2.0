@@ -31,7 +31,7 @@
 
     .profile-cover {
         height: 150px;
-        background: linear-gradient(120deg, #101828, #1e3a8a 60%, #0a6bd6);
+        background: #101828;
     }
 
     .profile-body {

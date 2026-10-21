@@ -33,8 +33,8 @@
     <div class="grid">
         <section class="panel span-7" aria-labelledby="purok-title">
             <h2 id="purok-title">Active records by purok</h2>
-            <div class="chart-box" id="purok-chart-box" style="height:250px"><canvas id="purok-chart" role="img" aria-label="Active records by purok"></canvas></div>
-            <p class="purok-chart-detail" id="purok-chart-detail" role="status" aria-live="polite">Hover over or click a Purok bar to see its MS, UWP, MK, and total counts.</p>
+            <div class="purok-bars" id="purok-chart-box" role="group" aria-label="Active records by Purok"></div>
+            <p class="purok-chart-detail" id="purok-chart-detail" role="status" aria-live="polite">Select a Purok bar to see its MS, UWP, MK, and total counts.</p>
             <ul class="legend" id="status-legend"></ul>
         </section>
 
@@ -72,22 +72,28 @@
             <ul class="legend" id="gender-legend"></ul>
         </section>
 
-        <section class="panel span-4" aria-labelledby="pie-title">
-            <h2 id="pie-title">Records by kalagayan</h2>
-            <div class="chart-box" style="height:190px"><canvas id="pie-chart" role="img" aria-label="Records by kalagayan"></canvas></div>
-            <ul class="legend legend-values" id="pie-legend"></ul>
+        <section class="panel span-4 cfo-panel" aria-labelledby="cfo-group-chart-title">
+            <div class="panel-row">
+                <h2 id="cfo-group-chart-title">Breakdown Per CFO Group</h2>
+                <div class="seg" role="radiogroup" aria-label="Filter by Kalagayan" id="cfo-status-seg"></div>
+            </div>
+            <div class="chart-box chart-doughnut" style="height:260px">
+                <canvas id="cfo-group-chart" role="img" aria-label="Breakdown per CFO group"></canvas>
+                <div class="chart-center" aria-hidden="true"><strong id="cfo-group-total">0</strong><span>RECORDS</span></div>
+            </div>
+            <ul class="legend legend-values" id="cfo-group-legend"></ul>
         </section>
 
-        <section class="panel span-4" aria-labelledby="locale-title">
+        <section class="panel span-4 cfo-panel" aria-labelledby="cfo-status-chart-title">
             <div class="panel-row">
-                <h2 id="locale-title">Records by CFO group</h2>
-                <div class="seg" role="radiogroup" aria-label="Kalagayan" id="locale-seg"></div>
+                <h2 id="cfo-status-chart-title">Breakdown of CFO per Kalagayan</h2>
+                <div class="seg" role="radiogroup" aria-label="Filter by CFO group" id="cfo-group-seg"></div>
             </div>
-            <div class="chart-box chart-doughnut" style="height:190px">
-                <canvas id="locale-chart" role="img" aria-label="Records by CFO group"></canvas>
-                <div class="chart-center" aria-hidden="true"><strong id="locale-total">0</strong><span>RECORDS</span></div>
+            <div class="chart-box chart-doughnut" style="height:260px">
+                <canvas id="cfo-status-chart" role="img" aria-label="Breakdown of CFO per Kalagayan"></canvas>
+                <div class="chart-center" aria-hidden="true"><strong id="cfo-status-total">0</strong><span>RECORDS</span></div>
             </div>
-            <ul class="legend legend-values" id="locale-legend"></ul>
+            <ul class="legend legend-values" id="cfo-status-legend"></ul>
         </section>
 
         <dialog class="modal" id="cfo-group-modal" aria-labelledby="cfo-group-title">
@@ -309,16 +315,19 @@
 
     /* Grid + panels */
     .grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: .75rem; }
-    .span-4 { grid-column: span 4; } .span-5 { grid-column: span 5; } .span-7 { grid-column: span 7; } .span-12 { grid-column: span 12; }
+    .span-4 { grid-column: span 4; } .span-5 { grid-column: span 5; } .span-6 { grid-column: span 6; } .span-7 { grid-column: span 7; } .span-12 { grid-column: span 12; }
     .panel { min-width: 0; padding: 1.15rem 1.25rem; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
     .panel h2 { font-size: 1rem; font-weight: 700; letter-spacing: -.01em; }
     .panel > h2 { margin-bottom: .9rem; }
     .panel-row { display: flex; justify-content: space-between; align-items: center; gap: .75rem; flex-wrap: wrap; margin-bottom: .9rem; }
+    .panel-row > h2 { min-width: 0; margin: 0; }
     .chart-box { position: relative; min-width: 0; }
+    .cfo-panel { display:flex; min-height:0; flex-direction:column; }
+    .cfo-panel .chart-box { flex:1 1 auto; }
     .chart-center { position: absolute; top: 50%; left: 50%; display: grid; justify-items: center; gap: 2px; min-width: 74px; padding: .15rem .3rem; transform: translate(-50%, -50%); border-radius: 8px; background: var(--card); pointer-events: none; }
     .chart-center strong { color: var(--ink); font-size: 1.3rem; font-weight: 800; line-height: 1.1; }
     .chart-center span { color: var(--muted); font-size: .58rem; font-weight: 750; letter-spacing: .04em; }
-    #locale-chart { cursor: pointer; }
+    #cfo-group-chart, #cfo-status-chart { cursor: pointer; }
 
     .legend { display: flex; flex-wrap: wrap; gap: .3rem 1rem; margin-top: .7rem; font-size: .8rem; color: var(--muted); }
     .legend li { display: flex; align-items: center; gap: .4rem; }
@@ -350,7 +359,7 @@
     .gbar span { display: block; height: 100%; width: 0; transition: width .9s cubic-bezier(.2,.8,.2,1); }
 
     /* Segmented control + chips */
-    .seg { display: inline-flex; gap: 3px; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: #f4f7fa; }
+    .seg { display: inline-flex; flex-wrap: wrap; gap: 3px; max-width: 100%; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: #f4f7fa; }
     .seg button { min-width: 42px; padding: .38rem .72rem; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font: inherit; font-size: .78rem; font-weight: 750; cursor: pointer; transition: background .18s ease, color .18s ease, box-shadow .18s ease; }
     .seg button:hover { color: var(--ink); background: rgba(255,255,255,.7); }
     .seg button[aria-checked="true"] { background: var(--card); color: var(--ms); box-shadow: 0 1px 3px rgba(16,35,58,.16); }
@@ -374,15 +383,21 @@
     .chip:disabled { opacity: .4; cursor: default; }
     .hint { margin: .5rem 0 1.1rem; color: var(--muted); font-size: .75rem; }
 
-    .chart-error { padding: 1rem; color: var(--muted); font-size: .83rem; text-align: center; }
+    .chart-error { position:absolute; z-index:2; inset:0; display:grid; place-items:center; margin:0; padding:1rem; background:var(--card); color:var(--muted); font-size:.83rem; text-align:center; }
     .chart-empty { display:grid; height:100%; place-items:center; padding:1rem; color:var(--muted); font-size:.9rem; text-align:center; }
+    .purok-bars { display:grid; max-height:320px; gap:.32rem; overflow-y:auto; padding:.2rem .25rem .2rem 0; }
+    .purok-row { display:grid; grid-template-columns:minmax(100px, 150px) minmax(0, 1fr) 42px; align-items:center; gap:.55rem; width:100%; min-height:28px; padding:.18rem .3rem; border:0; border-radius:6px; background:transparent; color:var(--ink); text-align:left; cursor:pointer; }
+    .purok-row:hover,.purok-row:focus-visible { background:var(--bg); }
+    .purok-row-name { overflow:hidden; font-size:.78rem; font-weight:650; line-height:1.2; text-align:left; text-overflow:ellipsis; white-space:nowrap; }
+    .purok-row-track { display:flex; width:100%; min-width:0; height:20px; overflow:hidden; border-radius:4px; background:var(--bg); }
+    .purok-row-segment { display:flex; min-width:0; height:100%; flex:0 0 auto; align-items:center; justify-content:center; overflow:hidden; font-size:.68rem; font-weight:750; white-space:nowrap; }
+    .purok-row-total { color:var(--muted); font-size:.76rem; font-weight:750; text-align:right; }
     .purok-chart-detail { min-height:1.25rem; margin:.5rem 0 0; color:var(--muted); font-size:.82rem; font-weight:600; }
     .dash a:focus-visible, .dash button:focus-visible { outline: 3px solid #5b9dff; outline-offset: 2px; }
     @media (prefers-reduced-motion: reduce) { .dash *, .dash *::before { transition: none !important; } }
 
     @media (max-width: 1100px) {
-        .span-4 { grid-column: span 6; } .span-5, .span-7 { grid-column: span 12; }
-        .grid > .panel:nth-child(5) { grid-column: span 12; }
+        .span-4 { grid-column: span 6; } .span-5, .span-7, .cfo-panel { grid-column: span 12; }
     }
     @media (max-width: 800px) {
         .hero { grid-template-columns: 1fr; gap: 1.1rem; }
@@ -391,9 +406,17 @@
         .filters { padding: 1rem 0 0; border-left: 0; border-top: 1px solid var(--line); }
     }
     @media (max-width: 640px) {
-        .span-4 { grid-column: span 12; }
+        .span-4, .span-6 { grid-column: span 12; }
         .gauges { grid-template-columns: 1fr; }
         .ot-chart { height: 280px; }
+        .purok-row { grid-template-columns:minmax(88px, 112px) minmax(0, 1fr) 34px; gap:.35rem; }
+        .purok-row-name { font-size:.72rem; }
+        .purok-row-track { height:18px; }
+        .purok-row-segment { font-size:.62rem; }
+        .chart-doughnut { height: 230px !important; }
+        .panel-row { align-items: flex-start; }
+        .panel-row .seg { width: 100%; justify-content: space-between; }
+        .panel-row .seg button { flex: 1 1 auto; }
     }
 </style>
 @endpush
@@ -410,7 +433,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (hasChart) {
         Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
         Chart.defaults.color = MUTED;
-        Chart.defaults.animation = reduceMotion ? false : { duration: 800, easing: 'easeOutQuart' };
+        Chart.defaults.animation = false;
     }
 
     /* ---------- Database-backed dashboard metrics ---------- */
@@ -433,8 +456,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }));
     const gender = DASHBOARD.gender;
     const genderRecords = DASHBOARD.genderRecords;
-    const locale = Object.fromEntries(KEYS.map(code => [code, DASHBOARD.groupLabels.map(label => DASHBOARD.groupCounts[code]?.[label] || 0)]));
-    const LOCALE = DASHBOARD.groupLabels.map((label, index) => [label, ['#16a34a', '#3b82f6', '#ef4444'][index]]);
+    const CFO_GROUPS = ['Buklod', 'Kadiwa', 'Binhi'];
+    const CFO_GROUP_COLORS = { Binhi: '#16a34a', Kadiwa: '#3b82f6', Buklod: '#ef4444' };
+    const CFO_STATUS_KEYS = ['MS', 'UWP', 'MK'];
+    const cfoGroupRecordsByStatus = DASHBOARD.groupRecords;
     const MONTHS = DASHBOARD.monthLabels;
     const DATA_MONTHS = MONTHS.length;
     const MONTH_KEYS = DASHBOARD.monthKeys;
@@ -471,10 +496,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const canvas = $(id);
         try {
             if (!hasChart) throw new Error('Chart.js missing');
+            if (!canvas) throw new Error(`Chart canvas "${id}" is missing`);
+            Chart.getChart(canvas)?.destroy();
             return new Chart(canvas, config);
         } catch (err) {
             console.error(`Chart "${id}" failed:`, err);
-            canvas.parentElement.replaceChildren(el('p', 'chart-error', "The chart couldn't load. Reload the page to try again."));
+            if (canvas?.parentElement) {
+                const message = el('p', 'chart-error', "The chart couldn't load. Reload the page to try again.");
+                message.setAttribute('role', 'status');
+                canvas.hidden = true;
+                canvas.setAttribute('aria-hidden', 'true');
+                canvas.parentElement.querySelector('.chart-center')?.setAttribute('hidden', '');
+                canvas.parentElement.append(message);
+            }
             return null;
         }
     }
@@ -506,79 +540,43 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /* ---------- By purok ---------- */
     legend('status-legend', statusItems);
-    const barLabels = {
-        id: 'barLabels',
-        afterDatasetsDraw(chart) {
-            const { ctx } = chart; ctx.save();
-            ctx.font = '600 11px ' + Chart.defaults.font.family; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            chart.data.datasets.forEach((ds, i) => chart.getDatasetMeta(i).data.forEach((bar, idx) => {
-                const v = ds.data[idx];
-                if (!v || Math.abs(bar.x - bar.base) < 16) return;
-                ctx.fillStyle = ds.label === 'MK' ? INK : '#fff';
-                ctx.fillText(String(v), (bar.x + bar.base) / 2, bar.y);
-            }));
-            ctx.restore();
-        },
-    };
     if (!puroks.length) {
         $('purok-chart-box').replaceChildren(el('p', 'chart-empty', 'No Puroks are configured yet. Add Puroks in Security Settings to see active records by Purok.'));
         $('status-legend').replaceChildren();
         $('purok-chart-detail').hidden = true;
     }
-    function showPurokDetail(chart, event) {
-        const item = chart.getElementsAtEventForMode(
-            event,
-            'nearest',
-            { intersect: false, axis: 'y' },
-            true
-        )[0];
-        if (!item) return;
-
-        const purok = puroks[item.index];
-        if (!purok) return;
+    function showPurokDetail(purok) {
         $('purok-chart-detail').textContent =
             `${purok.name}: ${KEYS.map(status => `${NAMES[status]} ${purok[status]}`).join(' · ')} · Total ${purok.total}`;
     }
-    const purokChart = puroks.length ? makeChart('purok-chart', {
-        type: 'bar',
-        data: {
-            labels: puroks.map(p => `${p.name} · ${p.total}`),
-            datasets: KEYS.map(k => ({ label: NAMES[k], data: puroks.map(p => p[k]), backgroundColor: colorFor(k), barPercentage: .7, borderSkipped: false })),
-        },
-        options: {
-            indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-            interaction: { mode: 'index', intersect: false, axis: 'y' },
-            events: ['mousemove', 'mouseout', 'click', 'touchstart', 'touchmove'],
-            onHover(event, _activeElements, chart) {
-                if (event.type === 'mousemove') showPurokDetail(chart, event);
-            },
-            onClick(event, _activeElements, chart) {
-                showPurokDetail(chart, event);
-            },
-            scales: {
-                x: { stacked: true, display: false, min: 0, beginAtZero: true, offset: false, max: Math.max(1, ...puroks.map(p => p.total)) },
-                y: { stacked: true, grid: { display: false }, border: { display: false }, ticks: { color: INK, font: { size: 12, weight: '600' } } },
-            },
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    mode: 'index',
-                    intersect: false,
-                    callbacks: {
-                        label(context) {
-                            return `${context.dataset.label}: ${context.parsed.x}`;
-                        },
-                        footer(items) {
-                            return `Total active records: ${items.reduce((total, item) => total + item.parsed.x, 0)}`;
-                        },
-                    },
-                },
-            },
-        },
-        plugins: [barLabels],
-    }) : null;
-    if (purokChart) purokChart.canvas.setAttribute('aria-label',
-        'Active records by purok: ' + puroks.map(p => `${p.name} ${p.total} (${KEYS.map(k => `${k} ${p[k]}`).join(', ')})`).join('; '));
+    const largestPurok = Math.max(1, ...puroks.map(purok => purok.total));
+    if (puroks.length) {
+        $('purok-chart-box').replaceChildren(...puroks.map(purok => {
+            const row = el('button', 'purok-row');
+            row.type = 'button';
+            row.setAttribute('aria-label',
+                `${purok.name}: ${KEYS.map(status => `${NAMES[status]} ${purok[status]}`).join(', ')}; total ${purok.total}`);
+            row.title = `${purok.name}: ${KEYS.map(status => `${NAMES[status]} ${purok[status]}`).join(' · ')} · Total ${purok.total}`;
+            const name = el('span', 'purok-row-name', purok.name);
+            const track = el('span', 'purok-row-track');
+            track.setAttribute('aria-hidden', 'true');
+            KEYS.forEach(status => {
+                const count = purok[status];
+                if (!count) return;
+                const segment = el('span', 'purok-row-segment', count / largestPurok >= .1 ? String(count) : '');
+                segment.style.width = `${count / largestPurok * 100}%`;
+                segment.style.background = colorFor(status);
+                segment.style.color = status === 'MK' ? INK : '#fff';
+                segment.title = `${status}: ${count}`;
+                track.append(segment);
+            });
+            row.append(name, track, el('span', 'purok-row-total', String(purok.total)));
+            row.addEventListener('mouseenter', () => showPurokDetail(purok));
+            row.addEventListener('focus', () => showPurokDetail(purok));
+            row.addEventListener('click', () => showPurokDetail(purok));
+            return row;
+        }));
+    }
 
     /* ---------- Gauges ---------- */
     document.querySelectorAll('.gauge').forEach((g, i) => {
@@ -634,7 +632,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const doughnutCenter = {
         id: 'doughnutCenter',
         afterDraw(chart) {
-            if (chart.canvas.id === 'locale-chart') return;
+            if (['cfo-group-chart', 'cfo-status-chart'].includes(chart.canvas.id)) return;
             if (!chart.chartArea) return;
             const values = chart.data.datasets[0]?.data || [];
             const total = chart.$centerTotal ?? values.reduce((sum, value) => sum + (Number(value) || 0), 0);
@@ -679,29 +677,13 @@ document.addEventListener('DOMContentLoaded', () => {
         plugins: [doughnutCenter],
     });
 
-    const pieItems = ['MS', 'MK', 'UWP'].map(status => [
-        status,
-        colorFor(status),
-        DASHBOARD.kalagayanCounts[status] || 0,
-    ]);
-    const pie = doughnut('pie-chart', pieItems.map(i => i[0]), pieItems.map(i => i[2]), pieItems.map(i => i[1]));
-    valueLegend('pie-legend', pieItems, add(pieItems.map(i => i[2])));
-    if (pie) pie.canvas.setAttribute('aria-label', 'Records by kalagayan: ' + pieItems.map(i => `${i[0]} ${i[2]}`).join(', '));
-
-    const GROUP_KEYS = ['MS', 'MK', 'UWP'];
-    const allGroupCounts = LOCALE.map((_, index) => GROUP_KEYS.reduce((sum, key) => sum + (locale[key]?.[index] || 0), 0));
-    locale.ALL = allGroupCounts;
-    const groupRecords = DASHBOARD.groupRecords;
     const cfoGroupModal = $('cfo-group-modal');
-    function showCfoGroupRecords(kind, group) {
-        const statuses = kind === 'ALL' ? GROUP_KEYS : [kind];
-        const records = statuses.flatMap(status => groupRecords[status]?.[group] || []);
-        const statusLabel = kind === 'ALL' ? 'All MS, MK, and UWP' : kind;
-        $('cfo-group-title').textContent = `${group} records`;
-        $('cfo-group-sub').textContent = `${records.length} ${statusLabel} record${records.length === 1 ? '' : 's'}`;
+    function showCfoRecords(records, title, description) {
+        $('cfo-group-title').textContent = title;
+        $('cfo-group-sub').textContent = `${records.length} ${description} record${records.length === 1 ? '' : 's'}`;
         const body = $('cfo-group-body');
         if (!records.length) {
-            body.replaceChildren(el('div', 'empty', `No ${statusLabel} records found in ${group}.`));
+            body.replaceChildren(el('div', 'empty', `No ${description} records found.`));
             cfoGroupModal.showModal();
             return;
         }
@@ -719,36 +701,95 @@ document.addEventListener('DOMContentLoaded', () => {
         body.replaceChildren(wrap);
         cfoGroupModal.showModal();
     }
-    const localeChart = doughnut('locale-chart', LOCALE.map(l => l[0]), allGroupCounts, LOCALE.map(l => l[1]), (event, elements, chart) => {
-        const [slice] = chart.getElementsAtEventForMode(event, 'nearest', { intersect: true }, true);
-        if (slice) showCfoGroupRecords(document.querySelector('#locale-seg button[aria-checked="true"]')?.dataset.k || 'ALL', LOCALE[slice.index][0]);
+
+    const selectedStatusesForGroupChart = () => document.querySelector('#cfo-status-seg button[aria-checked="true"]')?.dataset.k || 'ALL';
+    const selectedGroupForStatusChart = () => document.querySelector('#cfo-group-seg button[aria-checked="true"]')?.dataset.k || 'ALL';
+    const groupChartData = kind => CFO_GROUPS.map(group => {
+        const statuses = kind === 'ALL' ? CFO_STATUS_KEYS : [kind];
+        return statuses.reduce((total, status) => total + (DASHBOARD.groupCounts[status]?.[group] || 0), 0);
     });
-    if (localeChart) localeChart.$centerTotal = add(allGroupCounts);
-    function showLocale(kind) {
-        const data = locale[kind] || LOCALE.map(() => 0);
-        const groupTotal = add(data);
-        $('locale-total').textContent = String(groupTotal);
-        if (localeChart) {
-            localeChart.stop();
-            localeChart.data.datasets[0].data = data;
-            localeChart.$centerTotal = groupTotal;
-            localeChart.update('none');
-            const statusLabel = kind === 'ALL' ? 'All MS, MK, and UWP' : kind;
-            localeChart.canvas.setAttribute('aria-label', `${statusLabel}: ${groupTotal} records in Binhi, Kadiwa, and Buklod; Kapisanan breakdown: ` + LOCALE.map((l, i) => `${l[0]} ${data[i]}`).join(', '));
+    const statusChartData = kind => CFO_STATUS_KEYS.map(status => {
+        const groups = kind === 'ALL' ? CFO_GROUPS : [kind];
+        return groups.reduce((total, group) => total + (DASHBOARD.groupCounts[status]?.[group] || 0), 0);
+    });
+
+    const cfoGroupChart = doughnut('cfo-group-chart', CFO_GROUPS, groupChartData('ALL'), CFO_GROUPS.map(group => CFO_GROUP_COLORS[group]), (event, elements, chart) => {
+        const [slice] = chart.getElementsAtEventForMode(event, 'nearest', { intersect: true }, true);
+        if (!slice) return;
+        const group = CFO_GROUPS[slice.index];
+        const kind = selectedStatusesForGroupChart();
+        const statuses = kind === 'ALL' ? CFO_STATUS_KEYS : [kind];
+        const records = statuses.flatMap(status => cfoGroupRecordsByStatus[status]?.[group] || []);
+        const statusLabel = kind === 'ALL' ? 'all MS, UWP, and MK' : kind;
+        showCfoRecords(records, `${group} records`, `${statusLabel} ${group}`);
+    });
+    const cfoStatusChart = doughnut('cfo-status-chart', CFO_STATUS_KEYS, statusChartData('ALL'), CFO_STATUS_KEYS.map(status => colorFor(status)), (event, elements, chart) => {
+        const [slice] = chart.getElementsAtEventForMode(event, 'nearest', { intersect: true }, true);
+        if (!slice) return;
+        const status = CFO_STATUS_KEYS[slice.index];
+        const kind = selectedGroupForStatusChart();
+        const groups = kind === 'ALL' ? CFO_GROUPS : [kind];
+        const records = groups.flatMap(group => cfoGroupRecordsByStatus[status]?.[group] || []);
+        const groupLabel = kind === 'ALL' ? 'all CFO groups' : kind;
+        showCfoRecords(records, `${status} records`, `${status} ${groupLabel}`);
+    });
+
+    function updateCfoGroupChart(kind) {
+        const data = groupChartData(kind);
+        const total = add(data);
+        $('cfo-group-total').textContent = String(total);
+        cfoGroupChart?.stop();
+        if (cfoGroupChart) {
+            cfoGroupChart.data.datasets[0].data = data;
+            cfoGroupChart.update('none');
+            cfoGroupChart.canvas.setAttribute('aria-label', `${kind === 'ALL' ? 'All MS, UWP, and MK' : kind} breakdown per CFO group: `
+                + CFO_GROUPS.map((group, index) => `${group} ${data[index]}`).join(', '));
         }
-        valueLegend('locale-legend', LOCALE.map((l, i) => [l[0], l[1], data[i]]), groupTotal);
-        document.querySelectorAll('#locale-seg button').forEach(b => b.setAttribute('aria-checked', String(b.dataset.k === kind)));
+        valueLegend('cfo-group-legend', CFO_GROUPS.map((group, index) => [
+            group, CFO_GROUP_COLORS[group], data[index],
+        ]), total);
+        document.querySelectorAll('#cfo-status-seg button').forEach(button => {
+            button.setAttribute('aria-checked', String(button.dataset.k === kind));
+        });
     }
-    $('locale-seg').replaceChildren(...['ALL', ...GROUP_KEYS].map(k => {
-        const b = el('button', '', k); b.type = 'button'; b.dataset.k = k; b.setAttribute('role', 'radio');
-        b.addEventListener('click', () => showLocale(k));
-        return b;
+
+    function updateCfoStatusChart(kind) {
+        const data = statusChartData(kind);
+        const total = add(data);
+        $('cfo-status-total').textContent = String(total);
+        cfoStatusChart?.stop();
+        if (cfoStatusChart) {
+            cfoStatusChart.data.datasets[0].data = data;
+            cfoStatusChart.update('none');
+            cfoStatusChart.canvas.setAttribute('aria-label', `${kind === 'ALL' ? 'All CFO groups' : kind} breakdown per Kalagayan: `
+                + CFO_STATUS_KEYS.map((status, index) => `${status} ${data[index]}`).join(', '));
+        }
+        valueLegend('cfo-status-legend', CFO_STATUS_KEYS.map((status, index) => [
+            status, colorFor(status), data[index],
+        ]), total);
+        document.querySelectorAll('#cfo-group-seg button').forEach(button => {
+            button.setAttribute('aria-checked', String(button.dataset.k === kind));
+        });
+    }
+
+    $('cfo-status-seg').replaceChildren(...['ALL', ...CFO_STATUS_KEYS].map(kind => {
+        const button = el('button', '', kind);
+        button.type = 'button';
+        button.dataset.k = kind;
+        button.setAttribute('role', 'radio');
+        button.addEventListener('click', () => updateCfoGroupChart(kind));
+        return button;
     }));
-    if (GROUP_KEYS.some(key => Object.hasOwn(locale, key))) showLocale('ALL');
-    else {
-        valueLegend('locale-legend', LOCALE.map(([label, color]) => [label, color, 0]), 0);
-        $('locale-seg').replaceChildren(el('span', 'hint', 'No active status data.'));
-    }
+    $('cfo-group-seg').replaceChildren(...['ALL', ...CFO_GROUPS].map(group => {
+        const button = el('button', '', group);
+        button.type = 'button';
+        button.dataset.k = group;
+        button.setAttribute('role', 'radio');
+        button.addEventListener('click', () => updateCfoStatusChart(group));
+        return button;
+    }));
+    updateCfoGroupChart('ALL');
+    updateCfoStatusChart('ALL');
 
     /* ---------- Over time ---------- */
     const historyStatuses = ['MS', 'UWP', 'MK'];

@@ -34,9 +34,9 @@
     .hero {
         position: relative; background: var(--navy); color: #fff; text-align: center;
         padding: 2.4rem 1.4rem 6rem; min-height: 600px; display: flex; flex-direction: column; align-items: center;
-        background-image: radial-gradient(ellipse at 50% 0%, rgba(185, 150, 79, .22), transparent 55%);
     }
     .brand { font-size: 1.5rem; font-weight: 500; letter-spacing: .12em; color: var(--gold-soft); }
+    .brand-logo { display: block; width: min(190px, 45vw); max-height: 90px; margin: 0 auto 1rem; object-fit: contain; }
     .brand::after { content: ""; display: block; width: 40px; height: 1px; margin: 1rem auto 0; background: var(--gold); }
     .verse { flex: 1; display: flex; flex-direction: column; justify-content: center; max-width: 920px; padding-top: 3.5rem; transition: opacity .4s ease; }
     .verse.out { opacity: 0; }
@@ -48,6 +48,10 @@
     .verse.long p { font-size: clamp(1.6rem, 3.8vw, 2.7rem); }
     .verse cite { font-style: normal; font-size: .85rem; letter-spacing: .22em; color: var(--gold-soft); }
     .hero .btn { margin-top: 3rem; }
+    .lang-toggle { display: inline-flex; margin-top: 1.6rem; border: 1px solid rgba(227, 207, 156, .4); }
+    .lang-toggle button { padding: .55rem 1.1rem; border: 0; background: transparent; color: #aab4c8; cursor: pointer; font: 400 .72rem/1 'Jost', sans-serif; letter-spacing: .18em; text-transform: uppercase; transition: background .3s var(--ease), color .3s var(--ease); }
+    .lang-toggle button[aria-pressed="true"] { background: var(--gold); color: var(--navy); }
+    .lang-toggle button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 
     /* Sections */
     .sec { padding: 6.5rem 0 0; }
@@ -62,7 +66,7 @@
     .arch {
         width: min(100%, 340px); aspect-ratio: 3 / 4; justify-self: center; border-radius: 999px 999px 0 0;
         display: grid; place-content: center; text-align: center; color: #fff; position: relative;
-        background: linear-gradient(170deg, var(--navy-2), var(--navy));
+        background: var(--navy);
         box-shadow: 0 0 0 8px var(--ivory), 0 0 0 9px var(--gold);
     }
     .arch h3 { margin: 0; font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 500; font-size: 3rem; letter-spacing: .06em; }
@@ -86,7 +90,7 @@
     .go a:hover .btn-dark, .go a:focus-visible .btn-dark { background: var(--gold); border-color: var(--gold); color: var(--navy); }
 
     /* Official channels: round emblems on navy */
-    .official { margin-top: 7rem; padding: 6.5rem 0 5.5rem; background: var(--navy); color: #fff; background-image: radial-gradient(ellipse at 50% 100%, rgba(185, 150, 79, .18), transparent 60%); }
+    .official { margin-top: 7rem; padding: 6.5rem 0 5.5rem; background: var(--navy); color: #fff; }
     .official .sec-head p { color: #aab4c8; }
     .official .sec-head h2 { color: #fff; }
     .tabs { display: flex; justify-content: center; flex-wrap: wrap; gap: 1.2rem 2.2rem; margin-bottom: 4rem; }
@@ -114,10 +118,7 @@
     .emblem:hover .orb, .emblem:focus-visible .orb { background: var(--gold); color: var(--navy); transform: translateY(-6px); }
     .emblem:focus-visible { outline: 2px solid var(--gold); outline-offset: 6px; }
 
-    .closing { margin: 4.5rem auto 0; max-width: 54ch; text-align: center; font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-size: 1.3rem; line-height: 1.7; color: var(--gold-soft); }
-    .closing cite { display: block; margin-top: .6rem; font-family: 'Jost', sans-serif; font-style: normal; font-size: .78rem; letter-spacing: .2em; color: #aab4c8; }
     .foot { padding: 2.4rem 1rem; background: var(--deep, #070d1d); background: #070d1d; color: #8f9ab0; text-align: center; font-size: .85rem; }
-    .foot strong { display: block; margin-bottom: .3rem; font-family: 'Cormorant Garamond', Georgia, serif; font-size: 1.2rem; font-weight: 500; color: var(--gold-soft); letter-spacing: .06em; }
 
     .faith-page a:focus-visible, .faith-page button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
     @media (prefers-reduced-motion: reduce) { .faith-page *, .faith-page *::before { animation: none !important; transition: none !important; } }
@@ -203,14 +204,21 @@
 
     {{-- Hero: the verse takes centre stage --}}
     <section class="hero" id="top" aria-label="Talata mula sa Biblia">
-        <div class="brand serif">The Daily Faith</div>
+        <div class="brand serif">
+            <img class="brand-logo" src="{{ asset('images/LSP_logo_white.png') }}" alt="LSPDMS — LSP's Data Management System">
+            The Daily Faith
+        </div>
         <div class="verse" id="verse">
-            <blockquote lang="tl">
+            <blockquote lang="tl" id="verse-quote">
                 <p id="verse-text">Ang Panginoon ay aking pastor; hindi ako magkukulang.</p>
                 <cite id="verse-ref">Awit 23:1 · Ang Dating Biblia</cite>
             </blockquote>
         </div>
         <button type="button" class="btn btn-light" id="verse-next">Another verse</button>
+        <div class="lang-toggle" role="group" aria-label="Verse language">
+            <button type="button" data-lang="tl" aria-pressed="true">Tagalog</button>
+            <button type="button" data-lang="en" aria-pressed="false">English</button>
+        </div>
     </section>
 
     {{-- Featured read --}}
@@ -290,16 +298,11 @@
                     @endforeach
                 </div>
             @endforeach
-
-            <p class="closing">“Then he told them, ‘As you go into all the world, proclaim the gospel to everyone.’”
-                <cite>Mark 16:15 ISV</cite>
-            </p>
         </div>
     </section>
 
     <footer class="foot">
-        <strong>Thanks for stopping by</strong>
-        Tap any link above to open it in a new tab.
+        &copy; {{ date('Y') }} Iglesia Ni Cristo (Church of Christ)
     </footer>
 </div>
 @endsection
@@ -310,45 +313,58 @@ document.addEventListener('DOMContentLoaded', () => {
     const page = document.querySelector('.faith-page');
     const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+    // [Tagalog (Ang Dating Biblia), English (King James Version), reference key]
     const VERSES = [
-        ['Ang Panginoon ay aking pastor; hindi ako magkukulang.', 'Awit 23:1'],
-        ['Sapagka\'t nalalaman ko ang mga pagiisip na iniisip ko tungkol sa inyo, sabi ng Panginoon, mga pagiisip ng kapayapaan, at hindi ng kasamaan, upang bigyan kayo ng pagasa sa inyong huling wakas.', 'Jeremias 29:11'],
-        ['Huwag kang matakot; sapagka\'t ako\'y sumasaiyo: huwag kang manglupaypay; sapagka\'t ako ang iyong Dios: aking palalakasin ka; oo, aking tutulungan ka.', 'Isaias 41:10'],
-        ['Magagawa ko ang lahat ng mga bagay sa kaniya na nagpapalakas sa akin.', 'Filipos 4:13'],
-        ['Magsiparito sa akin, ang lahat ng nangapapagal at nangabibigatang lubha, at kayo\'y aking pagpapahingahin.', 'Mateo 11:28'],
-        ['Ang Dios ay aming kanlungan at kalakasan, isang katulong na laging masusumpungan sa kabagabagan.', 'Awit 46:1'],
-        ['Ang salita mo\'y ilawan sa aking mga paa, at liwanag sa aking landas.', 'Awit 119:105'],
-        ['Nguni\'t silang naghihintay sa Panginoon ay magbabagong lakas; sila\'y sasampa na may mga pakpak na gaya ng mga agila; sila\'y magsisitakbo, at hindi manganganyayat.', 'Isaias 40:31'],
-        ["Ang Panginoon ay aking liwanag at aking kaligtasan; kanino ako matatakot? Ang Panginoon ay katibayan ng aking buhay; kanino ako mangingilag?", 'Awit 27:1'],
-        ["Magalak ka naman sa Panginoon; at ibibigay niya sa iyo ang nasa ng iyong puso.", 'Awit 37:4'],
-        ["Ipagkatiwala mo ang iyong pasanin sa Panginoon, at aalalayan ka niya.", 'Awit 55:22'],
-        ["Siyang tumatahan sa lihim na dako ng Kataastaasan ay tatahan sa lilim ng Makapangyarihan sa lahat.", 'Awit 91:1'],
-        ["Ito ang araw na ginawa ng Panginoon; tayo'y matutuwa at magagalak diyan.", 'Awit 118:24'],
-        ["Kaniyang pinagagaling ang mga bagbag na puso, at tinatalian ang kanilang mga sugat.", 'Awit 147:3'],
-        ["Ang pagtangis ay magtatagal nang magdamag, nguni't ang kagalakan ay dumarating sa kinaumagahan.", 'Awit 30:5'],
-        ["Magtiwala ka sa Panginoon ng buong puso mo, at huwag kang manalig sa iyong sariling kaunawa.", 'Kawikaan 3:5'],
-        ["Ipagkatiwala mo sa Panginoon ang iyong mga gawa, at ang iyong mga pagiisip ay matatatag.", 'Kawikaan 16:3'],
-        ["Ang pangalan ng Panginoon ay matibay na moog: ang matuwid ay tumatakbo roon, at ligtas.", 'Kawikaan 18:10'],
-        ["Iyong iingatan siya sa sakdal na kapayapaan, na ang pagiisip ay nananatili sa iyo: sapagka't siya'y tumitiwala sa iyo.", 'Isaias 26:3'],
-        ["Pagka ikaw ay dumaraan sa mga tubig, ako'y sasaiyo; at sa mga ilog, hindi ka nila aapawan.", 'Isaias 43:2'],
-        ["Datapuwa't hanapin ninyo muna ang kaniyang kaharian, at ang kaniyang katuwiran; at ang lahat ng mga bagay na ito'y idaragdag sa inyo.", 'Mateo 6:33'],
-        ["Magsihingi kayo, at kayo'y bibigyan; magsihanap kayo, at kayo'y makasusumpong; magsituktok kayo, at kayo'y pagbubuksan.", 'Mateo 7:7'],
-        ["Kapayapaan ang iniiwan ko sa inyo, aking kapayapaan ang ibinibigay ko sa inyo. Huwag mabagabag ang inyong puso, ni mangilabot man.", 'Juan 14:27'],
-        ["Ngayon ang Dios ng pagasa ay puspusin nawa kayo ng buong kagalakan at kapayapaan sa pananampalataya, upang kayo'y managana sa pagasa.", 'Roma 15:13'],
-        ["Sapagka't nagsisilakad kami sa pamamagitan ng pananampalataya, hindi sa pamamagitan ng nakikita.", '2 Corinto 5:7'],
-        ["At huwag tayong mangapagod sa paggawa ng mabuti: sapagka't sa kapanahunan ay mangagsisiani tayo, kung tayo'y hindi manghihimagod.", 'Galacia 6:9'],
-        ["Ang pananampalataya nga ay siyang katunayan ng mga bagay na inaasahan, ang katibayan ng mga bagay na hindi nakikita.", 'Hebreo 11:1'],
-        ["Sa bawa't bagay ay may kapanahunan, at panahon sa bawa't panukala sa silong ng langit.", 'Eclesiastes 3:1'],
-        ["Bago sa bawa't umaga: dakila ang iyong pagtatapat.", 'Panaghoy 3:23'],
-        ["Kayo'y magpakalakas at magpakatapang, huwag kayong matakot; hindi ka niya iiwan, ni pababayaan ka man.", 'Deuteronomio 31:6'],
+        ['Ang Panginoon ay aking pastor; hindi ako magkukulang.', 'The LORD is my shepherd; I shall not want.', ['Awit 23:1', 'Psalm 23:1']],
+        ["Sapagka't nalalaman ko ang mga pagiisip na iniisip ko tungkol sa inyo, sabi ng Panginoon, mga pagiisip ng kapayapaan, at hindi ng kasamaan, upang bigyan kayo ng pagasa sa inyong huling wakas.", 'For I know the thoughts that I think toward you, saith the LORD, thoughts of peace, and not of evil, to give you an expected end.', ['Jeremias 29:11', 'Jeremiah 29:11']],
+        ["Huwag kang matakot; sapagka't ako'y sumasaiyo: huwag kang manglupaypay; sapagka't ako ang iyong Dios: aking palalakasin ka; oo, aking tutulungan ka.", 'Fear thou not; for I am with thee: be not dismayed; for I am thy God: I will strengthen thee; yea, I will help thee.', ['Isaias 41:10', 'Isaiah 41:10']],
+        ['Magagawa ko ang lahat ng mga bagay sa kaniya na nagpapalakas sa akin.', 'I can do all things through Christ which strengtheneth me.', ['Filipos 4:13', 'Philippians 4:13']],
+        ["Magsiparito sa akin, ang lahat ng nangapapagal at nangabibigatang lubha, at kayo'y aking pagpapahingahin.", 'Come unto me, all ye that labour and are heavy laden, and I will give you rest.', ['Mateo 11:28', 'Matthew 11:28']],
+        ['Ang Dios ay aming kanlungan at kalakasan, isang katulong na laging masusumpungan sa kabagabagan.', 'God is our refuge and strength, a very present help in trouble.', ['Awit 46:1', 'Psalm 46:1']],
+        ["Ang salita mo'y ilawan sa aking mga paa, at liwanag sa aking landas.", 'Thy word is a lamp unto my feet, and a light unto my path.', ['Awit 119:105', 'Psalm 119:105']],
+        ["Nguni't silang naghihintay sa Panginoon ay magbabagong lakas; sila'y sasampa na may mga pakpak na gaya ng mga agila; sila'y magsisitakbo, at hindi manganganyayat.", 'But they that wait upon the LORD shall renew their strength; they shall mount up with wings as eagles; they shall run, and not be weary; and they shall walk, and not faint.', ['Isaias 40:31', 'Isaiah 40:31']],
+        ['Ang Panginoon ay aking liwanag at aking kaligtasan; kanino ako matatakot? Ang Panginoon ay katibayan ng aking buhay; kanino ako mangingilag?', 'The LORD is my light and my salvation; whom shall I fear? the LORD is the strength of my life; of whom shall I be afraid?', ['Awit 27:1', 'Psalm 27:1']],
+        ['Magalak ka naman sa Panginoon; at ibibigay niya sa iyo ang nasa ng iyong puso.', 'Delight thyself also in the LORD; and he shall give thee the desires of thine heart.', ['Awit 37:4', 'Psalm 37:4']],
+        ['Ipagkatiwala mo ang iyong pasanin sa Panginoon, at aalalayan ka niya.', 'Cast thy burden upon the LORD, and he shall sustain thee.', ['Awit 55:22', 'Psalm 55:22']],
+        ['Siyang tumatahan sa lihim na dako ng Kataastaasan ay tatahan sa lilim ng Makapangyarihan sa lahat.', 'He that dwelleth in the secret place of the most High shall abide under the shadow of the Almighty.', ['Awit 91:1', 'Psalm 91:1']],
+        ["Ito ang araw na ginawa ng Panginoon; tayo'y matutuwa at magagalak diyan.", 'This is the day which the LORD hath made; we will rejoice and be glad in it.', ['Awit 118:24', 'Psalm 118:24']],
+        ['Kaniyang pinagagaling ang mga bagbag na puso, at tinatalian ang kanilang mga sugat.', 'He healeth the broken in heart, and bindeth up their wounds.', ['Awit 147:3', 'Psalm 147:3']],
+        ["Ang pagtangis ay magtatagal nang magdamag, nguni't ang kagalakan ay dumarating sa kinaumagahan.", 'Weeping may endure for a night, but joy cometh in the morning.', ['Awit 30:5', 'Psalm 30:5']],
+        ['Magtiwala ka sa Panginoon ng buong puso mo, at huwag kang manalig sa iyong sariling kaunawa.', 'Trust in the LORD with all thine heart; and lean not unto thine own understanding.', ['Kawikaan 3:5', 'Proverbs 3:5']],
+        ['Ipagkatiwala mo sa Panginoon ang iyong mga gawa, at ang iyong mga pagiisip ay matatatag.', 'Commit thy works unto the LORD, and thy thoughts shall be established.', ['Kawikaan 16:3', 'Proverbs 16:3']],
+        ["Ang pangalan ng Panginoon ay matibay na moog: ang matuwid ay tumatakbo roon, at ligtas.", 'The name of the LORD is a strong tower: the righteous runneth into it, and is safe.', ['Kawikaan 18:10', 'Proverbs 18:10']],
+        ["Iyong iingatan siya sa sakdal na kapayapaan, na ang pagiisip ay nananatili sa iyo: sapagka't siya'y tumitiwala sa iyo.", 'Thou wilt keep him in perfect peace, whose mind is stayed on thee: because he trusteth in thee.', ['Isaias 26:3', 'Isaiah 26:3']],
+        ["Pagka ikaw ay dumaraan sa mga tubig, ako'y sasaiyo; at sa mga ilog, hindi ka nila aapawan.", 'When thou passest through the waters, I will be with thee; and through the rivers, they shall not overflow thee.', ['Isaias 43:2', 'Isaiah 43:2']],
+        ["Datapuwa't hanapin ninyo muna ang kaniyang kaharian, at ang kaniyang katuwiran; at ang lahat ng mga bagay na ito'y idaragdag sa inyo.", 'But seek ye first the kingdom of God, and his righteousness; and all these things shall be added unto you.', ['Mateo 6:33', 'Matthew 6:33']],
+        ["Magsihingi kayo, at kayo'y bibigyan; magsihanap kayo, at kayo'y makasusumpong; magsituktok kayo, at kayo'y pagbubuksan.", 'Ask, and it shall be given you; seek, and ye shall find; knock, and it shall be opened unto you.', ['Mateo 7:7', 'Matthew 7:7']],
+        ['Kapayapaan ang iniiwan ko sa inyo, aking kapayapaan ang ibinibigay ko sa inyo. Huwag mabagabag ang inyong puso, ni mangilabot man.', 'Peace I leave with you, my peace I give unto you: not as the world giveth, give I unto you. Let not your heart be troubled, neither let it be afraid.', ['Juan 14:27', 'John 14:27']],
+        ["Ngayon ang Dios ng pagasa ay puspusin nawa kayo ng buong kagalakan at kapayapaan sa pananampalataya, upang kayo'y managana sa pagasa.", 'Now the God of hope fill you with all joy and peace in believing, that ye may abound in hope.', ['Roma 15:13', 'Romans 15:13']],
+        ["Sapagka't nagsisilakad kami sa pamamagitan ng pananampalataya, hindi sa pamamagitan ng nakikita.", 'For we walk by faith, not by sight.', ['2 Corinto 5:7', '2 Corinthians 5:7']],
+        ["At huwag tayong mangapagod sa paggawa ng mabuti: sapagka't sa kapanahunan ay mangagsisiani tayo, kung tayo'y hindi manghihimagod.", 'And let us not be weary in well doing: for in due season we shall reap, if we faint not.', ['Galacia 6:9', 'Galatians 6:9']],
+        ['Ang pananampalataya nga ay siyang katunayan ng mga bagay na inaasahan, ang katibayan ng mga bagay na hindi nakikita.', 'Now faith is the substance of things hoped for, the evidence of things not seen.', ['Hebreo 11:1', 'Hebrews 11:1']],
+        ["Sa bawa't bagay ay may kapanahunan, at panahon sa bawa't panukala sa silong ng langit.", 'To every thing there is a season, and a time to every purpose under the heaven.', ['Eclesiastes 3:1', 'Ecclesiastes 3:1']],
+        ["Bago sa bawa't umaga: dakila ang iyong pagtatapat.", 'They are new every morning: great is thy faithfulness.', ['Panaghoy 3:23', 'Lamentations 3:23']],
+        ["Kayo'y magpakalakas at magpakatapang, huwag kayong matakot; hindi ka niya iiwan, ni pababayaan ka man.", 'Be strong and of a good courage, fear not, nor be afraid of them: for the LORD thy God, he it is that doth go with thee; he will not fail thee, nor forsake thee.', ['Deuteronomio 31:6', 'Deuteronomy 31:6']],
     ];
+    const VERSIONS = { tl: 'Ang Dating Biblia', en: 'King James Version' };
     const box = document.getElementById('verse');
+    const quote = document.getElementById('verse-quote');
     const vText = document.getElementById('verse-text');
     const vRef = document.getElementById('verse-ref');
+    const langButtons = [...page.querySelectorAll('.lang-toggle button')];
+    const LANGS = ['tl', 'en'];
+
+    let lang = 'tl';
+    try { const saved = localStorage.getItem('faith-verse-lang'); if (LANGS.includes(saved)) lang = saved; } catch (e) {}
+
     const paint = i => {
-        vText.textContent = VERSES[i][0];
-        vRef.textContent = VERSES[i][1] + ' · Ang Dating Biblia';
-        box.classList.toggle('long', VERSES[i][0].length > 110);
+        const li = LANGS.indexOf(lang);
+        const text = VERSES[i][li];
+        vText.textContent = text;
+        vRef.textContent = VERSES[i][2][li] + ' · ' + VERSIONS[lang];
+        quote.lang = lang;
+        box.classList.toggle('long', text.length > 110);
+        langButtons.forEach(b => b.setAttribute('aria-pressed', b.dataset.lang === lang ? 'true' : 'false'));
     };
     const other = from => {
         let n;
@@ -368,6 +384,14 @@ document.addEventListener('DOMContentLoaded', () => {
         box.classList.add('out');
         setTimeout(() => { paint(current); box.classList.remove('out'); }, 400);
     });
+
+    // Same verse, switch language in place
+    langButtons.forEach(b => b.addEventListener('click', () => {
+        if (b.dataset.lang === lang) return;
+        lang = b.dataset.lang;
+        try { localStorage.setItem('faith-verse-lang', lang); } catch (e) {}
+        paint(current);
+    }));
 
     // Platform tabs
     const tabs = [...page.querySelectorAll('.tab')];

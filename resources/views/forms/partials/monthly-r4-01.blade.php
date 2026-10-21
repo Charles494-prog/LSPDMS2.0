@@ -175,7 +175,7 @@
                 <table class="r401-signature-table" aria-label="R4-01 signatures">
                     <colgroup><col style="width:24.7%"><col style="width:24.95%"><col style="width:24.65%"><col style="width:25.7%"></colgroup>
                     <tbody><tr>
-                        <td><span class="r401-signature-name">{{ mb_strtoupper($kalihimName) }}</span>Kalihim</td>
+                        <td><span class="r401-signature-name">{{ mb_strtoupper($pageData['kalihim_name'] ?? $kalihimName) }}</span>Kalihim</td>
                         <td><span class="r401-signature-name">{{ mb_strtoupper($globalVariables?->ksp_pd ?? '') }}</span>Pangulong Diakono / KSP</td>
                         <td><span class="r401-signature-name">{{ mb_strtoupper($pageData['maysakop_name']) }}</span>Maysakop</td>
                         <td><span class="r401-signature-name">{{ mb_strtoupper($globalVariables?->pastor_destinado ?? '') }}</span>Pastor / Destinado</td>

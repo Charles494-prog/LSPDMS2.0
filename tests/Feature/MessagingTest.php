@@ -122,6 +122,20 @@ class MessagingTest extends TestCase
             ->assertDontSee('<span class="label">Messages</span>', false);
     }
 
+    public function test_chat_widget_shows_a_conversation_placeholder_and_visible_error_region(): void
+    {
+        $user = $this->makeUser('sender@example.test');
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->get(route('messages.index', ['widget' => 1]))
+            ->assertOk()
+            ->assertSee('id="messagesApp"', false)
+            ->assertSee('id="accountSearch"', false)
+            ->assertSee('id="messagesSidebarAlert"', false)
+            ->assertSee('Loading your conversations…')
+            ->assertSee('Search registered accounts to start a private conversation.');
+    }
+
     public function test_unread_count_only_includes_unread_unexpired_messages_received_by_current_user(): void
     {
         $recipient = $this->makeUser('recipient@example.test');

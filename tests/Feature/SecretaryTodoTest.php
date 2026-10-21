@@ -117,7 +117,7 @@ class SecretaryTodoTest extends TestCase
             ->assertJsonPath('title', $content);
     }
 
-    public function test_to_do_widget_is_only_rendered_on_the_form_generator_notes_checker_page(): void
+    public function test_to_do_widget_is_not_embedded_in_the_notes_checker(): void
     {
         $secretary = $this->makeSecretary(['form_generator_allow' => true]);
 
@@ -129,15 +129,9 @@ class SecretaryTodoTest extends TestCase
         $this->withSession(['login_user' => ['id' => $secretary->id]])
             ->get(route('form-generator'))
             ->assertOk()
-            ->assertSee('Secretary To-Do')
-            ->assertSee('Private')
-            ->assertSee('Shared')
+            ->assertDontSee('Secretary To-Do')
             ->assertSee('id="notes-panel"', false)
-            ->assertSee('id="todoExpand"', false)
-            ->assertSee('id="todoBackdrop"', false)
-            ->assertSee('<textarea id="todoTitle"', false)
-            ->assertSee('id="todoDetail"', false)
-            ->assertSee('id="todoDetailTitle"', false);
+            ->assertSee('Notes Checker');
     }
 
     private function makeSecretary(array $attributes = []): User

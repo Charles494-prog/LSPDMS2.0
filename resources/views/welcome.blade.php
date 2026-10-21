@@ -4,6 +4,7 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>{{ config('app.name', 'LSPDMS') }}</title>
+        @include('components.brand-meta')
 
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -30,7 +31,7 @@
                 margin: 0;
                 min-height: 100%;
                 font-family: 'Montserrat', sans-serif;
-                background: linear-gradient(180deg, var(--page-bg) 0%, var(--page-bg-deep) 100%);
+                background: var(--page-bg);
                 color: var(--text);
             }
 
@@ -241,6 +242,7 @@
                 text-transform: uppercase;
                 color: var(--primary-deep);
             }
+            .brand-logo { display: block; width: 152px; max-width: 100%; height: auto; object-fit: contain; }
 
             .brand p {
                 margin: 0;
@@ -397,30 +399,6 @@
                 text-decoration: underline;
             }
 
-            .login-status {
-                position: fixed;
-                top: 1rem;
-                left: 50%;
-                z-index: 30;
-                width: min(calc(100% - 2rem), 520px);
-                padding: .9rem 1.1rem;
-                transform: translateX(-50%);
-                border: 1px solid rgba(10, 107, 214, .2);
-                border-radius: 12px;
-                color: var(--primary-deep);
-                background: #fff;
-                box-shadow: 0 12px 34px rgba(15, 76, 129, .18);
-                font-size: .88rem;
-                font-weight: 600;
-                line-height: 1.5;
-                text-align: center;
-                animation: login-status-in .2s ease-out;
-            }
-            @keyframes login-status-in {
-                from { opacity: 0; transform: translate(-50%, -8px); }
-                to { opacity: 1; transform: translate(-50%, 0); }
-            }
-
             @media (max-width: 480px) {
                 .login-card { padding: 1.7rem 1.3rem 1.4rem; }
                 .letter { width: 3.2rem; height: 3.2rem; font-size: 1.6rem; }
@@ -428,20 +406,16 @@
         </style>
     </head>
     <body>
-        @if (session('status') || request()->query('access'))
-            <div class="login-status" role="status" aria-live="polite">
-                {{ session('status') ?: (request()->query('access') === 'password_changed'
-                    ? 'Change of Password Detected, Please Login Again.'
-                    : 'Your account was signed out. Please log in again.') }}
-            </div>
-        @endif
+        <x-flash-toast :message="session('status') ?: (request()->query('access')
+            ? (request()->query('access') === 'password_changed'
+                ? 'Change of Password Detected, Please Login Again.'
+                : 'Your account was signed out. Please log in again.')
+            : null)" />
         <main class="login-shell show" id="loginShell">
             <div class="login-card">
                 <div class="brand">
-                    <div>
-                        <h1>LSPDMS v1.0</h1>
-                        <p>Secure Access</p>
-                    </div>
+                    <img class="brand-logo" src="{{ asset('images/LSP_logo_black.png') }}" alt="LSPDMS — LSP's Data Management System">
+                    <p>Secure Access</p>
                 </div>
 
                 <form class="login-form" id="loginForm" method="POST" action="{{ url('/login') }}" data-login-url="{{ route('login.form') }}" data-csrf-refresh-url="{{ route('login.csrf-token') }}">

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\GlobalVariable;
+use App\Services\SystemSmtpConfiguration;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\DB;
@@ -175,6 +176,7 @@ class LoginController extends Controller
             'Inquire_Allow' => (bool) $freshUser->Inquire_Allow,
             'tarheta_status_allow' => (bool) $freshUser->tarheta_status_allow,
             'filter_bnh_helper_allow' => (bool) $freshUser->filter_bnh_helper_allow,
+            'chatbot_records_allow' => (bool) ($freshUser->chatbot_records_allow ?? false),
             'is_verified' => (bool) $freshUser->is_verified,
         ]);
 
@@ -248,6 +250,7 @@ class LoginController extends Controller
 
         $html = view('emails.verification-code', ['code' => $code])->render();
 
+        app(SystemSmtpConfiguration::class)->apply();
         Mail::html($html, function ($message) use ($email) {
             $message->to($email)->subject('LSPDMS verification code');
         });

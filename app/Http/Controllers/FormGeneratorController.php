@@ -2,30 +2,28 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Record;
 use App\Models\GlobalVariable;
 use App\Models\MonthlyMovementSession;
-use App\Models\MonthlyRecordSnapshot;
 use App\Models\MonthlySessionMovement;
 use App\Models\Purok;
 use App\Models\R401Snapshot;
+use App\Models\Record;
 use App\Services\MonthlyResumenReport;
 use App\Services\R401DocxExporter;
 use App\Services\R401ReportBuilder;
 use App\Services\ResumenDocxExporter;
-use Illuminate\Support\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class FormGeneratorController extends Controller
 {
-    public function __construct(private readonly R401ReportBuilder $r401ReportBuilder)
-    {
-    }
+    public function __construct(private readonly R401ReportBuilder $r401ReportBuilder) {}
 
     public function index(Request $request)
     {
@@ -102,6 +100,13 @@ class FormGeneratorController extends Controller
         $kalihim = $data['selectedStatus'] === 'UWP'
             ? ($globalVariables?->kalihim_uwp ?: $globalVariables?->kalihim_ms)
             : ($globalVariables?->kalihim_ms ?: $globalVariables?->kalihim_uwp);
+        $reportPages = array_map(function (array $page) use ($data, $kalihim): array {
+            $page['kalihim_name'] = $data['usePurokSecretary']
+                ? $page['secretary_name']
+                : (string) $kalihim;
+
+            return $page;
+        }, $data['reportPages']);
         $path = $exporter->generate([
             'district' => $globalVariables?->district,
             'dcode' => $globalVariables?->dcode,
@@ -116,9 +121,10 @@ class FormGeneratorController extends Controller
                 '',
                 $globalVariables?->pastor_destinado,
             ],
-        ], $data['reportPages']);
+        ], $reportPages);
 
         $fileName = 'R4-01 ('.$data['selectedStatus'].') '.$data['month']->format('M Y').'.docx';
+
         return response()->download($path, $fileName, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         ])->deleteFileAfterSend(true);
@@ -287,7 +293,7 @@ class FormGeneratorController extends Controller
     {
         $request->validate([
             'acknowledge_permanent_deletion' => ['required', 'accepted'],
-            'confirmation_phrase' => ['required', 'string', \Illuminate\Validation\Rule::in(['SUPERADMIN'])],
+            'confirmation_phrase' => ['required', 'string', Rule::in(['SUPERADMIN'])],
         ], [
             'acknowledge_permanent_deletion.accepted' => 'Acknowledge that this deletion is permanent before proceeding.',
             'confirmation_phrase.in' => 'Type SUPERADMIN exactly to permanently delete this monthly snapshot.',
@@ -368,11 +374,22 @@ class FormGeneratorController extends Controller
             ? $this->r401ReportBuilder->build($selectedPurok, $selectedStatus, $session)
             : ['rows' => [], 'pages' => []];
         $globalVariables = GlobalVariable::query()->first();
+        $usePurokSecretary = (bool) ($globalVariables?->r401_use_purok_secretary ?? false);
+        $globalKalihimName = $selectedStatus === 'UWP'
+            ? (($globalVariables?->kalihim_uwp ?: $globalVariables?->kalihim_ms) ?? '')
+            : (($globalVariables?->kalihim_ms ?: $globalVariables?->kalihim_uwp) ?? '');
+        $reportPages = array_map(function (array $page) use ($usePurokSecretary, $globalKalihimName): array {
+            $page['kalihim_name'] = $usePurokSecretary
+                ? $page['secretary_name']
+                : $globalKalihimName;
+
+            return $page;
+        }, $report['pages']);
 
         return [
             'month' => $month,
             'reportRows' => $report['rows'],
-            'reportPages' => $report['pages'],
+            'reportPages' => $reportPages,
             'puroks' => $puroks,
             'selectedPurok' => $selectedPurok,
             'selectedStatus' => $selectedStatus,
@@ -381,9 +398,8 @@ class FormGeneratorController extends Controller
             'lcode' => $globalVariables?->lcode ?? '',
             'dcode' => $globalVariables?->dcode ?? '',
             'district' => $globalVariables?->district ?? '',
-            'kalihimName' => $selectedStatus === 'UWP'
-                ? (($globalVariables?->kalihim_uwp ?: $globalVariables?->kalihim_ms) ?? '')
-                : (($globalVariables?->kalihim_ms ?: $globalVariables?->kalihim_uwp) ?? ''),
+            'kalihimName' => $globalKalihimName,
+            'usePurokSecretary' => $usePurokSecretary,
         ];
     }
 

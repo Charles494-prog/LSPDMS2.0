@@ -1,19 +1,24 @@
 <?php
 
 use App\Http\Controllers\BroadcastAuthController;
+use App\Http\Controllers\AdminDatabaseController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DeliberationController;
 use App\Http\Controllers\DelistmentController;
 use App\Http\Controllers\FilterBnhHelperController;
 use App\Http\Controllers\FormGeneratorController;
+use App\Http\Controllers\BuiltInHelpChatbotController;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\R402R403Controller;
 use App\Http\Controllers\RecordsController;
 use App\Http\Controllers\RegistrationController;
 use App\Http\Controllers\SecretaryTodoController;
+use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\SuperadminController;
+use App\Http\Controllers\SystemSmtpSettingsController;
 use App\Http\Controllers\TarhetaStatusController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -49,8 +54,12 @@ Route::middleware('login.session')->group(function () {
     Route::post('/secretary-todos', [SecretaryTodoController::class, 'store'])->middleware('throttle:60,1')->name('secretary-todos.store');
     Route::patch('/secretary-todos/{todo}', [SecretaryTodoController::class, 'update'])->middleware('throttle:60,1')->name('secretary-todos.update');
     Route::post('/secretary-todos/{todo}/complete', [SecretaryTodoController::class, 'complete'])->middleware('throttle:60,1')->name('secretary-todos.complete');
-    Route::post('/broadcasting/auth', BroadcastAuthController::class)->name('broadcasting.auth');
+    Route::post('/messages/broadcasting/auth', BroadcastAuthController::class)->name('broadcasting.auth');
     Route::get('/messages', [MessageController::class, 'index'])->name('messages.index');
+    Route::get('/messages/assistant', [BuiltInHelpChatbotController::class, 'index'])->name('messages.assistant');
+    Route::post('/messages/assistant', [BuiltInHelpChatbotController::class, 'reply'])
+        ->middleware('throttle:10,1')
+        ->name('messages.assistant.reply');
     Route::get('/messages/unread-count', [MessageController::class, 'unreadCount'])->name('messages.unread-count');
     Route::get('/messages/accounts', [MessageController::class, 'accounts'])->name('messages.accounts');
     Route::get('/messages/conversations', [MessageController::class, 'conversations'])->name('messages.conversations');
@@ -63,6 +72,7 @@ Route::middleware('login.session')->group(function () {
     Route::get('/messages/{message}/attachment', [MessageController::class, 'attachment'])->name('messages.attachment');
     Route::get('/dashboard', [DashboardController::class, 'index'])->middleware('permission:dashboard_allow')->name('dashboard');
     Route::get('/de-listment', [DelistmentController::class, 'index'])->middleware('permission:Delistment_allow')->name('de-listment');
+    Route::post('/de-listment/records/mk', [DelistmentController::class, 'addMkMember'])->middleware('permission:Delistment_allow')->name('de-listment.mk.store');
     Route::get('/de-listment/export/{category}', [DelistmentController::class, 'exportCategory'])->middleware('permission:Delistment_allow')->name('de-listment.export');
     Route::get('/de-listment/history/download', [DelistmentController::class, 'exportHistory'])->middleware('permission:Delistment_allow')->name('de-listment.history.download');
     Route::put('/de-listment/records/{record}/endorsement', [DelistmentController::class, 'endorse'])->middleware('permission:Delistment_allow')->name('de-listment.endorse');
@@ -130,6 +140,15 @@ Route::middleware('login.session')->group(function () {
         Route::get('/forms/monthly/r4-01/download', [FormGeneratorController::class, 'downloadR401'])->name('forms.monthly.r4-01.download');
         Route::get('/forms/monthly/resumen', [FormGeneratorController::class, 'resumen'])->name('forms.monthly.resumen');
         Route::get('/forms/monthly/resumen/download', [FormGeneratorController::class, 'downloadResumen'])->name('forms.monthly.resumen.download');
+        Route::get('/forms/weekly/r4-02', [R402R403Controller::class, 'r402'])->name('forms.weekly.r4-02');
+        Route::post('/forms/weekly/r4-02', [R402R403Controller::class, 'storeR402'])
+            ->middleware('throttle:20,1')
+            ->name('forms.weekly.r4-02.store');
+        Route::get('/forms/weekly/r4-02/{generatedForm}/print', [R402R403Controller::class, 'printR402'])
+            ->whereNumber('generatedForm')
+            ->name('forms.weekly.r4-02.print');
+        Route::get('/forms/weekly/r4-03', [R402R403Controller::class, 'r403'])->name('forms.weekly.r4-03');
+        Route::get('/forms/weekly/r4-03/print', [R402R403Controller::class, 'printR403'])->name('forms.weekly.r4-03.print');
         Route::post('/forms/notes/records/{record}', [FormGeneratorController::class, 'appendNote'])->middleware('throttle:30,1')->name('forms.notes.append');
         Route::delete('/forms/notes/records/{record}/{noteIndex}', [FormGeneratorController::class, 'deleteNote'])
             ->whereNumber('noteIndex')
@@ -145,12 +164,25 @@ Route::middleware('login.session')->group(function () {
         Route::delete('/forms/monthly/r4-01/snapshots/{snapshot}', [FormGeneratorController::class, 'deleteR401Snapshot'])
             ->name('forms.monthly.r4-01.snapshots.delete');
         Route::get('/superadmin-dashboard', [SuperadminController::class, 'index'])->name('superadmin-dashboard');
+        Route::get('/superadmin/database/export.sql', [AdminDatabaseController::class, 'exportSql'])
+            ->name('superadmin.database.export-sql');
+        Route::post('/superadmin/database/import/preview', [AdminDatabaseController::class, 'previewSqlImport'])
+            ->name('superadmin.database.import-preview');
+        Route::post('/superadmin/database/import', [AdminDatabaseController::class, 'importSql'])
+            ->middleware('throttle:5,1')
+            ->name('superadmin.database.import');
+        Route::post('/superadmin/database/export.xlsx', [AdminDatabaseController::class, 'exportXlsx'])
+            ->name('superadmin.database.export-xlsx');
+        Route::put('/superadmin/smtp-settings', [SystemSmtpSettingsController::class, 'update'])
+            ->name('superadmin.smtp-settings.update');
         Route::get('/superadmin/record-activity/download', [SuperadminController::class, 'downloadRecordAuditLogs'])
             ->name('superadmin.record-activity.download');
         Route::post('/superadmin/r4-02/hakbangs', [SuperadminController::class, 'storeR402Hakbang'])->name('superadmin.r4-02.hakbangs.store');
         Route::put('/superadmin/r4-02/hakbangs/{hakbang}', [SuperadminController::class, 'updateR402Hakbang'])->name('superadmin.r4-02.hakbangs.update');
         Route::delete('/superadmin/r4-02/hakbangs/{hakbang}', [SuperadminController::class, 'destroyR402Hakbang'])->name('superadmin.r4-02.hakbangs.destroy');
         Route::put('/superadmin/users/{user}', [SuperadminController::class, 'updateUser'])->name('superadmin.users.update');
+        Route::post('/superadmin/users/transfer-head-secretary', [SuperadminController::class, 'transferHeadSecretary'])
+            ->name('superadmin.users.transfer-head-secretary');
         Route::put('/superadmin/permissions', [SuperadminController::class, 'updatePermissions'])->name('superadmin.permissions.update');
         Route::put('/superadmin/signatories', [SuperadminController::class, 'updateSignatories'])->name('superadmin.signatories.update');
         Route::put('/superadmin/global-variables', [SuperadminController::class, 'updateGlobalVariables'])->name('superadmin.global-variables.update');
@@ -183,6 +215,8 @@ Route::middleware('login.session')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile');
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::put('/profile/password', [ProfileController::class, 'changePassword'])->middleware('throttle:5,1')->name('profile.password.update');
+    Route::get('/settings', [SettingsController::class, 'edit'])->name('settings');
+    Route::put('/settings', [SettingsController::class, 'update'])->name('settings.update');
     Route::view('/home', 'home', ['title' => 'Home'])->name('home');
     Route::get('/inquire-modify', function (Request $request) {
         $user = $request->session()->get('login_user', []);

@@ -157,9 +157,10 @@ class R401ReportBuilder
             ->sortBy(fn ($group, string $key): int => $this->numericSortKey($key));
 
         $purokDetails = Purok::query()
+            ->with('secretaryUser:id,first_name,last_name')
             ->orderBy('purok_number')
             ->orderBy('grupo_start')
-            ->get(['id', 'purok_number', 'purok_name', 'manggagawa', 'ministerial_id', 'grupo_start', 'grupo_end', 'full_purok']);
+            ->get(['id', 'purok_number', 'purok_name', 'secretary', 'manggagawa', 'ministerial_id', 'grupo_start', 'grupo_end', 'full_purok']);
         $reportRows = [];
         $reportPages = [];
 
@@ -197,6 +198,7 @@ class R401ReportBuilder
                     })
                     ->values()
                     ->map(fn (array $row): array => [
+                        'record_id' => $row['record_id'] ?? null,
                         'code' => $row['code'],
                         'name' => $row['name'],
                         'registry' => $row['registry'],
@@ -212,6 +214,7 @@ class R401ReportBuilder
                         'purok_number' => $purokNumber,
                         'purok_name' => $splitPurok?->purok_name ?? 'Purok '.$purokNumber,
                         'maysakop_name' => trim((string) ($splitPurok?->manggagawa ?? '')),
+                        'secretary_name' => trim((string) ($splitPurok?->secretaryUser?->full_name ?? '')),
                         'assigned_number' => trim((string) ($splitPurok?->ministerial_id ?? '')),
                         'page_number' => $pageIndex + 1,
                         'rows' => $pageRows,

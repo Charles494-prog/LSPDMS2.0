@@ -18,6 +18,17 @@ class IntroTest extends TestCase
             ->assertSee('href="'.url('/login').'"', false);
     }
 
+    public function test_login_displays_session_success_as_a_mobile_friendly_dismissible_toast(): void
+    {
+        $this->withSession(['status' => 'Registration submitted.'])
+            ->get('/login')
+            ->assertOk()
+            ->assertSee('id="appFlashToast"', false)
+            ->assertSee('Registration submitted.')
+            ->assertSee('Dismiss notification')
+            ->assertSee('max-width: 600px', false);
+    }
+
     public function test_authenticated_user_visiting_intro_or_login_is_redirected_to_home(): void
     {
         $user = User::query()->create([

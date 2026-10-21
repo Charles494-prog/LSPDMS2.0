@@ -50,6 +50,7 @@ class RegistrationController extends Controller
             'Inquire_Allow' => false,
             'tarheta_status_allow' => false,
             'filter_bnh_helper_allow' => false,
+            'chatbot_records_allow' => false,
         ]);
 
         return redirect()

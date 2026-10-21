@@ -6,8 +6,10 @@
 <div class="delist-page">
     <span id="delist-config"
         data-entry-years="{{ $entryYearsRequirement }}"
+        data-require-baptism-date="{{ $requireBaptismDate ? 'true' : 'false' }}"
         data-endorse-url="{{ route('de-listment.endorse', ['record' => '__RECORD__']) }}"
         data-delist-url="{{ route('de-listment.delist', ['record' => '__RECORD__']) }}"
+        data-mk-create-url="{{ route('de-listment.mk.store') }}"
         data-export-url="{{ route('de-listment.export', ['category' => '__CATEGORY__']) }}"
         data-update-dates-url="{{ route('de-listment.update-dates') }}"
         data-csrf="{{ csrf_token() }}"
@@ -19,6 +21,7 @@
             <p class="delist-subtitle">Review R2-10 eligibility and report progress at a glance.</p>
         </div>
         <div class="delist-tools">
+            <button type="button" class="btn btn-primary" id="add-mk-btn" aria-haspopup="dialog" aria-controls="add-mk-dialog">Add MK member</button>
             <button type="button" class="missing-btn" id="missing-btn" aria-haspopup="dialog" aria-controls="missing-dialog">
                 <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.2 14.3 13H1.7L8 2.2Z"/><path d="M8 6.6v3M8 11.6v.1"/></svg>
                 See entries with missing data
@@ -29,6 +32,72 @@
             </button>
         </div>
     </div>
+
+    <dialog class="modal modal-wide" id="add-mk-dialog" aria-labelledby="add-mk-title">
+        <form class="modal-body" id="add-mk-form" novalidate>
+            <div class="modal-head">
+                <div>
+                    <h3 id="add-mk-title">Add an MK member</h3>
+                    <p class="modal-sub">This adds a record directly as MK. No monthly code is used.</p>
+                </div>
+                <button type="button" class="modal-close" data-close aria-label="Close">
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg>
+                </button>
+            </div>
+            <div class="mk-add-grid">
+                <label class="field-label" for="mk-full-name">Full name</label>
+                <input id="mk-full-name" name="full_name" maxlength="150" required autocomplete="name">
+                <label class="field-label" for="mk-registry">Registry / RFID</label>
+                <input id="mk-registry" name="registry" maxlength="100" required>
+                <label class="check-row mk-rfid" for="mk-is-rfid">
+                    <input id="mk-is-rfid" name="is_rfid" type="checkbox" value="1">
+                    <span>This member has RFID instead of a 13-character registry number.</span>
+                </label>
+                <label class="field-label" for="mk-gender">Gender</label>
+                <select id="mk-gender" name="gender" required>
+                    <option value="">Select gender</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                </select>
+                <label class="field-label" for="mk-purok">Purok</label>
+                <select id="mk-purok" name="purok_id" required>
+                    <option value="">Select Purok</option>
+                    @foreach ($puroks as $purok)
+                        <option value="{{ $purok->id }}" data-start="{{ $purok->grupo_start }}" data-end="{{ $purok->grupo_end }}">
+                            {{ $purok->purok_name ?: 'Purok '.$purok->purok_number }} ({{ $purok->grupo_start }}–{{ $purok->grupo_end }})
+                        </option>
+                    @endforeach
+                </select>
+                <label class="field-label" for="mk-grupo">Grupo <span class="modal-sub">(optional)</span></label>
+                <input id="mk-grupo" name="grupo" type="number" min="1" step="1">
+                <label class="field-label" for="mk-kapisanan">Kapisanan</label>
+                <select id="mk-kapisanan" name="kapisanan" required>
+                    <option value="">Select Kapisanan</option>
+                    <option value="Buklod">Buklod</option>
+                    <option value="Kadiwa">Kadiwa</option>
+                    <option value="Binhi">Binhi</option>
+                    <option value="Suliranin">Suliranin</option>
+                </select>
+                <span class="modal-sub mk-kapisanan-hint" id="mk-kapisanan-hint" aria-live="polite">Enter a date of birth or select a Kapisanan.</span>
+                <label class="field-label" for="mk-married">Marital status</label>
+                <select id="mk-married" name="is_married">
+                    <option value="0" selected>Not Married</option>
+                    <option value="1">Married</option>
+                </select>
+                <label class="field-label" for="mk-birth">Date of birth <span class="modal-sub">(optional)</span></label>
+                <input id="mk-birth" name="date_of_birth" type="date" max="{{ now()->toDateString() }}">
+                <label class="field-label" for="mk-baptism">Date of baptism <span class="modal-sub">(optional)</span></label>
+                <input id="mk-baptism" name="date_of_baptism" type="date" max="{{ now()->toDateString() }}">
+                <label class="field-label" for="mk-evangelist">Evangelist <span class="modal-sub">(optional)</span></label>
+                <input id="mk-evangelist" name="evangelist" maxlength="150">
+            </div>
+            <p class="modal-warn" id="add-mk-error" role="alert" hidden></p>
+            <div class="modal-actions">
+                <button type="button" class="btn" data-close>Cancel</button>
+                <button type="submit" class="btn btn-primary" id="add-mk-submit">Add MK member</button>
+            </div>
+        </form>
+    </dialog>
 
     <dialog class="modal modal-wide" id="delisted-history-dialog" aria-labelledby="delisted-records-heading">
         <div class="modal-body">
@@ -86,6 +155,11 @@
             <span class="stat-note" id="reported-note">0% of eligibles have been reported (R2-10)</span>
             <span class="stat-bar" aria-hidden="true"><span id="reported-bar"></span></span>
         </article>
+        <button type="button" class="delist-stat stat-button stat-action" id="pending-card" aria-label="Show eligible members awaiting R2-10">
+            <span class="stat-label">Eligible, awaiting R2-10</span>
+            <strong id="pending-total">0</strong>
+            <span class="stat-note">Click to review these members</span>
+        </button>
     </section>
 
     <div class="chart-grid">
@@ -367,11 +441,10 @@
     }
     .delist-heading {
         position: relative; padding: clamp(1.3rem, 3vw, 2rem); overflow: hidden;
-        border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--delist-border));
-        border-radius: 20px; background: linear-gradient(125deg, color-mix(in srgb, var(--accent) 11%, var(--delist-surface)), var(--delist-surface) 64%);
+        border: 1px solid var(--delist-border);
+        border-radius: 14px; background: var(--delist-surface);
         box-shadow: 0 12px 32px rgba(16, 24, 40, .06);
     }
-    .delist-heading::after { position: absolute; right: -34px; bottom: -92px; width: 245px; height: 245px; border: 34px solid color-mix(in srgb, var(--accent) 8%, transparent); border-radius: 50%; content: ""; pointer-events: none; }
     .delist-heading > * { position: relative; z-index: 1; }
     .delist-eyebrow { text-transform: uppercase; letter-spacing: .12em; }
     .delist-heading h1 { font-size: clamp(2rem, 4vw, 2.8rem); }
@@ -396,19 +469,20 @@
     .panel-heading p { margin: .45rem 0 0; color: var(--delist-muted); font-size: .92rem; line-height: 1.55; }
 
     /* Stats */
-    .delist-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+    .delist-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin-bottom: 1rem; }
     .delist-stat,
     .delist-panel {
         border: 1px solid var(--delist-border);
         border-radius: 14px;
         background: var(--delist-surface);
-        box-shadow: 0 8px 24px rgba(16, 24, 40, .055);
-        transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+        box-shadow: 0 1px 3px rgba(16, 24, 40, .04);
+        transition: border-color .18s ease;
     }
-    .delist-stat:hover, .delist-panel:hover { transform: translateY(-2px); box-shadow: 0 13px 30px rgba(16, 24, 40, .09); }
+    .delist-stat:hover, .delist-panel:hover { border-color: color-mix(in srgb, var(--accent) 24%, var(--delist-border)); }
     .delist-stat { display: flex; flex-direction: column; padding: 1.1rem 1.25rem; }
     .stat-label { color: var(--delist-muted); font-size: .82rem; font-weight: 600; }
     .delist-stat strong { margin: .35rem 0 .2rem; color: var(--delist-ink); font-size: 1.8rem; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+    .delist-stat:not(.stat-button) #reported-total { color: var(--ok); }
     .stat-note { color: var(--delist-muted); font-size: .78rem; }
     .stat-bar { display: block; height: 5px; margin-top: .65rem; border-radius: 99px; background: var(--delist-border); overflow: hidden; }
     .stat-bar span { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--ok); transition: width .7s cubic-bezier(.2,.8,.2,1); }
@@ -417,10 +491,11 @@
     .stat-button:hover { border-color: var(--accent); }
     .stat-button:active { transform: scale(.99); }
     .stat-button .stat-note { color: var(--accent); font-weight: 600; }
+    .stat-action { border-color: color-mix(in srgb, var(--warn) 35%, var(--delist-border)); }
+    .stat-action strong, .stat-action .stat-note { color: var(--warn); }
 
     /* Panels */
     .delist-panel { position: relative; padding: 1.35rem; margin-bottom: 1rem; overflow: hidden; }
-    .chart-panel::before { position: absolute; inset: 0 0 auto; height: 4px; background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 16%, #fff)); content: ""; }
     .panel-heading { align-items: center; }
     .panel-heading h2 { margin: 0; color: var(--delist-ink); font-size: 1.08rem; letter-spacing: -.02em; }
     .panel-heading p { font-size: .83rem; }
@@ -444,8 +519,8 @@
     }
 
     .chart-content { display: grid; grid-template-columns: minmax(190px, 250px) minmax(0, 1fr); align-items: center; gap: clamp(1.25rem, 4vw, 3rem); margin: 1.25rem 0 .25rem; }
-    .donut-wrap { position: relative; width: 100%; max-width: 250px; aspect-ratio: 1; justify-self: center; padding: .35rem; border-radius: 50%; background: radial-gradient(circle, var(--delist-surface) 59%, color-mix(in srgb, var(--accent) 8%, var(--delist-surface)) 60%, transparent 72%); }
-    .bar-wrap { position: relative; height: 250px; margin-top: 1.25rem; padding: .65rem .8rem .25rem; border-radius: 14px; background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 5%, var(--delist-surface)), var(--delist-surface)); }
+    .donut-wrap { position: relative; width: 100%; max-width: 250px; aspect-ratio: 1; justify-self: center; padding: .35rem; border-radius: 50%; }
+    .bar-wrap { position: relative; height: 250px; margin-top: 1.25rem; padding: .65rem .8rem .25rem; border-radius: 14px; background: var(--bg); }
     .chart-legend { display: grid; gap: .1rem; }
     .legend-row {
         width: 100%; border: 0; background: transparent; font: inherit; text-align: left;
@@ -595,6 +670,14 @@
     .modal-close svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
 
     .field-label { color: var(--delist-ink); font-size: .82rem; font-weight: 650; }
+    .mk-add-grid { display: grid; grid-template-columns: minmax(8rem, .65fr) minmax(12rem, 1fr); align-items: center; gap: .65rem .9rem; }
+    .mk-add-grid input, .mk-add-grid select {
+        width: 100%; min-width: 0; padding: .65rem .75rem; border: 1px solid var(--delist-border); border-radius: 9px;
+        background: var(--bg); color: var(--delist-ink); font: inherit; font-size: .85rem;
+    }
+    .mk-add-grid input:focus-visible, .mk-add-grid select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .mk-rfid { grid-column: 2; padding: .6rem; }
+    @media(max-width:520px) { .mk-add-grid { grid-template-columns: 1fr; gap: .35rem; } .mk-rfid { grid-column: 1; margin-bottom: .4rem; } }
     .modal textarea {
         width: 100%; min-height: 96px; padding: .7rem .8rem; resize: vertical; border: 1px solid var(--delist-border);
         border-radius: 10px; background: var(--bg); color: var(--delist-ink); font: inherit; font-size: .85rem; line-height: 1.5;
@@ -622,9 +705,9 @@
     .bd-bar span { display: block; width: 0; height: 100%; border-radius: inherit; transition: width .7s cubic-bezier(.2,.8,.2,1); }
 
     .toast {
-        position: fixed; left: 50%; bottom: 1.5rem; max-width: 92vw; padding: .65rem 1rem; border-radius: 10px;
+        position: fixed; left: 50%; bottom: max(1.5rem, env(safe-area-inset-bottom)); width: max-content; max-width: calc(100vw - 2rem); padding: .65rem 1rem; border-radius: 10px;
         background: var(--delist-ink); color: var(--delist-surface); font-size: .8rem; font-weight: 600;
-        opacity: 0; pointer-events: none; transform: translate(-50%, 12px); transition: opacity .25s ease, transform .25s ease; z-index: 2000;
+        overflow-wrap: anywhere; text-align: center; opacity: 0; pointer-events: none; transform: translate(-50%, 12px); transition: opacity .25s ease, transform .25s ease; z-index: 2000;
     }
     .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
@@ -689,6 +772,7 @@
         .chart-grid { grid-template-columns: 1fr; }
     }
     @media (max-width: 700px) {
+        .delist-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .delist-panel { padding: 1rem; }
         .search-field { max-width: none; flex-basis: 100%; }
     }
@@ -711,7 +795,7 @@
 @endpush
 
 @push('scripts')
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+@vite('resources/js/delistment-charts.js')
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const config = document.getElementById('delist-config');
@@ -719,6 +803,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const missingRecords = @json($missingRecords);
     const PAGE_SIZE = 20;
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const Chart = window.Chart;
 
     /* ---------- Dates ---------- */
     const pad = n => String(n).padStart(2, '0');
@@ -786,9 +871,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderStats() {
         const eligibles = members.filter(m => m.eligible);
         const reported = eligibles.filter(m => m.reported).length;
+        const pending = eligibles.length - reported;
         const pct = eligibles.length ? Math.round(reported / eligibles.length * 100) : 0;
         countUp(document.getElementById('member-total'), total);
         countUp(document.getElementById('reported-total'), reported);
+        countUp(document.getElementById('pending-total'), pending);
         document.getElementById('reported-note').textContent = `${pct}% of eligibles have been reported (R2-10)`;
         requestAnimationFrame(() => { document.getElementById('reported-bar').style.width = pct + '%'; });
         document.getElementById('record-count').textContent = `${total} members`;
@@ -798,6 +885,108 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.modal').forEach(dialog => {
         dialog.querySelectorAll('[data-close]').forEach(btn => btn.addEventListener('click', () => dialog.close()));
         dialog.addEventListener('click', e => { if (e.target === dialog) dialog.close(); }); // backdrop click
+    });
+
+    const addMkDialog = document.getElementById('add-mk-dialog');
+    const addMkForm = document.getElementById('add-mk-form');
+    const addMkSubmit = document.getElementById('add-mk-submit');
+    const addMkError = document.getElementById('add-mk-error');
+    const mkPurok = document.getElementById('mk-purok');
+    const mkGrupo = document.getElementById('mk-grupo');
+    const mkKapisanan = document.getElementById('mk-kapisanan');
+    const mkMarried = document.getElementById('mk-married');
+    const mkBirth = document.getElementById('mk-birth');
+    const mkKapisananHint = document.getElementById('mk-kapisanan-hint');
+    document.getElementById('add-mk-btn').addEventListener('click', () => {
+        addMkForm.reset();
+        addMkError.hidden = true;
+        addMkError.textContent = '';
+        mkGrupo.removeAttribute('max');
+        syncMkKapisanan();
+        addMkDialog.showModal();
+        document.getElementById('mk-full-name').focus();
+    });
+    mkPurok.addEventListener('change', () => {
+        const selected = mkPurok.selectedOptions[0];
+        mkGrupo.min = selected?.dataset.start || '1';
+        if (selected?.dataset.end) mkGrupo.max = selected.dataset.end;
+        else mkGrupo.removeAttribute('max');
+    });
+    function syncMkKapisanan() {
+        const birthDate = mkBirth.value ? new Date(`${mkBirth.value}T00:00:00`) : null;
+        if (mkMarried.value === '1') {
+            mkKapisanan.value = 'Buklod';
+            mkKapisanan.disabled = true;
+            mkKapisananHint.textContent = 'Automatically selected: Buklod (married).';
+            return;
+        }
+        if (birthDate && !Number.isNaN(birthDate.getTime())) {
+            const today = new Date();
+            let age = today.getFullYear() - birthDate.getFullYear();
+            if (today.getMonth() < birthDate.getMonth()
+                || (today.getMonth() === birthDate.getMonth() && today.getDate() < birthDate.getDate())) age--;
+            mkKapisanan.value = age < 18 ? 'Binhi' : 'Kadiwa';
+            mkKapisanan.disabled = true;
+            mkKapisananHint.textContent = `Automatically selected: ${mkKapisanan.value} based on age ${age}.`;
+            return;
+        }
+        mkKapisanan.disabled = false;
+        mkKapisananHint.textContent = 'Enter a date of birth for automatic selection, or choose Kapisanan manually.';
+    }
+    mkMarried.addEventListener('change', syncMkKapisanan);
+    mkBirth.addEventListener('input', syncMkKapisanan);
+    mkBirth.addEventListener('change', syncMkKapisanan);
+    addMkForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        if (!addMkForm.reportValidity() || addMkSubmit.disabled) return;
+
+        addMkError.hidden = true;
+        addMkError.textContent = '';
+        addMkSubmit.disabled = true;
+        addMkSubmit.textContent = 'Saving...';
+        const body = Object.fromEntries(new FormData(addMkForm).entries());
+        body.kapisanan = mkKapisanan.value;
+        try {
+            const response = await fetch(config.dataset.mkCreateUrl, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': config.dataset.csrf,
+                },
+                body: JSON.stringify(body),
+            });
+            const result = await response.json();
+            if (!response.ok) {
+                const validationMessage = Object.values(result.errors || {}).flat()[0];
+                throw new Error(validationMessage || result.message || 'Unable to add this MK member.');
+            }
+
+            members.push(result.data);
+            total = members.length;
+            if (config.dataset.requireBaptismDate === 'true' && !result.data.baptism) {
+                missingRecords.push({
+                    id: result.data.id,
+                    name: result.data.name,
+                    registry: result.data.registry || '—',
+                    baptism: '',
+                });
+            }
+            addMkDialog.close();
+            renderStats();
+            renderEligibility();
+            renderProgress();
+            renderTable();
+            renderMissingCount();
+            showToast(`${result.data.name} was added as MK.`);
+        } catch (error) {
+            console.error('MK member could not be added:', error);
+            addMkError.textContent = error.message || 'Unable to add this MK member.';
+            addMkError.hidden = false;
+        } finally {
+            addMkSubmit.disabled = false;
+            addMkSubmit.textContent = 'Add MK member';
+        }
     });
 
     const delistedHistoryDialog = document.getElementById('delisted-history-dialog');
@@ -879,7 +1068,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     /* ---------- Charts ---------- */
-    let chartsOK = typeof Chart !== 'undefined'; // false if the CDN script didn't load
+    let chartsOK = typeof Chart !== 'undefined';
     if (chartsOK) {
         Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
         Chart.defaults.animation = reduceMotion ? false : { duration: 900, easing: 'easeOutQuart' };
@@ -939,8 +1128,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function buildEligibilityChart(cats) {
         if (!chartsOK) return;
-        if (eligibilityChart) { eligibilityChart.destroy(); eligibilityChart = null; }
         try {
+        if (eligibilityChart) {
+            eligibilityChart.stop();
+            eligibilityChart.$categories = cats;
+            eligibilityChart.data.labels = cats.map(c => c.label);
+            eligibilityChart.data.datasets[0].data = cats.map(c => c.count);
+            eligibilityChart.data.datasets[0].backgroundColor = cats.map(c => c.color);
+            eligibilityChart.data.datasets[0].borderColor = surface();
+            eligibilityChart.update('none');
+            return;
+        }
         eligibilityChart = new Chart(document.getElementById('eligibility-chart'), {
             type: 'doughnut',
             data: {
@@ -955,7 +1153,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 onClick: (event, _active, chart) => {
                     const [hit] = chart.getElementsAtEventForMode(event, 'nearest', { intersect: true }, true);
                     if (!hit) return;
-                    const category = cats[hit.index];
+                    const category = chart.$categories[hit.index];
                     showChartMembers(category.label, 'R2-10 eligibility', members.filter(category.matches), category.key);
                 },
                 plugins: {
@@ -965,6 +1163,7 @@ document.addEventListener('DOMContentLoaded', () => {
             },
             plugins: [centerText],
         });
+        eligibilityChart.$categories = cats;
         } catch (err) {
             console.error('Eligibility chart failed:', err);
             chartsOK = false;
@@ -974,7 +1173,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderEligibility() {
         const cats = categories(detailed).map(c => ({ ...c, count: members.filter(c.matches).length }));
-        buildEligibilityChart(cats); // fresh chart = animated sweep with every slice colour
+        buildEligibilityChart(cats);
         if (eligibilityChart) eligibilityChart.canvas.setAttribute('aria-label',
             `Doughnut chart showing ${cats.map(c => `${c.label}: ${c.count}`).join(', ')}`);
 
@@ -1455,6 +1654,27 @@ document.addEventListener('DOMContentLoaded', () => {
     bindChips('[data-filter]', 'eligibility', 'filter');
     bindChips('[data-status]', 'status', 'status');
     bindChips('[data-age]', 'age', 'age');
+
+    document.getElementById('pending-card').addEventListener('click', () => {
+        Object.assign(state, {
+            search: '',
+            eligibility: 'eligible',
+            status: 'pending',
+            kalagayan: 'all',
+            age: 'all',
+            page: 1,
+        });
+        document.getElementById('member-search').value = '';
+        document.getElementById('kalagayan-filter').value = 'all';
+        document.querySelectorAll('[data-filter]').forEach(chip => chip.classList.toggle('is-active', chip.dataset.filter === 'eligible'));
+        document.querySelectorAll('[data-status]').forEach(chip => chip.classList.toggle('is-active', chip.dataset.status === 'pending'));
+        document.querySelectorAll('[data-age]').forEach(chip => chip.classList.toggle('is-active', chip.dataset.age === 'all'));
+        renderTable();
+        document.getElementById('members-heading').scrollIntoView({
+            behavior: reduceMotion ? 'auto' : 'smooth',
+            block: 'start',
+        });
+    });
 
     document.getElementById('clear-filters').addEventListener('click', () => {
         Object.assign(state, { search: '', eligibility: 'all', status: 'all', kalagayan: 'all', age: 'all' });

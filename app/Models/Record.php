@@ -21,6 +21,8 @@ class Record extends Model
         'date_of_entry',
         'status',
         'tarheta_status',
+        'filing_status',
+        'filing_number',
         'monthly_code',
         'date_of_birth',
         'is_married',

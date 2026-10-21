@@ -68,6 +68,7 @@ class EnsureUserIsLoggedIn
                 'Inquire_Allow' => (bool) $user->Inquire_Allow,
                 'tarheta_status_allow' => (bool) $user->tarheta_status_allow,
                 'filter_bnh_helper_allow' => (bool) $user->filter_bnh_helper_allow,
+                'chatbot_records_allow' => (bool) ($user->chatbot_records_allow ?? false),
                 'is_verified' => (bool) $user->is_verified,
             ];
             $request->session()->put('login_user', $freshUser);
@@ -127,6 +128,7 @@ class EnsureUserIsLoggedIn
             'Inquire_Allow' => (bool) $user->Inquire_Allow,
             'tarheta_status_allow' => (bool) $user->tarheta_status_allow,
             'filter_bnh_helper_allow' => (bool) $user->filter_bnh_helper_allow,
+            'chatbot_records_allow' => (bool) ($user->chatbot_records_allow ?? false),
             'is_verified' => (bool) $user->is_verified,
         ]);
 

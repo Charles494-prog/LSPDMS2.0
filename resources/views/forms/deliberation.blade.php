@@ -5,7 +5,7 @@
 @section('content')
 <style>
     .deliberation-page { max-width:1000px; margin:0 auto; }
-    .deliberation-hero { margin-bottom:1.2rem; padding:1.5rem clamp(1rem,3vw,2rem); border:1px solid color-mix(in srgb,var(--accent) 18%,var(--border)); border-radius:18px; background:radial-gradient(circle at 90% 15%,color-mix(in srgb,var(--accent) 17%,transparent),transparent 34%),var(--surface); }
+    .deliberation-hero { margin-bottom:1.2rem; padding:1.5rem clamp(1rem,3vw,2rem); border:1px solid var(--border); border-radius:14px; background:var(--surface); }
     .deliberation-hero a { color:var(--accent); font-size:.84rem; font-weight:700; text-decoration:none; }
     .deliberation-hero h1 { margin:.75rem 0 .35rem; font-size:clamp(1.6rem,4vw,2.2rem); letter-spacing:-.04em; }
     .deliberation-hero p { margin:0; color:var(--text-muted); line-height:1.55; }

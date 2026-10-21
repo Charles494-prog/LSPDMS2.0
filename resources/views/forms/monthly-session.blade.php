@@ -5,6 +5,8 @@
 @section('content')
 <style>
     .monthly-back-button { display:inline-flex; align-items:center; min-height:40px; padding:.5rem .85rem; border:1px solid var(--border); border-radius:9px; background:var(--surface); color:var(--accent); font:inherit; font-size:.85rem; font-weight:750; text-decoration:none; }
+    .monthly-session-notice { margin:.8rem 0; padding:.75rem .9rem; border:1px solid var(--border); border-left:4px solid var(--danger); border-radius:9px; background:var(--surface); color:var(--text); font-size:.85rem; line-height:1.5; overflow-wrap:anywhere; }
+    .monthly-session-notice[hidden] { display:none; }
 </style>
 <main style="max-width:1100px;margin:0 auto">
     <section style="padding:1.4rem;border:1px solid var(--border);border-radius:16px;background:var(--surface);margin-bottom:1rem">
@@ -20,6 +22,7 @@
         @endif
     </section>
     <section style="padding:1rem;border:1px solid var(--border);border-radius:16px;background:var(--surface)">
+        <p class="monthly-session-notice" id="monthlySessionNotice" role="alert" aria-live="assertive" hidden></p>
         <div style="overflow-x:auto">
             <table style="width:100%;border-collapse:collapse">
                 <thead><tr><th style="text-align:left;padding:.7rem">Member / details</th><th style="text-align:left;padding:.7rem">Movement</th><th style="text-align:left;padding:.7rem">Changed by / at</th><th style="padding:.7rem">Action</th></tr></thead>
@@ -51,6 +54,7 @@
 (() => {
     const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
     const body = document.getElementById('monthlyMovementRows');
+    const notice = document.getElementById('monthlySessionNotice');
     const statusUrl = @json(route('forms.monthly.session.status'));
     const renderMovements = movements => {
         body.replaceChildren();
@@ -119,7 +123,8 @@
             }
             window.location.reload();
         } catch (error) {
-            window.alert(error.message);
+            notice.textContent = error.message;
+            notice.hidden = false;
             button.disabled = false;
         }
     });

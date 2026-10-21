@@ -3,8 +3,8 @@
     .todo-launcher {
         position:fixed; right:24px; bottom:96px; z-index:70; display:flex; align-items:center; gap:.55rem;
         min-height:54px; padding:.45rem 1rem .45rem .55rem; border:0; border-radius:999px;
-        background:linear-gradient(135deg,#1681f5,#0759bd); color:#fff; font:inherit; font-weight:750;
-        box-shadow:0 8px 24px rgba(10,107,214,.35); cursor:pointer;
+        background:#0a6bd6; color:#fff; font:inherit; font-weight:750;
+        box-shadow:0 2px 8px rgba(10,107,214,.2); cursor:pointer;
     }
     .todo-launcher svg { width:40px; height:40px; padding:9px; border-radius:50%; background:rgba(255,255,255,.15); }
     .todo-launcher:hover { transform:translateY(-2px); }

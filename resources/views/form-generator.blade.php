@@ -14,10 +14,10 @@
         overflow: hidden;
         margin-bottom: 1.35rem;
         padding: clamp(1.5rem, 4vw, 2.4rem);
-        border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border));
+        border: 1px solid var(--border);
         border-radius: 20px;
-        background: radial-gradient(circle at 88% 20%, color-mix(in srgb, var(--accent) 19%, transparent), transparent 32%), var(--surface);
-        box-shadow: 0 14px 38px rgba(15,23,42,.06);
+        background: var(--surface);
+        box-shadow: 0 1px 3px rgba(15,23,42,.04);
     }
     .form-eyebrow { margin: 0 0 .55rem; color: var(--accent); font-size: .74rem; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
     .form-hero h1 { margin: 0; font-size: clamp(1.8rem, 4vw, 2.55rem); letter-spacing: -.045em; }
@@ -60,6 +60,8 @@
     .notes-sidebar { display:flex; min-height:0; flex-direction:column; border-right:1px solid var(--border); }
     .notes-sidebar-head { padding:1rem; border-bottom:1px solid var(--border); }
     .notes-sidebar-head h2 { margin:0 0 .75rem; font-size:1rem; }
+    .notes-section-meta { display:flex; align-items:center; gap:.55rem; flex-wrap:wrap; }
+    .notes-count-pill { display:inline-flex; align-items:center; min-height:1.5rem; padding:.1rem .55rem; border:1px solid var(--border); border-radius:999px; background:var(--bg); color:var(--text-muted); font-size:.73rem; font-weight:700; white-space:nowrap; }
     .notes-search { width:100%; padding:.7rem .8rem; border:1px solid var(--border); border-radius:9px; background:var(--bg); color:var(--text); font:inherit; }
     .notes-records { flex:1; min-height:0; overflow-y:auto; }
     .notes-record { display:block; width:100%; padding:.85rem 1rem; border:0; border-bottom:1px solid var(--border); background:transparent; color:var(--text); text-align:left; cursor:pointer; }
@@ -67,6 +69,8 @@
     .notes-record strong,.notes-record span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .notes-record strong { font-size:.88rem; }
     .notes-record span { margin-top:.25rem; color:var(--text-muted); font-size:.77rem; }
+    .notes-record .notes-record-meta { display:flex; align-items:center; justify-content:space-between; gap:.4rem; }
+    .notes-record .notes-record-meta span:last-child { flex:none; color:var(--accent); font-weight:700; }
     .notes-record-pagination { display:flex; flex:none; align-items:center; justify-content:space-between; gap:.4rem; padding:.65rem .75rem; border-top:1px solid var(--border); }
     .notes-record-pagination[hidden] { display:none; }
     .notes-record-pagination button { padding:.4rem .55rem; border:1px solid var(--border); border-radius:7px; background:var(--surface); color:var(--text); font:inherit; font-size:.75rem; font-weight:700; cursor:pointer; }
@@ -74,6 +78,7 @@
     .notes-record-page-status { color:var(--text-muted); font-size:.72rem; white-space:nowrap; }
     .notes-editor { display:flex; min-width:0; min-height:0; flex-direction:column; }
     .notes-editor-head { padding:1rem 1.2rem; border-bottom:1px solid var(--border); }
+    .notes-editor-head-row { display:flex; align-items:flex-start; justify-content:space-between; gap:.8rem; }
     .notes-editor-head h2 { margin:0; font-size:1.08rem; }
     .notes-editor-head p { margin:.28rem 0 0; color:var(--text-muted); font-size:.82rem; }
     .notes-list { display:grid; align-content:start; gap:.65rem; flex:1; min-height:180px; overflow-y:auto; padding:1rem 1.2rem; background:var(--bg); }
@@ -95,6 +100,8 @@
     .notes-compose button { padding:.74rem 1rem; border:0; border-radius:9px; background:var(--accent); color:white; font:inherit; font-size:.85rem; font-weight:750; cursor:pointer; }
     .notes-compose button:disabled { opacity:.55; cursor:wait; }
     .notes-hint { margin:.55rem 0 0; color:var(--text-muted); font-size:.75rem; }
+    .notes-compose-footer { display:flex; align-items:center; justify-content:space-between; gap:.75rem; }
+    .notes-character-count { color:var(--text-muted); font-size:.72rem; font-variant-numeric:tabular-nums; white-space:nowrap; }
     .notes-alert { margin:0 1.2rem .6rem; color:var(--danger); font-size:.82rem; }
     .notes-alert:empty { display:none; }
     @media(max-width:850px) { .generator-grid.monthly { grid-template-columns:repeat(2,minmax(0,1fr)); } }
@@ -140,14 +147,14 @@
             <div><h2>Weekly generators</h2><p>Weekly reporting forms and summaries.</p></div>
         </div>
         <div class="generator-grid">
-            <article class="generator-card">
+            <a class="generator-card" href="{{ route('forms.weekly.r4-02') }}">
                 <div class="generator-card-top"><span class="generator-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v13H5V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5M8 13h8M8 17h8"/></svg></span><h3>R4-02 Generator</h3></div>
-                <p>Prepare the R4-02 weekly report.</p><span class="generator-tag">Weekly report</span>
-            </article>
-            <article class="generator-card">
+                <p>Filter R4-01 members, assign configured Hakbang codes, and save a printable R4-02.</p><span class="generator-tag">Open R4-02 Maker</span>
+            </a>
+            <a class="generator-card" href="{{ route('forms.weekly.r4-03') }}">
                 <div class="generator-card-top"><span class="generator-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v13H5V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5M8 13h8M8 17h5"/></svg></span><h3>R4-03 Generator</h3></div>
-                <p>Prepare the R4-03 weekly report.</p><span class="generator-tag">Weekly report</span>
-            </article>
+                <p>Summarize saved R4-02 forms, grouped only by Puroks with generated reports.</p><span class="generator-tag">Open R4-03 Maker</span>
+            </a>
         </section>
     </section>
 
@@ -182,16 +189,22 @@
 
     <section class="form-panel" id="notes-panel" role="tabpanel" aria-labelledby="notes-tab" @if ($activePanel !== 'notes') hidden @endif>
         <div class="form-section-heading">
-            <div><h2>Notes Checker</h2><p>Review, add, or remove entries in a record’s log section. New notes are dated automatically.</p></div>
+            <div><h2>Notes Checker</h2><p>Find a record, review its dated log entries, and safely add or remove notes.</p></div>
         </div>
-        @include('components.secretary-todo-widget')
         <div class="notes-layout" id="notesApp"
             data-list-url="{{ route('forms.notes') }}"
             data-add-url="{{ route('forms.notes.append', ['record' => '__ID__']) }}"
             data-delete-url="{{ route('forms.notes.delete', ['record' => '__ID__', 'noteIndex' => '__INDEX__']) }}"
             data-csrf="{{ csrf_token() }}">
             <aside class="notes-sidebar">
-                <div class="notes-sidebar-head"><h2>Records with notes</h2><input class="notes-search" id="notesSearch" type="search" placeholder="Search name or registry…" aria-label="Search records with notes"></div>
+                <div class="notes-sidebar-head">
+                    <div class="notes-section-meta">
+                        <h2>Records with notes</h2>
+                        <span class="notes-count-pill" id="notesRecordCount" aria-live="polite">Loading</span>
+                    </div>
+                    <input class="notes-search" id="notesSearch" type="search" placeholder="Search name or registry…" aria-label="Search records with notes">
+                    <p class="notes-hint">Search returns up to 100 matching records.</p>
+                </div>
                 <div class="notes-records" id="notesRecords" aria-live="polite"><p class="notes-empty">Loading records…</p></div>
                 <nav class="notes-record-pagination" id="notesRecordPagination" aria-label="Record pages" hidden>
                     <button type="button" id="previousRecordsPage">Previous</button>
@@ -200,7 +213,12 @@
                 </nav>
             </aside>
             <section class="notes-editor" aria-label="Selected record notes">
-                <header class="notes-editor-head"><h2 id="selectedRecordName">Select a record</h2><p id="selectedRecordRegistry">Choose a record to review its log notes.</p></header>
+                <header class="notes-editor-head">
+                    <div class="notes-editor-head-row">
+                        <div><h2 id="selectedRecordName">Select a record</h2><p id="selectedRecordRegistry">Choose a record to review its log notes.</p></div>
+                        <span class="notes-count-pill" id="selectedNoteCount">No record selected</span>
+                    </div>
+                </header>
                 <div class="notes-list" id="recordNotes" aria-live="polite"><p class="notes-empty">Select a record from the list to review its notes.</p></div>
                 <nav class="notes-pagination" id="notesPagination" aria-label="Notes pages" hidden>
                     <button type="button" id="previousNotesPage">Previous</button>
@@ -211,7 +229,7 @@
                 <form class="notes-compose" id="noteForm">
                     <label for="newNote">Append a note</label>
                     <div class="notes-compose-row"><textarea id="newNote" maxlength="2000" placeholder="For example: Should be included in deliberation…" disabled></textarea><button id="saveNote" type="submit" disabled>Add note</button></div>
-                    <p class="notes-hint">The current date is added automatically in DD/MM/YYYY: note format.</p>
+                    <div class="notes-compose-footer"><p class="notes-hint">Today’s date is added automatically to the note.</p><span class="notes-character-count" id="newNoteCount">0 / 2000</span></div>
                 </form>
             </section>
         </div>
@@ -255,6 +273,9 @@
     const alert = document.getElementById('notesAlert');
     const selectedName = document.getElementById('selectedRecordName');
     const selectedRegistry = document.getElementById('selectedRecordRegistry');
+    const recordCount = document.getElementById('notesRecordCount');
+    const selectedNoteCount = document.getElementById('selectedNoteCount');
+    const noteCharacterCount = document.getElementById('newNoteCount');
     let records = [];
     let selectedId = null;
     let searchTimer = null;
@@ -262,8 +283,11 @@
     const notesPerPage = 5;
     let recordsPage = 0;
     const recordsPerPage = 10;
+    let activeRecordsRequest = null;
+    let recordsRequestSequence = 0;
 
     function showError(error) {
+        if (error?.name === 'AbortError') return;
         alert.textContent = error?.message || String(error);
     }
 
@@ -292,10 +316,13 @@
         selectedId = Number(record.id);
         selectedName.textContent = record.name;
         selectedRegistry.textContent = record.registry ? `Registry: ${record.registry}` : 'No registry number';
+        selectedNoteCount.textContent = `${record.notes.length} ${record.notes.length === 1 ? 'note' : 'notes'}`;
         input.disabled = false;
         saveButton.disabled = false;
         recordsList.querySelectorAll('.notes-record').forEach(button => {
-            button.classList.toggle('selected', Number(button.dataset.id) === selectedId);
+            const selected = Number(button.dataset.id) === selectedId;
+            button.classList.toggle('selected', selected);
+            button.setAttribute('aria-pressed', String(selected));
         });
         notesList.replaceChildren();
         if (!record.notes.length) {
@@ -356,6 +383,8 @@
             selectedId = null;
             selectedName.textContent = 'Select a record';
             selectedRegistry.textContent = 'Choose a record to review its log notes.';
+            recordCount.textContent = '0 records';
+            selectedNoteCount.textContent = 'No record selected';
             notesList.replaceChildren();
             recordsPagination.hidden = true;
             pagination.hidden = true;
@@ -365,6 +394,7 @@
         }
 
         const pageCount = Math.ceil(items.length / recordsPerPage);
+        recordCount.textContent = `${items.length} ${items.length === 1 ? 'record' : 'records'}`;
         recordsPage = Math.min(recordsPage, pageCount - 1);
         recordsPagination.hidden = pageCount <= 1;
         previousRecordsPageButton.disabled = recordsPage === 0;
@@ -378,12 +408,23 @@
             button.type = 'button';
             button.className = `notes-record${Number(record.id) === selectedId ? ' selected' : ''}`;
             button.dataset.id = record.id;
+            button.setAttribute('aria-pressed', String(Number(record.id) === selectedId));
             const name = document.createElement('strong');
             name.textContent = record.name;
             const detail = document.createElement('span');
-            detail.textContent = record.registry || `${record.notes.length} note${record.notes.length === 1 ? '' : 's'}`;
+            detail.className = 'notes-record-meta';
+            const registry = document.createElement('span');
+            registry.textContent = record.registry || 'No registry number';
+            const count = document.createElement('span');
+            count.textContent = `${record.notes.length} ${record.notes.length === 1 ? 'note' : 'notes'}`;
+            detail.append(registry, count);
             button.append(name, detail);
             button.addEventListener('click', () => {
+                if (Number(record.id) !== selectedId && input.value.trim()) {
+                    alert.textContent = 'Save or clear the unsaved note before switching records.';
+                    input.focus();
+                    return;
+                }
                 if (Number(record.id) !== selectedId) notesPage = 0;
                 renderNotes(record);
             });
@@ -394,15 +435,33 @@
     }
 
     function replaceRecord(updated) {
-        records = records.map(record => Number(record.id) === Number(updated.id) ? updated : record);
+        records = records.flatMap(record => Number(record.id) === Number(updated.id)
+            ? (updated.notes.length ? [updated] : [])
+            : [record]);
         renderRecords(records);
     }
 
     async function loadRecords() {
         const url = `${app.dataset.listUrl}?q=${encodeURIComponent(search.value.trim())}`;
-        const items = await request(url);
-        recordsPage = 0;
-        renderRecords(items);
+        activeRecordsRequest?.abort();
+        const controller = new AbortController();
+        activeRecordsRequest = controller;
+        const sequence = ++recordsRequestSequence;
+        recordsList.replaceChildren();
+        const loading = document.createElement('p');
+        loading.className = 'notes-empty';
+        loading.textContent = 'Searching records…';
+        recordsList.append(loading);
+        try {
+            const items = await request(url, { signal: controller.signal });
+            if (sequence !== recordsRequestSequence) return;
+            recordCount.textContent = `${items.length} ${items.length === 1 ? 'record' : 'records'}`;
+            recordsPage = 0;
+            renderRecords(items);
+            alert.textContent = '';
+        } catch (error) {
+            if (error?.name !== 'AbortError') throw error;
+        }
     }
 
     previousRecordsPageButton.addEventListener('click', () => {
@@ -437,7 +496,16 @@
 
     search.addEventListener('input', () => {
         clearTimeout(searchTimer);
-        searchTimer = window.setTimeout(() => loadRecords().catch(showError), 250);
+        searchTimer = window.setTimeout(() => {
+            if (input.value.trim()) {
+                alert.textContent = 'Save or clear the unsaved note before searching for another record.';
+                return;
+            }
+            loadRecords().catch(showError);
+        }, 250);
+    });
+    input.addEventListener('input', () => {
+        noteCharacterCount.textContent = `${input.value.length} / 2000`;
     });
 
     form.addEventListener('submit', async event => {
@@ -448,6 +516,7 @@
             const url = app.dataset.addUrl.replace('__ID__', selectedId);
             const updated = await request(url, { method: 'POST', body: JSON.stringify({ note: input.value }) });
             input.value = '';
+            noteCharacterCount.textContent = '0 / 2000';
             alert.textContent = '';
             notesPage = Math.floor((updated.notes.length - 1) / notesPerPage);
             replaceRecord(updated);

@@ -86,10 +86,6 @@
             <label>Month<input type="month" name="month" aria-label="Filter snapshots by month" value="{{ $filters['month'] ?? '' }}"></label>
         </form>
 
-        @if (session('status'))
-            <p role="status">{{ session('status') }}</p>
-        @endif
-
         @if ($snapshots->isEmpty())
             <p class="r401-snapshot-empty">No saved monthly session snapshots match these filters. A snapshot is created when a monthly session is finalized.</p>
         @else

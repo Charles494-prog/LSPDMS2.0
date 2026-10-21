@@ -4,15 +4,19 @@ namespace App\Http\Controllers;
 
 use App\Models\GlobalVariable;
 use App\Models\Purok;
+use App\Models\R402Hakbang;
 use App\Models\Record;
 use App\Models\RecordAuditLog;
-use App\Models\R402Hakbang;
+use App\Models\SystemSmtpSetting;
 use App\Models\User;
+use App\Services\DatabaseBackupService;
+use App\Services\SystemSmtpConfiguration;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -20,7 +24,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SuperadminController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, SystemSmtpConfiguration $smtpConfiguration)
     {
         $auditFilters = $this->validatedAuditFilters($request);
         $users = User::query()
@@ -38,6 +42,7 @@ class SuperadminController extends Controller
                 'Inquire_Allow',
                 'tarheta_status_allow',
                 'filter_bnh_helper_allow',
+                'chatbot_records_allow',
             ])
             ->orderBy('id')
             ->get();
@@ -46,11 +51,17 @@ class SuperadminController extends Controller
             ->with('secretaryUser:id,first_name,last_name,gmail')
             ->orderBy('purok_number')
             ->get();
+        $smtpSettings = SystemSmtpSetting::query()->first();
+        $smtpPasswordConfigured = filled($smtpSettings?->getRawOriginal('app_password'));
+        $smtpDatabaseConfigured = filled($smtpSettings?->email) && $smtpPasswordConfigured;
+        $smtpConfiguredFromEnvironment = $smtpConfiguration->isEnvironmentConfigured();
+        $smtpConfigured = $smtpConfiguration->isConfigured();
+        $securitySettings = GlobalVariable::query()->first();
 
         return view('superadmin-dashboard', [
             'users' => $users,
             'puroks' => $puroks,
-            'globalVariables' => GlobalVariable::query()->first(),
+            'globalVariables' => $securitySettings,
             'r402Hakbangs' => R402Hakbang::query()
                 ->orderBy('status')
                 ->orderBy('code')
@@ -61,6 +72,18 @@ class SuperadminController extends Controller
                 ->paginate(50)
                 ->withQueryString(),
             'auditFilters' => $auditFilters,
+            'databaseTables' => app(DatabaseBackupService::class)->tableNames(),
+            'smtpEmail' => $smtpSettings?->email
+                ?: ($smtpConfiguredFromEnvironment ? config('mail.mailers.smtp.username') : null),
+            'smtpPasswordConfigured' => $smtpPasswordConfigured,
+            'smtpDatabaseConfigured' => $smtpDatabaseConfigured,
+            'smtpConfiguredFromEnvironment' => $smtpConfiguredFromEnvironment && ! $smtpDatabaseConfigured,
+            'smtpConfigured' => $smtpConfigured,
+            'smtpRequiredForAuthentication' => (bool) ($securitySettings?->require_otp ?? true)
+                || (bool) ($securitySettings?->allow_forgot_password ?? true),
+            'headSecretaryTransferCandidates' => $users->filter(fn (User $user): bool => $user->is_verified
+                && mb_strtolower(trim((string) $user->tungkulin)) === 'secretary'
+                && (int) $user->id !== (int) $request->session()->get('login_user.id'))->values(),
         ]);
     }
 
@@ -200,6 +223,37 @@ class SuperadminController extends Controller
             ]);
         }
 
+        $isHeadSecretary = static fn (?string $role): bool => in_array(
+            mb_strtolower(trim(preg_replace('/\s+/', ' ', (string) $role) ?? '')),
+            ['head secretary', 'secretary head'],
+            true
+        );
+        $isSelf = (int) $request->session()->get('login_user.id') === (int) $user->id;
+        $targetIsHead = $isHeadSecretary($user->tungkulin);
+
+        if (array_key_exists('tungkulin', $validated)
+            && $isHeadSecretary($validated['tungkulin'])
+            && ! $targetIsHead) {
+            throw ValidationException::withMessages([
+                'tungkulin' => 'Use the confirmed Head Secretary transfer control to assign this role.',
+            ]);
+        }
+
+        if ($targetIsHead && array_key_exists('tungkulin', $validated)
+            && ! $isHeadSecretary($validated['tungkulin'])) {
+            if ($isSelf) {
+                throw ValidationException::withMessages([
+                    'tungkulin' => 'You cannot demote yourself. Use the confirmed Head Secretary transfer control instead.',
+                ]);
+            }
+        }
+
+        if ($targetIsHead && array_key_exists('is_verified', $validated) && ! $validated['is_verified']) {
+            throw ValidationException::withMessages([
+                'is_verified' => 'A Head Secretary cannot be revoked. Demote the account to Secretary first.',
+            ]);
+        }
+
         $user->fill($validated)->save();
         if (array_key_exists('is_verified', $validated) && ! $user->is_verified) {
             $user->forceFill([
@@ -213,8 +267,70 @@ class SuperadminController extends Controller
                 'id' => $user->id,
                 'tungkulin' => $user->tungkulin,
                 'is_verified' => (bool) $user->is_verified,
-                'revoked_current_session' => (int) $request->session()->get('login_user.id') === (int) $user->id && ! $user->is_verified,
+                'revoked_current_session' => $isSelf && ! $user->is_verified,
             ],
+        ]);
+    }
+
+    public function transferHeadSecretary(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'target_user_id' => ['required', 'integer', 'exists:login_user,id'],
+            'current_password' => ['required', 'string'],
+            'confirmation' => ['required', 'accepted'],
+        ]);
+        $currentUserId = (int) $request->session()->get('login_user.id');
+        if ((int) $validated['target_user_id'] === $currentUserId) {
+            throw ValidationException::withMessages([
+                'target_user_id' => 'Choose another verified Secretary account.',
+            ]);
+        }
+
+        $targetUser = DB::transaction(function () use ($validated, $currentUserId): User {
+            $currentHead = User::query()
+                ->whereKey($currentUserId)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $target = User::query()
+                ->whereKey($validated['target_user_id'])
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $isHeadSecretary = static fn (?string $role): bool => in_array(
+                mb_strtolower(trim(preg_replace('/\s+/', ' ', (string) $role) ?? '')),
+                ['head secretary', 'secretary head'],
+                true
+            );
+
+            if (! $isHeadSecretary($currentHead->tungkulin) || ! $currentHead->is_verified) {
+                throw ValidationException::withMessages([
+                    'target_user_id' => 'Only the active Head Secretary can transfer this role.',
+                ]);
+            }
+            $passwordMatches = str_starts_with((string) $currentHead->password, '$')
+                ? Hash::check($validated['current_password'], $currentHead->password)
+                : hash_equals((string) $currentHead->password, $validated['current_password']);
+            if (! $passwordMatches) {
+                throw ValidationException::withMessages([
+                    'current_password' => 'The current password is incorrect.',
+                ]);
+            }
+            if (! $target->is_verified || mb_strtolower(trim((string) $target->tungkulin)) !== 'secretary') {
+                throw ValidationException::withMessages([
+                    'target_user_id' => 'Choose a verified Secretary account for the transfer.',
+                ]);
+            }
+
+            $currentHead->forceFill(['tungkulin' => 'Secretary'])->save();
+            $target->forceFill(['tungkulin' => 'Head Secretary'])->save();
+
+            return $target;
+        });
+
+        return response()->json([
+            'message' => 'Head Secretary role transferred. Your account is now a Secretary.',
+            'target_user' => $targetUser->only(['id', 'gmail', 'first_name', 'last_name']),
+            'redirect_url' => route('home'),
         ]);
     }
 
@@ -229,6 +345,7 @@ class SuperadminController extends Controller
             'permissions.*.Inquire_Allow' => ['required', 'boolean'],
             'permissions.*.tarheta_status_allow' => ['required', 'boolean'],
             'permissions.*.filter_bnh_helper_allow' => ['required', 'boolean'],
+            'permissions.*.chatbot_records_allow' => ['sometimes', 'boolean'],
         ]);
 
         DB::transaction(function () use ($validated): void {
@@ -244,14 +361,18 @@ class SuperadminController extends Controller
                     ]);
                 }
 
-                $user->fill([
+                $userPermissions = [
                     'dashboard_allow' => $permission['dashboard_allow'],
                     'form_generator_allow' => $permission['form_generator_allow'],
                     'Delistment_allow' => $permission['Delistment_allow'],
                     'Inquire_Allow' => $permission['Inquire_Allow'],
                     'tarheta_status_allow' => $permission['tarheta_status_allow'],
                     'filter_bnh_helper_allow' => $permission['filter_bnh_helper_allow'],
-                ])->save();
+                ];
+                if (array_key_exists('chatbot_records_allow', $permission)) {
+                    $userPermissions['chatbot_records_allow'] = $permission['chatbot_records_allow'];
+                }
+                $user->fill($userPermissions)->save();
             }
         });
 
@@ -346,6 +467,7 @@ class SuperadminController extends Controller
             'head_lsp' => ['nullable', 'string', 'max:255'],
             'kalihim_ms' => ['nullable', 'string', 'max:255'],
             'kalihim_uwp' => ['nullable', 'string', 'max:255'],
+            'r401_use_purok_secretary' => ['sometimes', 'boolean'],
             'baptism_requirement' => ['required_if:dateofbaptism_requirement_boolean,1', 'nullable', 'date'],
             'entry_years_requirement' => ['required', 'integer', 'in:1,2,3'],
             'dateofbaptism_requirement_boolean' => ['required', 'boolean'],

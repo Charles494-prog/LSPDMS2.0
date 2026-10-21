@@ -7,15 +7,19 @@
     :root {
         --sa-accent: var(--accent, #0a6bd6);
         --sa-accent-hover: var(--accent-hover, #0a4a8a);
-        --sa-navy: #101828;
+        --sa-navy: var(--text, #101828);
         --sa-ink-soft: var(--text-muted, #64748b);
         --sa-surface: var(--surface, #ffffff);
         --sa-border: var(--border, #e3e8ee);
         --sa-bg: var(--bg, #f6f8fa);
         --sa-danger: #dc2626;
-        --sa-danger-bg: #fdecea;
+        --sa-danger-bg: color-mix(in srgb,var(--sa-danger) 12%,var(--sa-surface));
         --sa-success: #16a34a;
-        --sa-success-bg: #e6f4ea;
+        --sa-success-bg: color-mix(in srgb,var(--sa-success) 12%,var(--sa-surface));
+    }
+    html[data-theme="dark"] {
+        --sa-danger: #f87171;
+        --sa-success: #4ade80;
     }
     .sa-page {
         font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
@@ -52,11 +56,63 @@
     .sa-tab-btn.active { color: var(--sa-accent); border-bottom-color: var(--sa-accent); }
     .sa-tab-panel { display: none; }
     .sa-tab-panel.active { display: block; }
+    .smtp-setup-alert {
+        display:flex; align-items:center; justify-content:space-between; gap:1rem; margin:0 0 1.2rem;
+        padding:1rem 1.15rem; border:1px solid color-mix(in srgb,#b7791f 35%,var(--sa-border));
+        border-left:4px solid #b7791f; border-radius:10px; background:var(--sa-surface); color:var(--sa-navy);
+    }
+    .smtp-setup-alert[hidden], .smtp-security-alert[hidden] { display:none !important; }
+    .smtp-setup-alert-copy { display:flex; align-items:flex-start; gap:.8rem; min-width:0; }
+    .smtp-setup-alert-icon { display:grid; width:2rem; height:2rem; flex:0 0 2rem; place-items:center; border-radius:50%; background:color-mix(in srgb,#b7791f 14%,var(--sa-surface)); color:#946200; font-weight:800; }
+    .smtp-setup-alert strong { display:block; margin-bottom:.15rem; font-size:.9rem; }
+    .smtp-setup-alert p { margin:0; color:var(--sa-ink-soft); font-size:.82rem; line-height:1.45; }
+    .smtp-setup-alert .sa-btn { flex:none; }
+    .smtp-setup-wrap { width:min(100%,1080px); margin:0 auto; }
+    .smtp-setup-card { overflow:hidden; padding:0; }
+    .smtp-setup-heading { padding:1.45rem 1.6rem 1.2rem; border-bottom:1px solid var(--sa-border); }
+    .smtp-setup-heading-top { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+    .smtp-setup-heading h2 { margin:0; color:var(--sa-navy); font-size:1.15rem; letter-spacing:-.02em; }
+    .smtp-setup-heading p { margin:.35rem 0 0; color:var(--sa-ink-soft); font-size:.86rem; line-height:1.5; }
+    .smtp-setup-status { display:inline-flex; align-items:center; gap:.45rem; flex:none; padding:.4rem .65rem; border:1px solid var(--sa-border); border-radius:999px; color:var(--sa-ink-soft); font-size:.74rem; font-weight:700; white-space:nowrap; }
+    .smtp-setup-status::before { width:.48rem; height:.48rem; border-radius:50%; background:#b7791f; content:""; }
+    .smtp-setup-status.is-configured::before { background:#16835d; }
+    .smtp-setup-grid { display:grid; grid-template-columns:minmax(250px,.85fr) minmax(0,1.15fr); }
+    .smtp-guide { padding:1.4rem 1.6rem; border-right:1px solid var(--sa-border); background:var(--sa-bg); }
+    .smtp-guide h3, .smtp-form h3 { margin:0; color:var(--sa-navy); font-size:.9rem; }
+    .smtp-guide-intro { margin:.35rem 0 1rem; color:var(--sa-ink-soft); font-size:.8rem; line-height:1.5; }
+    .smtp-guide ol { display:grid; gap:.9rem; margin:0; padding:0; list-style:none; counter-reset:smtp-setup; }
+    .smtp-guide li { position:relative; min-height:1.75rem; padding-left:2.25rem; color:var(--sa-ink-soft); font-size:.8rem; line-height:1.5; counter-increment:smtp-setup; }
+    .smtp-guide li::before { position:absolute; left:0; top:0; display:grid; width:1.5rem; height:1.5rem; place-items:center; border:1px solid var(--sa-border); border-radius:50%; background:var(--sa-surface); color:var(--sa-navy); font-size:.72rem; font-weight:750; content:counter(smtp-setup); }
+    .smtp-guide li strong { color:var(--sa-navy); }
+    .smtp-guide a { color:var(--sa-accent); font-weight:650; text-underline-offset:2px; }
+    .smtp-guide-note { margin:1.1rem 0 0; padding-top:.9rem; border-top:1px solid var(--sa-border); color:var(--sa-ink-soft); font-size:.75rem; line-height:1.5; }
+    .smtp-form { display:flex; flex-direction:column; padding:1.4rem 1.6rem; }
+    .smtp-form h3 { margin-bottom:1rem; }
+    .smtp-field { display:grid; gap:.4rem; margin-bottom:1rem; }
+    .smtp-field label { color:var(--sa-navy); font-size:.8rem; font-weight:700; }
+    .smtp-field input { width:100%; min-height:43px; padding:.65rem .75rem; border:1px solid var(--sa-border); border-radius:8px; background:var(--sa-surface); color:var(--sa-navy); font:inherit; font-size:.87rem; }
+    .smtp-field input:focus-visible { outline:2px solid var(--sa-accent); outline-offset:2px; border-color:var(--sa-accent); }
+    .smtp-field-hint { color:var(--sa-ink-soft); font-size:.74rem; line-height:1.45; }
+    .smtp-save-row { display:flex; align-items:center; justify-content:space-between; gap:.8rem; margin-top:auto; padding-top:.9rem; border-top:1px solid var(--sa-border); }
+    .smtp-save-row p { margin:0; color:var(--sa-ink-soft); font-size:.74rem; line-height:1.4; }
+    .smtp-security-alert { margin:0 0 1rem; padding:.8rem .95rem; border:1px solid color-mix(in srgb,#b7791f 32%,var(--sa-border)); border-radius:9px; background:color-mix(in srgb,#b7791f 6%,var(--sa-surface)); color:var(--sa-navy); font-size:.82rem; line-height:1.5; }
+    .smtp-security-alert button { margin-left:.25rem; padding:0; border:0; background:none; color:var(--sa-accent); font:inherit; font-weight:700; text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
+    @media(max-width:760px) {
+        .smtp-setup-grid { grid-template-columns:1fr; }
+        .smtp-guide { border-right:0; border-bottom:1px solid var(--sa-border); }
+        .smtp-setup-alert { align-items:flex-start; flex-direction:column; }
+    }
+    @media(max-width:480px) {
+        .smtp-setup-heading,.smtp-guide,.smtp-form { padding:1.1rem; }
+        .smtp-setup-heading-top { align-items:flex-start; flex-direction:column; }
+        .smtp-save-row { align-items:flex-start; flex-direction:column; }
+        .smtp-save-row .sa-btn { width:100%; }
+    }
     #bnhResetGeneratedCode { display:inline-block; margin:.4rem 0; padding:.55rem .75rem; border:1px solid var(--sa-border); border-radius:8px; background:var(--sa-bg); font-size:1.1rem; font-weight:800; letter-spacing:.12em; user-select:none; -webkit-user-select:none; }
     .bnh-reset-grid { grid-template-columns:1fr; }
     .bnh-reset-field { width:100%; }
     .bnh-reset-state[hidden], .bnh-reset-code-panel[hidden] { display:none !important; }
-    .bnh-reset-state { display:flex; width:100%; min-height:300px; box-sizing:border-box; flex-direction:column; align-items:center; justify-content:center; gap:1rem; padding:2rem; border:1px solid color-mix(in srgb,var(--sa-accent) 24%,var(--sa-border)); border-radius:12px; background:linear-gradient(145deg,color-mix(in srgb,var(--sa-accent) 7%,var(--sa-surface)),var(--sa-surface) 74%); color:var(--sa-navy); text-align:center; }
+    .bnh-reset-state { display:flex; width:100%; min-height:300px; box-sizing:border-box; flex-direction:column; align-items:center; justify-content:center; gap:1rem; padding:2rem; border:1px solid var(--sa-border); border-radius:12px; background:var(--sa-surface); color:var(--sa-navy); text-align:center; }
     .bnh-reset-state-copy { width:min(100%,680px); }
     .bnh-reset-state-title { margin:0 0 .4rem; color:var(--sa-navy); font-size:1.1rem; font-weight:750; line-height:1.35; }
     .bnh-reset-state p { margin:0; color:var(--sa-ink-soft); font-size:.92rem; line-height:1.6; }
@@ -116,6 +172,51 @@
         gap: 0.6rem;
         flex-wrap: wrap;
     }
+    .head-secretary-transfer-controls {
+        display: grid;
+        grid-template-columns: minmax(260px, 1.3fr) minmax(220px, 1fr) auto;
+        align-items: end;
+        gap: 0.8rem;
+    }
+    .head-secretary-transfer-controls .gv-field {
+        min-width: 0;
+        margin: 0;
+    }
+    .head-secretary-transfer-controls .gv-field > span {
+        display: block;
+        margin-bottom: 0.4rem;
+        color: var(--sa-navy);
+        font-size: 0.83rem;
+        font-weight: 600;
+    }
+    .head-secretary-transfer-controls .sa-btn {
+        min-height: 42px;
+    }
+    .head-secretary-transfer-controls .sa-select {
+        box-sizing: border-box;
+        width: 100%;
+        height: 42px;
+    }
+    .head-secretary-transfer-controls input[type="password"] {
+        box-sizing: border-box;
+        width: 100%;
+        height: 42px;
+        padding: 0.6rem 0.8rem;
+        border: 1px solid var(--sa-border);
+        border-radius: 8px;
+        background: var(--sa-bg);
+        color: var(--sa-navy);
+        font: inherit;
+    }
+    .head-secretary-transfer-controls input[type="password"]:focus {
+        outline: none;
+        border-color: var(--sa-accent);
+        background: var(--sa-surface);
+    }
+    @media (max-width: 760px) {
+        .head-secretary-transfer-controls { grid-template-columns: 1fr; }
+        .head-secretary-transfer-controls .sa-btn { justify-content: center; }
+    }
 
     .sa-page-actions {
         display: flex;
@@ -171,7 +272,7 @@
     .sa-btn-ghost { background: var(--sa-bg); color: var(--sa-navy); border: 1px solid var(--sa-border); }
     .sa-btn-ghost:hover { background: var(--sa-border); }
     .sa-btn-danger { background: var(--sa-danger-bg); color: var(--sa-danger); }
-    .sa-btn-danger:hover { background: #f9d5d2; }
+    .sa-btn-danger:hover { background: color-mix(in srgb,var(--sa-danger) 20%,var(--sa-surface)); }
     .sa-btn-sm { padding: 0.4rem 0.75rem; font-size: 0.8rem; }
 
     .sa-search {
@@ -485,6 +586,60 @@
         opacity: 0.65;
     }
     .gv-hint { font-size: 0.76rem; color: var(--sa-ink-soft); margin-top: 0.35rem; }
+    .sql-dropzone {
+        box-sizing: border-box;
+        min-height: 240px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: .65rem;
+        padding: 2rem;
+        border: 2px dashed var(--sa-border);
+        border-radius: 14px;
+        background: var(--sa-bg);
+        color: var(--sa-navy);
+        cursor: pointer;
+        text-align: center;
+        transition: border-color .15s ease, background-color .15s ease, transform .15s ease;
+    }
+    .sql-dropzone:hover, .sql-dropzone.is-dragging {
+        border-color: var(--sa-accent);
+        background: color-mix(in srgb, var(--sa-accent) 5%, var(--sa-bg));
+    }
+    .sql-dropzone.is-dragging { transform: scale(1.005); }
+    .sql-dropzone:focus-within {
+        outline: 2px solid var(--sa-accent);
+        outline-offset: 2px;
+    }
+    .sql-dropzone-icon {
+        width: 52px;
+        height: 52px;
+        display: grid;
+        place-items: center;
+        border-radius: 14px;
+        background: color-mix(in srgb, var(--sa-accent) 9%, var(--sa-surface));
+        color: var(--sa-accent);
+    }
+    .sql-dropzone-icon svg { width: 28px; height: 28px; }
+    .sql-dropzone-title { font-size: 1.05rem; font-weight: 700; }
+    .sql-dropzone-hint, .sql-file-status { color: var(--sa-ink-soft); font-size: .88rem; }
+    .sql-dropzone-hint strong { color: var(--sa-accent); }
+    .sql-file-status { min-height: 1.25rem; }
+    @media (max-width: 600px) {
+        .sql-dropzone { min-height: 200px; padding: 1.5rem 1rem; }
+    }
+    .sql-file-input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        clip-path: inset(50%);
+    }
+    .sql-file-error { margin: .5rem 0 0; color: var(--sa-danger); font-size: .8rem; }
 
     .gv-subsection {
         margin-top: 0.4rem;
@@ -561,8 +716,8 @@
 
     .sa-toast-container {
         position: fixed;
-        top: 1rem;
-        right: 1rem;
+        top: max(1rem, env(safe-area-inset-top));
+        right: max(1rem, env(safe-area-inset-right));
         z-index: 100100;
         display: grid;
         gap: 0.65rem;
@@ -609,6 +764,18 @@
         cursor: pointer;
     }
     .sa-toast.sa-toast-leaving { animation: sa-toast-out 180ms ease-in both; }
+    @media (max-width: 600px) {
+        .sa-toast-container {
+            top: max(.65rem, env(safe-area-inset-top));
+            right: max(.65rem, env(safe-area-inset-right));
+            left: max(.65rem, env(safe-area-inset-left));
+            width: auto;
+        }
+        .sa-modal-overlay { align-items: flex-start; padding: max(.75rem, env(safe-area-inset-top)) .65rem; }
+        .sa-modal { max-height: calc(100dvh - 1.5rem); padding: 1.1rem; }
+        .sa-modal-save-bar { flex-wrap: wrap; }
+        .sa-modal-save-bar .sa-btn { flex: 1 1 auto; justify-content: center; }
+    }
     @keyframes sa-toast-in {
         from { opacity: 0; transform: translateY(-8px); }
         to { opacity: 1; transform: translateY(0); }
@@ -684,6 +851,82 @@
         gap: 0.7rem;
         margin-top: 1.2rem;
     }
+    .database-import-modal { max-width: 680px; }
+    .database-import-warning {
+        margin: 0 0 1rem;
+        padding: .9rem 1rem;
+        border: 1px solid var(--sa-danger);
+        border-radius: 10px;
+        background: var(--sa-danger-bg);
+        color: var(--sa-danger);
+        font-size: .88rem;
+        font-weight: 600;
+    }
+    .database-import-summary {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        margin: 1rem 0;
+    }
+    .database-import-summary section {
+        min-width: 0;
+        padding: .9rem;
+        border: 1px solid var(--sa-border);
+        border-radius: 10px;
+        background: var(--sa-bg);
+    }
+    .database-import-summary h3 {
+        margin: 0 0 .5rem;
+        color: var(--sa-navy);
+        font-size: .85rem;
+    }
+    .database-import-summary ul {
+        max-height: 150px;
+        overflow: auto;
+        margin: 0;
+        padding-left: 1.2rem;
+        color: var(--sa-ink-soft);
+        font-size: .8rem;
+    }
+    .database-import-confirm-fields {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: .9rem;
+        margin-top: 1rem;
+    }
+    .database-import-confirm-fields label {
+        display: grid;
+        align-content: start;
+        gap: .4rem;
+        color: var(--sa-navy);
+        font-size: .82rem;
+        font-weight: 600;
+    }
+    .database-import-confirm-fields input {
+        box-sizing: border-box;
+        width: 100%;
+        min-height: 42px;
+        padding: .6rem .75rem;
+        border: 1px solid var(--sa-border);
+        border-radius: 8px;
+        background: var(--sa-bg);
+        color: var(--sa-navy);
+        font: inherit;
+    }
+    .database-import-confirm-fields input:focus {
+        outline: none;
+        border-color: var(--sa-accent);
+        background: var(--sa-surface);
+    }
+    .database-import-error {
+        margin: .8rem 0 0;
+        color: var(--sa-danger);
+        font-size: .85rem;
+        font-weight: 600;
+    }
+    @media (max-width: 620px) {
+        .database-import-summary, .database-import-confirm-fields { grid-template-columns: 1fr; }
+    }
 </style>
 
 <div class="sa-page">
@@ -692,6 +935,25 @@
         <h1>Superadmin Dashboard</h1>
         <p>Manage user access, congregation signatories, and system-wide settings.</p>
     </div>
+
+    @unless ($smtpConfigured)
+        <aside class="smtp-setup-alert" id="smtpSetupAlert" role="status">
+            <div class="smtp-setup-alert-copy">
+                <span class="smtp-setup-alert-icon" aria-hidden="true">!</span>
+                <div>
+                    <strong>Email delivery is not configured</strong>
+                    <p id="smtpSetupAlertText">
+                        @if ($smtpRequiredForAuthentication)
+                            Email verification and password recovery are enabled, but these emails cannot be delivered until SMTP is set up.
+                        @else
+                            Configure SMTP to enable system email delivery, including account verification and password recovery.
+                        @endif
+                    </p>
+                </div>
+            </div>
+            <button class="sa-btn sa-btn-primary" type="button" data-open-smtp>Configure SMTP</button>
+        </aside>
+    @endunless
 
     <div class="sa-tabs">
         <button type="button" class="sa-tab-btn active" data-tab="users">
@@ -713,6 +975,8 @@
         <button type="button" class="sa-tab-btn" data-tab="r402-hakbangs">Mga R4-02 Hakbang</button>
         <button type="button" class="sa-tab-btn" data-tab="maintenance">BNH FORM RESET</button>
         <button type="button" class="sa-tab-btn" data-tab="record-audit">Record Activity</button>
+        <button type="button" class="sa-tab-btn" data-tab="smtp-settings">SMTP Settings</button>
+        <button type="button" class="sa-tab-btn" data-tab="database">Database</button>
     </div>
 
     <!-- ============ USER MANAGEMENT ============ -->
@@ -722,6 +986,33 @@
                 <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2l7 3v5c0 4.5-3 7.5-7 8-4-.5-7-3.5-7-8V5l7-3z"/><path d="M7.2 10l1.9 1.9L13 8"/></svg>
                 Edit Permissions of Secretaries
             </button>
+        </div>
+        <div class="sa-card">
+            <div class="sa-card-head">
+                <div>
+                    <h2>Transfer Head Secretary role</h2>
+                    <p>Transfers the role atomically: the current account becomes Secretary and the selected verified Secretary becomes Head Secretary.</p>
+                </div>
+            </div>
+            <div class="head-secretary-transfer-controls">
+                <label class="gv-field" for="headSecretaryTransferTarget">
+                    <span>Verified Secretary</span>
+                    <select id="headSecretaryTransferTarget" class="sa-select" @disabled($headSecretaryTransferCandidates->isEmpty())>
+                        <option value="">Select an account</option>
+                        @foreach ($headSecretaryTransferCandidates as $candidate)
+                            <option value="{{ $candidate->id }}">{{ trim(($candidate->first_name ?? '').' '.($candidate->last_name ?? '')) ?: $candidate->gmail }} · {{ $candidate->gmail }}</option>
+                        @endforeach
+                    </select>
+                </label>
+                <label class="gv-field" for="headSecretaryTransferPassword">
+                    <span>Confirm with your password</span>
+                    <input type="password" id="headSecretaryTransferPassword" autocomplete="current-password" required @disabled($headSecretaryTransferCandidates->isEmpty())>
+                </label>
+                <button type="button" class="sa-btn sa-btn-danger" id="transferHeadSecretaryBtn" @disabled($headSecretaryTransferCandidates->isEmpty())>Transfer role</button>
+            </div>
+            @if ($headSecretaryTransferCandidates->isEmpty())
+                <p class="gv-hint">There are no other verified Secretary accounts available to receive the role.</p>
+            @endif
         </div>
         <div class="sa-card">
             <div class="sa-card-head">
@@ -858,6 +1149,139 @@
             @if ($recordAuditLogs->hasPages())
                 <div class="sa-audit-pagination">{{ $recordAuditLogs->links() }}</div>
             @endif
+        </div>
+    </div>
+
+    <div class="sa-tab-panel" id="tab-smtp-settings">
+        <div class="smtp-setup-wrap">
+            <section class="sa-card smtp-setup-card" aria-labelledby="smtp-setup-title">
+                <header class="smtp-setup-heading">
+                    <div class="smtp-setup-heading-top">
+                        <div>
+                            <h2 id="smtp-setup-title" tabindex="-1">Email delivery</h2>
+                            <p>Connect a Gmail account for sign-in verification and password recovery messages.</p>
+                        </div>
+                        <span class="smtp-setup-status{{ $smtpConfigured ? ' is-configured' : '' }}" id="smtpSetupStatus">
+                            {{ $smtpConfiguredFromEnvironment ? 'Configured via app environment' : ($smtpConfigured ? 'Configured' : 'Setup required') }}
+                        </span>
+                    </div>
+                </header>
+                <div class="smtp-setup-grid">
+                    <aside class="smtp-guide" aria-labelledby="smtp-guide-title">
+                        <h3 id="smtp-guide-title">Before you start</h3>
+                        <p class="smtp-guide-intro">Use a Google App Password, not your regular Google password.</p>
+                        <ol>
+                            <li>Sign in to the Gmail account that should send LSPDMS emails.</li>
+                            <li>Enable <strong>2-Step Verification</strong> in that Google Account.</li>
+                            <li>Create an app password from <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer">Google App Passwords</a>.</li>
+                            <li>Enter the Gmail address and paste the generated password on this page.</li>
+                        </ol>
+                        <p class="smtp-guide-note">The app password is stored encrypted and never displayed again. Spaces in the password are removed when saved.</p>
+                    </aside>
+
+                    <form class="smtp-form" id="smtpSettingsForm" autocomplete="off">
+                        @csrf
+                        <h3>Sender account</h3>
+                        <div class="smtp-field">
+                            <label for="smtpEmail">Gmail address</label>
+                            <input id="smtpEmail" name="email" type="email" maxlength="255" value="{{ $smtpEmail }}" required autocomplete="email" placeholder="name@gmail.com">
+                            <span class="smtp-field-hint">This address appears as the sender for system emails.</span>
+                        </div>
+                        <div class="smtp-field">
+                            <label for="smtpAppPassword">Google App Password</label>
+                            <input id="smtpAppPassword" name="app_password" type="password" maxlength="255" @required(!$smtpPasswordConfigured) autocomplete="new-password" placeholder="{{ $smtpPasswordConfigured ? 'Enter a new password to replace the saved one' : 'Paste your 16-character app password' }}">
+                            <span class="smtp-field-hint" id="smtpPasswordState">
+                                {{ $smtpPasswordConfigured
+                                    ? 'A password is saved securely. Leave blank to keep it.'
+                                    : ($smtpConfiguredFromEnvironment
+                                        ? 'Laravel is currently using environment SMTP settings. Enter an app password to move this configuration into the admin-managed settings.'
+                                        : 'Required to enable email delivery.') }}
+                            </span>
+                        </div>
+                        <div class="smtp-save-row">
+                            <p>Changes apply to new outgoing emails immediately.</p>
+                            <button type="submit" class="sa-btn sa-btn-primary" id="saveSmtpSettingsBtn">
+                                {{ $smtpConfigured ? 'Save email settings' : 'Save and enable email' }}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <div class="sa-tab-panel" id="tab-database">
+        <div class="sa-card">
+            <div class="sa-card-head">
+                <div>
+                    <h2>Export Database</h2>
+                    <p>Download the database as one portable SQL file. Optionally exclude account or message tables.</p>
+                </div>
+            </div>
+            <form method="GET" action="{{ route('superadmin.database.export-sql') }}">
+                <div class="gv-grid">
+                    <label class="delist-check-row" for="excludeLoginUser">
+                        <input id="excludeLoginUser" type="checkbox" name="exclude_tables[]" value="login_user">
+                        <span class="delist-check-text"><strong>Exclude login_user</strong><small>Omit account and sign-in records.</small></span>
+                    </label>
+                    <label class="delist-check-row" for="excludeMessages">
+                        <input id="excludeMessages" type="checkbox" name="exclude_tables[]" value="messages">
+                        <span class="delist-check-text"><strong>Exclude messages</strong><small>Omit private message records and attachments metadata.</small></span>
+                    </label>
+                </div>
+                <div class="sa-save-bar">
+                    <button type="submit" class="sa-btn sa-btn-primary">Download entire database (lspdms.sql)</button>
+                </div>
+            </form>
+            <p class="sa-note">Unchecked tables are included. SMTP credentials are always excluded.</p>
+        </div>
+
+        <div class="sa-card">
+            <div class="sa-card-head">
+                <div>
+                    <h2>Import Database</h2>
+                    <p>Restore an LSPDMS SQL backup from your computer.</p>
+                </div>
+            </div>
+            <p class="sa-note">Import accepts LSPDMS SQL backups for the same database engine. Run Laravel migrations on the destination PC first.</p>
+            <form id="databaseImportForm" enctype="multipart/form-data">
+                @csrf
+                <label class="sql-dropzone" id="databaseSqlDropzone" for="databaseSqlFile">
+                    <span class="sql-dropzone-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5"/><path d="M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>
+                    </span>
+                    <span class="sql-dropzone-title">Drop your SQL backup here</span>
+                    <span class="sql-dropzone-hint">Drag and drop an <strong>.sql</strong> file, or click to browse your computer</span>
+                    <input class="sql-file-input" id="databaseSqlFile" name="sql_file" type="file" accept=".sql,application/sql" required>
+                    <span class="sql-file-status" id="databaseSqlFileStatus" aria-live="polite">No file selected.</span>
+                </label>
+                <p class="sql-file-error" id="databaseSqlFileError" role="alert" hidden></p>
+                <p class="gv-hint">Before applying an import, LSPDMS creates a private safety backup. Data in tables included in the file is replaced. Tables omitted from the file are retained.</p>
+                <button type="submit" class="sa-btn sa-btn-danger" id="importDatabaseBtn" disabled>Review and Import SQL</button>
+            </form>
+        </div>
+
+        <div class="sa-card">
+            <div class="sa-card-head">
+                <div>
+                    <h2>Optional Excel table export</h2>
+                    <p>For a partial spreadsheet export, select specific tables. Use Export Database above for the complete backup.</p>
+                </div>
+            </div>
+            <form method="POST" action="{{ route('superadmin.database.export-xlsx') }}" id="databaseXlsxForm">
+                @csrf
+                <div class="gv-grid">
+                    @foreach ($databaseTables as $table)
+                        <label class="delist-check-row" for="exportTable{{ $loop->index }}">
+                            <input id="exportTable{{ $loop->index }}" type="checkbox" name="tables[]" value="{{ $table }}">
+                            <span class="delist-check-text"><strong>{{ $table }}</strong></span>
+                        </label>
+                    @endforeach
+                </div>
+                <div class="sa-save-bar">
+                    <button type="submit" class="sa-btn sa-btn-primary">Export Selected Tables to XLSX</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -1134,6 +1558,13 @@
                 </div>
             </div>
 
+            @unless ($smtpConfigured)
+                <div class="smtp-security-alert" id="smtpSecurityAlert" @if (!$smtpRequiredForAuthentication) hidden @endif>
+                    Email-based security features need a working SMTP account. Configure it before relying on OTP or password recovery.
+                    <button type="button" data-open-smtp>Open SMTP settings</button>
+                </div>
+            @endunless
+
             <div class="settings-list">
                 <div class="settings-row">
                     <div class="settings-row-text">
@@ -1215,6 +1646,15 @@
                 <div class="gv-field">
                     <label for="gvKalihimUwp">Kalihim ng UWP</label>
                     <input type="text" id="gvKalihimUwp" placeholder="Full name" value="{{ $globalVariables?->kalihim_uwp }}">
+                </div>
+                <div class="gv-field">
+                    <label class="delist-check-row" for="gvR401PurokSecretary">
+                        <input type="checkbox" id="gvR401PurokSecretary" @checked($globalVariables?->r401_use_purok_secretary)>
+                        <span class="delist-check-text">
+                            <strong>Use each Purok's assigned Secretary</strong>
+                            <span>When off, R4-01 uses the Kalihim ng MS/UWP global settings. When on, each page uses the Secretary assigned to that Purok.</span>
+                        </span>
+                    </label>
                 </div>
 
                 <div class="gv-field {{ $globalVariables?->dateofbaptism_requirement_boolean ? '' : 'disabled' }}" id="gvBaptismField">
@@ -1350,6 +1790,44 @@
 
 <div class="sa-toast-container" id="saToastContainer" aria-live="polite" aria-atomic="false"></div>
 
+<div class="sa-modal-overlay" id="databaseImportModal" aria-hidden="true">
+    <div class="sa-modal database-import-modal" role="dialog" aria-modal="true" aria-labelledby="databaseImportModalTitle">
+        <div class="sa-modal-header">
+            <div>
+                <h2 id="databaseImportModalTitle">Review database import</h2>
+                <p>Verify the impact and confirm your identity before any data is replaced.</p>
+            </div>
+            <button type="button" class="sa-modal-close" id="closeDatabaseImportModal" aria-label="Cancel import review">&times;</button>
+        </div>
+        <p class="database-import-warning">This import replaces data in every listed table. A private safety backup will be created first. This action cannot be undone from this screen.</p>
+        <div class="database-import-summary">
+            <section>
+                <h3>Tables that will be replaced (<span id="databaseImportTableCount">0</span>)</h3>
+                <ul id="databaseImportTables"></ul>
+            </section>
+            <section>
+                <h3>Tables that will be retained (<span id="databaseImportOmittedCount">0</span>)</h3>
+                <ul id="databaseImportOmittedTables"></ul>
+            </section>
+        </div>
+        <div class="database-import-confirm-fields">
+            <label for="databaseImportPassword">
+                Head Secretary current password
+                <input id="databaseImportPassword" type="password" autocomplete="current-password">
+            </label>
+            <label for="databaseImportConfirmationText">
+                Type <strong>IMPORT DATABASE</strong> to confirm
+                <input id="databaseImportConfirmationText" type="text" autocomplete="off" spellcheck="false">
+            </label>
+        </div>
+        <p class="database-import-error" id="databaseImportConfirmError" role="alert" hidden></p>
+        <div class="sa-modal-save-bar">
+            <button type="button" class="sa-btn sa-btn-ghost" id="cancelDatabaseImport">Cancel</button>
+            <button type="button" class="sa-btn sa-btn-danger" id="confirmDatabaseImport">Import database</button>
+        </div>
+    </div>
+</div>
+
 <div class="sa-modal-overlay" id="deleteHakbangModal" aria-hidden="true">
     <div class="sa-modal" role="dialog" aria-modal="true" aria-labelledby="deleteHakbangTitle">
         <div class="sa-modal-header">
@@ -1391,6 +1869,7 @@
                         <th class="center">Allow Inquire<br>/ Modify</th>
                         <th class="center">Allow Tarheta<br>Status Checker</th>
                         <th class="center">Allow Filter &amp;<br>BNH Helper</th>
+                        <th class="center">Allow chatbot<br>record lookups</th>
                     </tr>
                 </thead>
                 <tbody id="permissionsTableBody">
@@ -1412,9 +1891,10 @@
                             <td class="center"><input type="checkbox" class="sa-checkbox" data-permission="Inquire_Allow" @checked($user->Inquire_Allow)></td>
                             <td class="center"><input type="checkbox" class="sa-checkbox" data-permission="tarheta_status_allow" @checked($user->tarheta_status_allow)></td>
                             <td class="center"><input type="checkbox" class="sa-checkbox" data-permission="filter_bnh_helper_allow" @checked($user->filter_bnh_helper_allow)></td>
+                            <td class="center"><input type="checkbox" class="sa-checkbox" data-permission="chatbot_records_allow" @checked($user->chatbot_records_allow)></td>
                         </tr>
                     @empty
-                        <tr><td colspan="7" class="sa-empty">No verified users found.</td></tr>
+                        <tr><td colspan="8" class="sa-empty">No verified users found.</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -1454,6 +1934,36 @@
                 if (btn.dataset.tab === 'maintenance') ensureBnhResetCode?.();
             });
         });
+        document.querySelectorAll('[data-open-smtp]').forEach(button => {
+            button.addEventListener('click', () => {
+                activateTab('smtp-settings');
+                window.history.replaceState(null, '', '#smtp-settings');
+                document.getElementById('smtp-setup-title')?.focus();
+            });
+        });
+        const smtpSetupAlert = document.getElementById('smtpSetupAlert');
+        const smtpSetupAlertText = document.getElementById('smtpSetupAlertText');
+        const smtpSecurityAlert = document.getElementById('smtpSecurityAlert');
+        const requireOtpSetting = document.getElementById('requireOtpSetting');
+        const allowForgotPasswordSetting = document.getElementById('allowForgotPasswordSetting');
+        const refreshSmtpPrompt = () => {
+            if (!smtpSetupAlert) return;
+            const otpEnabled = Boolean(requireOtpSetting?.checked);
+            const forgotPasswordEnabled = Boolean(allowForgotPasswordSetting?.checked);
+            if (smtpSetupAlertText) {
+                smtpSetupAlertText.textContent = otpEnabled && forgotPasswordEnabled
+                    ? 'Email verification and password recovery are enabled, but these emails cannot be delivered until SMTP is set up.'
+                    : otpEnabled
+                        ? 'Email verification is enabled, but one-time codes cannot be delivered until SMTP is set up.'
+                        : forgotPasswordEnabled
+                            ? 'Password recovery is enabled, but reset links cannot be delivered until SMTP is set up.'
+                            : 'Configure SMTP to enable system email delivery, including account verification and password recovery.';
+            }
+            if (smtpSecurityAlert) smtpSecurityAlert.hidden = !otpEnabled && !forgotPasswordEnabled;
+        };
+        requireOtpSetting?.addEventListener('change', refreshSmtpPrompt);
+        allowForgotPasswordSetting?.addEventListener('change', refreshSmtpPrompt);
+        refreshSmtpPrompt();
 
         // ===== Generic search filter (used by Users table + Permissions modal table) =====
         function wireSearch(inputId, bodyId, emptyStateId) {
@@ -1486,6 +1996,10 @@
             signatories: @json(route('superadmin.signatories.update')),
             globalVariables: @json(route('superadmin.global-variables.update')),
             securitySettings: @json(route('superadmin.security-settings.update')),
+            smtpSettings: @json(route('superadmin.smtp-settings.update')),
+            transferHeadSecretary: @json(route('superadmin.users.transfer-head-secretary')),
+            databaseImportPreview: @json(route('superadmin.database.import-preview')),
+            databaseImport: @json(route('superadmin.database.import')),
             generateBnhResetCode: @json(route('superadmin.reset-bnh-helper-checks.code')),
             resetBnhChecks: @json(route('superadmin.reset-bnh-helper-checks')),
             r402Hakbangs: @json(url('/superadmin/r4-02/hakbangs')),
@@ -1531,6 +2045,254 @@
             toastContainer.appendChild(toast);
             const timer = window.setTimeout(dismiss, type === 'error' ? 7000 : 4500);
         }
+
+        async function sendFormData(url, formData, method = 'POST') {
+            const response = await fetch(url, {
+                method,
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: formData,
+            });
+            const body = await response.json();
+            if (!response.ok) {
+                const message = body.errors ? Object.values(body.errors).flat()[0] : body.message;
+                throw new Error(message || 'The request could not be completed.');
+            }
+            return body;
+        }
+
+        document.getElementById('transferHeadSecretaryBtn')?.addEventListener('click', async event => {
+            const button = event.currentTarget;
+            const targetId = document.getElementById('headSecretaryTransferTarget').value;
+            const passwordInput = document.getElementById('headSecretaryTransferPassword');
+            const currentPassword = passwordInput.value;
+            if (!targetId) {
+                showToast('Choose a verified Secretary account first.', 'error');
+                return;
+            }
+            if (!currentPassword) {
+                passwordInput.focus();
+                showToast('Enter your current password to confirm the transfer.', 'error');
+                return;
+            }
+            if (!window.confirm('Transfer Head Secretary access to this account? Your account will become a Secretary and lose Head Secretary access.')) return;
+            button.disabled = true;
+            try {
+                const result = await sendUpdate(superadminUrls.transferHeadSecretary, {
+                    target_user_id: Number(targetId),
+                    current_password: currentPassword,
+                    confirmation: true,
+                }, 'POST');
+                passwordInput.value = '';
+                showToast(result.message);
+                window.setTimeout(() => { window.location.href = result.redirect_url; }, 1200);
+            } catch (error) {
+                passwordInput.value = '';
+                showToast(error.message, 'error');
+                button.disabled = false;
+            }
+        });
+
+        const smtpSettingsForm = document.getElementById('smtpSettingsForm');
+        smtpSettingsForm?.addEventListener('submit', async event => {
+            event.preventDefault();
+            const button = document.getElementById('saveSmtpSettingsBtn');
+            button.disabled = true;
+            try {
+                const result = await sendFormData(
+                    superadminUrls.smtpSettings,
+                    new URLSearchParams(new FormData(smtpSettingsForm)),
+                    'PUT'
+                );
+                document.getElementById('smtpAppPassword').value = '';
+                document.getElementById('smtpAppPassword').required = false;
+                document.getElementById('smtpPasswordState').textContent = 'A password is saved securely. Leave blank to keep it.';
+                document.getElementById('smtpSetupStatus').textContent = 'Configured';
+                document.getElementById('smtpSetupStatus').classList.add('is-configured');
+                document.getElementById('saveSmtpSettingsBtn').textContent = 'Save email settings';
+                if (smtpSetupAlert) smtpSetupAlert.hidden = true;
+                if (smtpSecurityAlert) smtpSecurityAlert.hidden = true;
+                showToast(result.message);
+            } catch (error) {
+                showToast(error.message, 'error');
+            } finally {
+                button.disabled = false;
+            }
+        });
+
+        const databaseImportForm = document.getElementById('databaseImportForm');
+        const databaseSqlInput = document.getElementById('databaseSqlFile');
+        const databaseSqlDropzone = document.getElementById('databaseSqlDropzone');
+        const databaseSqlStatus = document.getElementById('databaseSqlFileStatus');
+        const databaseSqlError = document.getElementById('databaseSqlFileError');
+        const databaseImportButton = document.getElementById('importDatabaseBtn');
+        const databaseImportModal = document.getElementById('databaseImportModal');
+        const databaseImportPassword = document.getElementById('databaseImportPassword');
+        const databaseImportConfirmationText = document.getElementById('databaseImportConfirmationText');
+        const databaseImportConfirmError = document.getElementById('databaseImportConfirmError');
+        const confirmDatabaseImportButton = document.getElementById('confirmDatabaseImport');
+        let pendingDatabaseImport = null;
+        let validSqlFileSelected = false;
+
+        if (databaseImportModal && databaseImportModal.parentElement !== document.body) {
+            document.body.appendChild(databaseImportModal);
+        }
+
+        function closeDatabaseImportReview() {
+            databaseImportModal.classList.remove('active');
+            databaseImportModal.setAttribute('aria-hidden', 'true');
+            databaseImportPassword.value = '';
+            databaseImportConfirmationText.value = '';
+            databaseImportConfirmError.hidden = true;
+            pendingDatabaseImport = null;
+            databaseImportButton.disabled = !validSqlFileSelected;
+        }
+
+        function populateTableList(list, tables) {
+            list.replaceChildren();
+            if (tables.length === 0) {
+                const item = document.createElement('li');
+                item.textContent = 'None';
+                list.appendChild(item);
+                return;
+            }
+            tables.forEach(table => {
+                const item = document.createElement('li');
+                item.textContent = table;
+                list.appendChild(item);
+            });
+        }
+
+        function validateSqlFile(file) {
+            databaseSqlError.hidden = true;
+            databaseSqlError.textContent = '';
+            if (!file) {
+                validSqlFileSelected = false;
+                databaseSqlStatus.textContent = 'No file selected.';
+                databaseImportButton.disabled = true;
+                return false;
+            }
+
+            if (!/\.sql$/i.test(file.name)) {
+                databaseSqlInput.value = '';
+                databaseSqlError.textContent = 'Choose an .sql backup file.';
+            } else if (file.size > 100 * 1024 * 1024) {
+                databaseSqlInput.value = '';
+                databaseSqlError.textContent = 'The SQL backup must be 100 MB or smaller.';
+            } else {
+                validSqlFileSelected = true;
+                databaseSqlStatus.textContent = `${file.name} · ${(file.size / 1024 / 1024).toFixed(1)} MB`;
+                databaseImportButton.disabled = false;
+                return true;
+            }
+
+            validSqlFileSelected = false;
+            databaseSqlStatus.textContent = 'No file selected.';
+            databaseSqlError.hidden = false;
+            databaseImportButton.disabled = true;
+            return false;
+        }
+
+        databaseSqlInput?.addEventListener('change', () => validateSqlFile(databaseSqlInput.files?.[0]));
+        ['dragenter', 'dragover'].forEach(eventName => databaseSqlDropzone?.addEventListener(eventName, event => {
+            event.preventDefault();
+            databaseSqlDropzone.classList.add('is-dragging');
+        }));
+        ['dragleave', 'dragend'].forEach(eventName => databaseSqlDropzone?.addEventListener(eventName, event => {
+            if (eventName === 'dragleave' && databaseSqlDropzone.contains(event.relatedTarget)) return;
+            databaseSqlDropzone.classList.remove('is-dragging');
+        }));
+        databaseSqlDropzone?.addEventListener('drop', event => {
+            event.preventDefault();
+            databaseSqlDropzone.classList.remove('is-dragging');
+            const file = event.dataTransfer?.files?.[0];
+            if (!file) return;
+
+            const transfer = new DataTransfer();
+            transfer.items.add(file);
+            databaseSqlInput.files = transfer.files;
+            databaseSqlInput.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+
+        document.getElementById('cancelDatabaseImport')?.addEventListener('click', closeDatabaseImportReview);
+        document.getElementById('closeDatabaseImportModal')?.addEventListener('click', closeDatabaseImportReview);
+        databaseImportModal?.addEventListener('click', event => {
+            if (event.target === databaseImportModal) closeDatabaseImportReview();
+        });
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && databaseImportModal?.classList.contains('active')) {
+                closeDatabaseImportReview();
+            }
+        });
+
+        databaseImportForm?.addEventListener('submit', async event => {
+            event.preventDefault();
+            if (!validSqlFileSelected || pendingDatabaseImport) return;
+            databaseImportButton.disabled = true;
+            try {
+                const formData = new FormData(databaseImportForm);
+                const preview = await sendFormData(superadminUrls.databaseImportPreview, formData);
+                document.getElementById('databaseImportTableCount').textContent = preview.tables.length;
+                document.getElementById('databaseImportOmittedCount').textContent = preview.omitted_tables.length;
+                populateTableList(document.getElementById('databaseImportTables'), preview.tables);
+                populateTableList(document.getElementById('databaseImportOmittedTables'), preview.omitted_tables);
+                pendingDatabaseImport = formData;
+                databaseImportConfirmError.hidden = true;
+                databaseImportModal.classList.add('active');
+                databaseImportModal.setAttribute('aria-hidden', 'false');
+                databaseImportPassword.focus();
+            } catch (error) {
+                showToast(error.message, 'error');
+            } finally {
+                databaseImportButton.disabled = !validSqlFileSelected;
+            }
+        });
+
+        confirmDatabaseImportButton?.addEventListener('click', async () => {
+            if (!pendingDatabaseImport) return;
+            const password = databaseImportPassword.value;
+            const confirmationText = databaseImportConfirmationText.value.trim();
+            if (!password || confirmationText !== 'IMPORT DATABASE') {
+                databaseImportConfirmError.textContent = !password
+                    ? 'Enter your current password to continue.'
+                    : 'Type IMPORT DATABASE exactly as shown to continue.';
+                databaseImportConfirmError.hidden = false;
+                (!password ? databaseImportPassword : databaseImportConfirmationText).focus();
+                return;
+            }
+
+            confirmDatabaseImportButton.disabled = true;
+            document.getElementById('cancelDatabaseImport').disabled = true;
+            document.getElementById('closeDatabaseImportModal').disabled = true;
+            databaseImportConfirmError.hidden = true;
+            const formData = pendingDatabaseImport;
+            formData.set('confirmation_text', confirmationText);
+            formData.set('current_password', password);
+            try {
+                const result = await sendFormData(superadminUrls.databaseImport, formData);
+                closeDatabaseImportReview();
+                showToast(`${result.message} Backup: ${result.backup_file}`);
+                databaseImportForm.reset();
+                validSqlFileSelected = false;
+                databaseSqlStatus.textContent = 'No file selected.';
+                databaseSqlError.hidden = true;
+                databaseImportButton.disabled = true;
+                window.setTimeout(() => window.location.reload(), 1800);
+            } catch (error) {
+                databaseImportConfirmError.textContent = error.message;
+                databaseImportConfirmError.hidden = false;
+                databaseImportPassword.value = '';
+                databaseImportConfirmationText.value = '';
+                databaseImportPassword.focus();
+            } finally {
+                confirmDatabaseImportButton.disabled = false;
+                document.getElementById('cancelDatabaseImport').disabled = false;
+                document.getElementById('closeDatabaseImportModal').disabled = false;
+            }
+        });
 
         async function sendDestructiveReset(url, confirmation) {
             const response = await fetch(url, {
@@ -1653,9 +2415,9 @@
             ensureBnhResetCode();
         }
 
-        async function sendUpdate(url, payload) {
+        async function sendUpdate(url, payload, method = 'PUT') {
             const response = await fetch(url, {
-                method: 'PUT',
+                method,
                 headers: {
                     'Accept': 'application/json',
                     'Content-Type': 'application/json',
@@ -2347,6 +3109,7 @@
                 return [column, value === '' ? null : value];
             }));
             values.dateofbaptism_requirement_boolean = document.getElementById('delistBaptismCheck').checked ? 1 : 0;
+            values.r401_use_purok_secretary = document.getElementById('gvR401PurokSecretary').checked ? 1 : 0;
             button.disabled = true;
             try {
                 await sendUpdate(superadminUrls.globalVariables, values);

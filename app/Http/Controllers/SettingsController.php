@@ -17,8 +17,10 @@ class SettingsController extends Controller
     public function update(Request $request)
     {
         $sessionUser = $request->session()->get('login_user');
-
-        $darkMode = $request->boolean('dark_mode');
+        $validated = $request->validate([
+            'dark_mode' => ['required', 'boolean'],
+        ]);
+        $darkMode = (bool) $validated['dark_mode'];
 
         DB::table('login_user')->where('id', $sessionUser['id'])->update([
             'dark_mode' => $darkMode,
@@ -26,6 +28,10 @@ class SettingsController extends Controller
 
         $sessionUser['dark_mode'] = $darkMode;
         $request->session()->put('login_user', $sessionUser);
+
+        if ($request->expectsJson()) {
+            return response()->json(['dark_mode' => $darkMode]);
+        }
 
         return back()->with('status', 'Settings saved.');
     }

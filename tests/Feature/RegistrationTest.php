@@ -42,6 +42,7 @@ class RegistrationTest extends TestCase
         $this->assertFalse($user->Inquire_Allow);
         $this->assertFalse($user->tarheta_status_allow);
         $this->assertFalse($user->filter_bnh_helper_allow);
+        $this->assertFalse($user->chatbot_records_allow);
 
         $this->post(route('login'), [
             'email' => 'alex.member@example.test',

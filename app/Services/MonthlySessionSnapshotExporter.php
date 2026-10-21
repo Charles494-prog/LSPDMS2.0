@@ -55,10 +55,18 @@ class MonthlySessionSnapshotExporter
                 $kalihimName = $status === 'UWP'
                     ? ($globalVariables?->kalihim_uwp ?: $globalVariables?->kalihim_ms ?: '')
                     : ($globalVariables?->kalihim_ms ?: $globalVariables?->kalihim_uwp ?: '');
+                $usePurokSecretary = (bool) ($globalVariables?->r401_use_purok_secretary ?? false);
+                $reportPages = array_map(function (array $page) use ($usePurokSecretary, $kalihimName): array {
+                    $page['kalihim_name'] = $usePurokSecretary
+                        ? $page['secretary_name']
+                        : $kalihimName;
+
+                    return $page;
+                }, $rows['pages']);
                 $statusReports[$status] = [
                     'month' => $month,
                     'reportRows' => $rows['rows'],
-                    'reportPages' => $rows['pages'],
+                    'reportPages' => $reportPages,
                     'puroks' => $puroks,
                     'selectedPurok' => 'all',
                     'selectedStatus' => $status,
@@ -83,7 +91,7 @@ class MonthlySessionSnapshotExporter
                         '',
                         $globalVariables?->pastor_destinado,
                     ],
-                ], $rows['pages']);
+                ], $reportPages);
             }
             $this->mergeDocuments($docxPaths, $mergedPath);
             $contents = file_get_contents($mergedPath);
