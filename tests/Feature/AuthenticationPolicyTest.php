@@ -30,17 +30,18 @@ class AuthenticationPolicyTest extends TestCase
         $this->assertFalse(session()->has('pending_login_user'));
     }
 
-    public function test_otp_remains_required_by_default(): void
+    public function test_otp_is_disabled_by_default(): void
     {
-        Mail::fake();
         $user = $this->verifiedUser('otp@example.test');
 
         $this->post(route('login'), [
             'email' => $user->gmail,
             'password' => 'valid-password',
         ])
-            ->assertRedirect('/verify-code')
-            ->assertSessionHas('pending_login_user.id', $user->id);
+            ->assertRedirect('/home')
+            ->assertSessionHas('login_user.id', $user->id);
+
+        $this->assertFalse(session()->has('pending_login_user'));
     }
 
     public function test_invalid_credentials_return_to_login_with_an_error_even_if_referred_from_intro(): void
@@ -134,10 +135,8 @@ class AuthenticationPolicyTest extends TestCase
             ->assertOk();
     }
 
-    public function test_forgot_password_setting_hides_link_and_disables_reset_routes(): void
+    public function test_forgot_password_is_disabled_by_default(): void
     {
-        GlobalVariable::query()->create(['allow_forgot_password' => false]);
-
         $this->get(route('login.form'))
             ->assertOk()
             ->assertDontSee('Forgot password?');
@@ -146,8 +145,20 @@ class AuthenticationPolicyTest extends TestCase
         $this->post(route('password.email.resend'))->assertNotFound();
     }
 
+    public function test_authentication_policy_database_defaults_are_disabled(): void
+    {
+        $settings = GlobalVariable::query()->create([]);
+
+        $this->assertFalse($settings->fresh()->require_otp);
+        $this->assertFalse($settings->fresh()->allow_forgot_password);
+    }
+
     public function test_password_reset_email_flow_updates_password_and_revokes_remember_token(): void
     {
+        GlobalVariable::query()->create([
+            'require_otp' => false,
+            'allow_forgot_password' => true,
+        ]);
         $user = $this->verifiedUser('reset@example.test', [
             'remember_token' => Hash::make('remember-me'),
             'remember_token_expires_at' => now()->addDay(),
@@ -212,6 +223,7 @@ class AuthenticationPolicyTest extends TestCase
 
     public function test_expired_password_reset_link_shows_the_expired_link_page(): void
     {
+        GlobalVariable::query()->create(['allow_forgot_password' => true]);
         $user = $this->verifiedUser('expired-reset@example.test');
         $token = str_repeat('a', 64);
         DB::table('password_reset_tokens')->insert([
@@ -235,6 +247,7 @@ class AuthenticationPolicyTest extends TestCase
 
     public function test_password_reset_link_can_only_be_resent_after_five_minutes(): void
     {
+        GlobalVariable::query()->create(['allow_forgot_password' => true]);
         $user = $this->verifiedUser('resend-reset@example.test');
         Mail::shouldReceive('html')->twice();
 
@@ -289,6 +302,7 @@ class AuthenticationPolicyTest extends TestCase
 
     public function test_password_reset_revokes_existing_sessions(): void
     {
+        GlobalVariable::query()->create(['allow_forgot_password' => true]);
         $user = $this->verifiedUser('reset-revokes@example.test');
         $token = str_repeat('x', 64);
         DB::table('password_reset_tokens')->insert([

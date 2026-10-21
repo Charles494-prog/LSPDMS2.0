@@ -203,6 +203,6 @@ class PasswordResetController extends Controller
 
     private function ensureEnabled(): void
     {
-        abort_unless((bool) (GlobalVariable::query()->first()?->allow_forgot_password ?? true), 404);
+        abort_unless((bool) (GlobalVariable::query()->first()?->allow_forgot_password ?? false), 404);
     }
 }

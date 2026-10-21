@@ -79,8 +79,8 @@ class SuperadminController extends Controller
             'smtpDatabaseConfigured' => $smtpDatabaseConfigured,
             'smtpConfiguredFromEnvironment' => $smtpConfiguredFromEnvironment && ! $smtpDatabaseConfigured,
             'smtpConfigured' => $smtpConfigured,
-            'smtpRequiredForAuthentication' => (bool) ($securitySettings?->require_otp ?? true)
-                || (bool) ($securitySettings?->allow_forgot_password ?? true),
+            'smtpRequiredForAuthentication' => (bool) ($securitySettings?->require_otp ?? false)
+                || (bool) ($securitySettings?->allow_forgot_password ?? false),
             'headSecretaryTransferCandidates' => $users->filter(fn (User $user): bool => $user->is_verified
                 && mb_strtolower(trim((string) $user->tungkulin)) === 'secretary'
                 && (int) $user->id !== (int) $request->session()->get('login_user.id'))->values(),

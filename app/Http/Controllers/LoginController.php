@@ -20,7 +20,7 @@ class LoginController extends Controller
         $globalVariables = GlobalVariable::query()->first();
 
         return view('welcome', [
-            'allowForgotPassword' => (bool) ($globalVariables?->allow_forgot_password ?? true),
+            'allowForgotPassword' => (bool) ($globalVariables?->allow_forgot_password ?? false),
         ]);
     }
 
@@ -75,7 +75,7 @@ class LoginController extends Controller
         }
 
         $globalVariables = GlobalVariable::query()->first();
-        if (! (bool) ($globalVariables?->require_otp ?? true)) {
+        if (! (bool) ($globalVariables?->require_otp ?? false)) {
             return $this->completeLogin($request, (int) $user->id, $request->boolean('remember'));
         }
 
