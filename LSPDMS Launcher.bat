@@ -6,6 +6,7 @@ exit /b %errorlevel%
 #!PS!#
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
 
 $RepoUrl = 'https://github.com/Charles494-prog/LSPDMS2.0'
 $RepoBranch = 'master'
@@ -107,6 +108,120 @@ function Find-LanAddress {
         Select-Object -First 1
 
     return $address.IPAddress
+}
+
+function Show-LauncherMenu([bool]$Running = $false, [string]$CurrentMode = 'lan') {
+    $selected = if ($CurrentMode -eq 'lan') { 0 } else { 1 }
+    try {
+        $Host.UI.RawUI.WindowTitle = 'LSPDMS Launcher'
+        $Host.UI.RawUI.BackgroundColor = 'Black'
+        $Host.UI.RawUI.ForegroundColor = 'Gray'
+        $Host.UI.RawUI.WindowSize = New-Object Management.Automation.Host.Size(80, 30)
+        $Host.UI.RawUI.BufferSize = New-Object Management.Automation.Host.Size(80, 30)
+    } catch {}
+
+    while ($true) {
+        $lanAddress = Find-LanAddress
+        [Console]::Clear()
+        Write-Host ''
+        Write-Host '  LSPDMS' -ForegroundColor Cyan
+        Write-Host '  APPLICATION LAUNCHER' -ForegroundColor DarkGray
+        Write-Host ''
+        Write-Host '  How will LSPDMS be used?' -ForegroundColor White
+        Write-Host ''
+
+        $lanColor = if ($selected -eq 0) { 'Cyan' } else { 'DarkGray' }
+        $localColor = if ($selected -eq 1) { 'Cyan' } else { 'DarkGray' }
+        $lanMarker = if ($selected -eq 0) { '>' } else { ' ' }
+        $localMarker = if ($selected -eq 1) { '>' } else { ' ' }
+
+        Write-Host '  +--------------------------------------------------------------------+' -ForegroundColor $lanColor
+        Write-Host ((("  | {0} Team / network (LAN)" -f $lanMarker).PadRight(73)) + '|') -ForegroundColor $lanColor
+        Write-Host '  |   Share access with people on the same local network.' -ForegroundColor Gray
+        if ($lanAddress) {
+            Write-Host ("  |   Address: http://{0}:{1}" -f $lanAddress, $AppPort) -ForegroundColor Green
+        } else {
+            Write-Host '  |   No network address detected. Connect to Wi-Fi, then press R.' -ForegroundColor Yellow
+        }
+        Write-Host '  |   Firewall access is limited to your Private local network.' -ForegroundColor Gray
+        Write-Host '  +--------------------------------------------------------------------+' -ForegroundColor $lanColor
+        Write-Host ''
+
+        Write-Host '  +--------------------------------------------------------------------+' -ForegroundColor $localColor
+        Write-Host ((("  | {0} Just this device" -f $localMarker).PadRight(73)) + '|') -ForegroundColor $localColor
+        Write-Host '  |   Open LSPDMS only on this PC. No LAN firewall changes.' -ForegroundColor Gray
+        Write-Host ("  |   Address: http://127.0.0.1:{0}" -f $AppPort) -ForegroundColor Green
+        Write-Host '  +--------------------------------------------------------------------+' -ForegroundColor $localColor
+        Write-Host ''
+        $hint = '  Up/Down: choose    Enter: continue    R: refresh network    Q: quit'
+        if ($Running) { $hint = '  Up/Down: choose    Enter: switch    R: refresh    B: back' }
+        Write-Host $hint -ForegroundColor DarkGray
+
+        $key = [Console]::ReadKey($true).Key
+        if ($key -eq 'UpArrow' -or $key -eq 'DownArrow') {
+            $selected = 1 - $selected
+        } elseif ($key -eq 'R') {
+            continue
+        } elseif ($key -eq 'Q' -or $key -eq 'Escape') {
+            if ($Running) { return 'back' }
+            return 'quit'
+        } elseif ($Running -and $key -eq 'B') {
+            return 'back'
+        } elseif ($key -eq 'Enter') {
+            if ($selected -eq 0) { return 'lan' }
+            return 'local'
+        }
+    }
+}
+
+function Show-OnlineMenu([string]$Mode, [string]$LanAddress) {
+    $items = @(
+        [pscustomobject]@{ Label = 'Open browser'; Key = 'O'; Id = 'open' },
+        [pscustomobject]@{ Label = 'Restart servers'; Key = 'R'; Id = 'restart' },
+        [pscustomobject]@{ Label = 'Run Laravel migrations'; Key = 'M'; Id = 'migrate' },
+        [pscustomobject]@{ Label = 'Switch access mode'; Key = 'S'; Id = 'switch' },
+        [pscustomobject]@{ Label = 'Shut down'; Key = 'Q'; Id = 'quit' }
+    )
+    $selected = 0
+
+    while ($true) {
+        [Console]::Clear()
+        Write-Host ''
+        Write-Host '  LSPDMS' -ForegroundColor Cyan
+        Write-Host '  APPLICATION ONLINE' -ForegroundColor Green
+        Write-Host ''
+        if ($Mode -eq 'lan' -and $LanAddress) {
+            Write-Host ("  Team / network: http://{0}:{1}" -f $LanAddress, $AppPort) -ForegroundColor Green
+        } else {
+            Write-Host ("  This device:    http://127.0.0.1:{0}" -f $AppPort) -ForegroundColor Green
+        }
+        $reverbDisplayHost = if ($Mode -eq 'lan' -and $LanAddress) { $LanAddress } else { '127.0.0.1' }
+        Write-Host ("  Reverb:         http://{0}:{1}" -f $reverbDisplayHost, $ReverbPort) -ForegroundColor DarkGray
+        Write-Host ''
+        Write-Host '  Choose an action' -ForegroundColor White
+        Write-Host ''
+        for ($index = 0; $index -lt $items.Count; $index++) {
+            $item = $items[$index]
+            $color = if ($index -eq $selected) { 'Cyan' } elseif ($item.Id -eq 'quit') { 'Red' } else { 'Gray' }
+            $marker = if ($index -eq $selected) { '>' } else { ' ' }
+            Write-Host ("  {0} [{1}] {2}" -f $marker, $item.Key, $item.Label) -ForegroundColor $color
+        }
+        Write-Host ''
+        Write-Host '  Up/Down: choose    Enter: select    O/R/M/S/Q: shortcuts' -ForegroundColor DarkGray
+
+        $key = [Console]::ReadKey($true).Key
+        if ($key -eq 'UpArrow') {
+            $selected = ($selected + $items.Count - 1) % $items.Count
+        } elseif ($key -eq 'DownArrow') {
+            $selected = ($selected + 1) % $items.Count
+        } elseif ($key -eq 'Enter') {
+            return $items[$selected].Id
+        } else {
+            $shortcut = [string]$key
+            $match = $items | Where-Object { $_.Key -eq $shortcut } | Select-Object -First 1
+            if ($match) { return $match.Id }
+        }
+    }
 }
 
 function Set-FirstInstallEnvironment([string]$ProjectRoot) {
@@ -451,6 +566,13 @@ try {
         exit 0
     }
 
+    $launchMode = $env:LSPDMS_MODE
+    if ($launchMode -notin @('lan', 'local')) {
+        $launchMode = Show-LauncherMenu
+    }
+    if ($launchMode -eq 'quit') { exit 0 }
+    $lanMode = $launchMode -eq 'lan'
+
     Write-Step 'Checking this PC'
     $laragonRoot = Find-LaragonRoot
     if (-not $laragonRoot) {
@@ -576,66 +698,102 @@ try {
         Ensure-InitialHeadSecretary $projectRoot $php
     } finally { Pop-Location }
 
-    Write-Step 'Building assets for localhost and LAN'
-    $lanAddress = Find-LanAddress
-    $env:VITE_REVERB_HOST = if ($lanAddress) { $lanAddress } else { '127.0.0.1' }
-    $env:VITE_REVERB_PORT = [string]$ReverbPort
-    $env:VITE_REVERB_SCHEME = 'http'
-    $hotMarker = Join-Path $projectRoot 'public\hot'
-    if (Test-Path $hotMarker) { Remove-Item $hotMarker -Force }
+    :launch while ($true) {
+        Write-Step 'Building assets for localhost and LAN'
+        $lanAddress = Find-LanAddress
+        $env:VITE_REVERB_HOST = if ($lanMode -and $lanAddress) { $lanAddress } else { '127.0.0.1' }
+        $env:VITE_REVERB_PORT = [string]$ReverbPort
+        $env:VITE_REVERB_SCHEME = 'http'
+        $hotMarker = Join-Path $projectRoot 'public\hot'
+        if (Test-Path $hotMarker) { Remove-Item $hotMarker -Force }
 
-    Push-Location $projectRoot
-    try {
-        & npm.cmd run build
-        if ($LASTEXITCODE -ne 0) { throw 'Vite could not build the production assets.' }
-    } finally { Pop-Location }
+        Push-Location $projectRoot
+        try {
+            & npm.cmd run build
+            if ($LASTEXITCODE -ne 0) { throw 'Vite could not build the production assets.' }
+        } finally { Pop-Location }
 
-    if (Test-TcpPort '127.0.0.1' $AppPort) {
-        throw "Port $AppPort is already in use. Close the other server or run 'LSPDMS Launcher.bat stop' for the launcher-managed instance."
-    }
-    if (-not (Test-TcpPort '127.0.0.1' $ReverbPort)) {
-        Write-Host 'Starting Reverb for live messaging...'
-        $reverb = Start-LspdmsProcess $php $projectRoot @('artisan', 'reverb:start', '--host=0.0.0.0', "--port=$ReverbPort") 'reverb'
-        for ($attempt = 0; $attempt -lt 30 -and -not $reverb.HasExited; $attempt++) {
-            if (Test-TcpPort '127.0.0.1' $ReverbPort) { break }
-            Start-Sleep -Milliseconds 500
+        if (Test-TcpPort '127.0.0.1' $AppPort) {
+            throw "Port $AppPort is already in use. Close the other server or run 'LSPDMS Launcher.bat stop' for the launcher-managed instance."
         }
         if (-not (Test-TcpPort '127.0.0.1' $ReverbPort)) {
-            Write-Warning "Reverb did not start. Live messaging may be unavailable; see $LogRoot."
+            Write-Host 'Starting Reverb for live messaging...'
+            $reverbHost = if ($lanMode) { '0.0.0.0' } else { '127.0.0.1' }
+            $reverb = Start-LspdmsProcess $php $projectRoot @('artisan', 'reverb:start', "--host=$reverbHost", "--port=$ReverbPort") 'reverb'
+            for ($attempt = 0; $attempt -lt 30 -and -not $reverb.HasExited; $attempt++) {
+                if (Test-TcpPort '127.0.0.1' $ReverbPort) { break }
+                Start-Sleep -Milliseconds 500
+            }
+            if (-not (Test-TcpPort '127.0.0.1' $ReverbPort)) {
+                Write-Warning "Reverb did not start. Live messaging may be unavailable; see $LogRoot."
+            }
+        } else {
+            Write-Host "Port $ReverbPort is already in use; leaving its existing process untouched."
         }
-    } else {
-        Write-Host "Port $ReverbPort is already in use; leaving its existing process untouched."
-    }
 
-    Write-Host 'Starting the Laravel web server...'
-    $web = Start-LspdmsProcess $php $projectRoot @('artisan', 'serve', '--host=0.0.0.0', "--port=$AppPort") 'web'
-    $ready = $false
-    for ($attempt = 0; $attempt -lt 40 -and -not $web.HasExited; $attempt++) {
-        try {
-            $response = Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 "http://127.0.0.1:$AppPort/up"
-            if ($response.StatusCode -eq 200) { $ready = $true; break }
-        } catch {}
-        Start-Sleep -Milliseconds 750
-    }
-    if (-not $ready) {
-        throw "Laravel did not pass its health check. Review $LogRoot\web-error.log."
-    }
+        Write-Host 'Starting the Laravel web server...'
+        $appHost = if ($lanMode) { '0.0.0.0' } else { '127.0.0.1' }
+        $web = Start-LspdmsProcess $php $projectRoot @('artisan', 'serve', "--host=$appHost", "--port=$AppPort") 'web'
+        $ready = $false
+        for ($attempt = 0; $attempt -lt 40 -and -not $web.HasExited; $attempt++) {
+            try {
+                $response = Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 "http://127.0.0.1:$AppPort/up"
+                if ($response.StatusCode -eq 200) { $ready = $true; break }
+            } catch {}
+            Start-Sleep -Milliseconds 750
+        }
+        if (-not $ready) {
+            throw "Laravel did not pass its health check. Review $LogRoot\web-error.log."
+        }
 
-    Write-Step 'Opening LAN access (optional)'
-    Add-PrivateFirewallRules
+        if ($lanMode) {
+            Write-Step 'Opening LAN access (optional)'
+            Add-PrivateFirewallRules
+        }
 
-    Write-Step 'LSPDMS is ready'
-    Write-Host "Local: http://127.0.0.1:$AppPort" -ForegroundColor Green
-    if ($lanAddress) {
-        Write-Host "LAN:   http://$lanAddress`:$AppPort" -ForegroundColor Green
-        Write-Host 'LAN access is limited to Private-network firewall rules when those rules are enabled.'
-    } else {
-        Write-Host 'No LAN address was detected; localhost access is available.'
+        Write-Step 'LSPDMS is ready'
+        Write-Host "Local: http://127.0.0.1:$AppPort" -ForegroundColor Green
+        if ($lanMode -and $lanAddress) {
+            Write-Host "LAN:   http://$lanAddress`:$AppPort" -ForegroundColor Green
+            Write-Host 'LAN access is limited to Private-network firewall rules when those rules are enabled.'
+        } elseif ($lanMode) {
+            Write-Host 'No LAN address was detected; localhost access is available.'
+        }
+        Write-Host "`nLogs: $LogRoot"
+        $browserUrl = if ($lanMode -and $lanAddress) { "http://$lanAddress`:$AppPort" } else { "http://127.0.0.1:$AppPort" }
+        Start-Process $browserUrl
+
+        while ($true) {
+            $action = Show-OnlineMenu $launchMode $lanAddress
+            if ($action -eq 'open') {
+                Start-Process $browserUrl
+            } elseif ($action -eq 'migrate') {
+                Push-Location $projectRoot
+                try {
+                    Write-Host 'Applying Laravel migrations without resetting or dropping data...'
+                    & $php artisan migrate --force
+                    if ($LASTEXITCODE -ne 0) { throw 'Laravel migrations failed.' }
+                    Write-Host 'Migrations completed.' -ForegroundColor Green
+                    Read-Host 'Press Enter to return to the menu'
+                } finally { Pop-Location }
+            } elseif ($action -eq 'restart') {
+                Stop-LspdmsProcesses
+                continue launch
+            } elseif ($action -eq 'switch') {
+                $newMode = Show-LauncherMenu $true $launchMode
+                if ($newMode -in @('lan', 'local') -and $newMode -ne $launchMode) {
+                    Stop-LspdmsProcesses
+                    $launchMode = $newMode
+                    $lanMode = $launchMode -eq 'lan'
+                    continue launch
+                }
+            } elseif ($action -eq 'quit') {
+                Stop-LspdmsProcesses
+                Write-Host 'LSPDMS stopped. MySQL was left running to protect the database.'
+                exit 0
+            }
+        }
     }
-    Write-Host "`nLogs: $LogRoot"
-    Write-Host "To stop only the launcher-managed web and Reverb processes, run: `"$env:LSPDMS_LAUNCHER`" stop"
-    Start-Process "http://127.0.0.1:$AppPort"
-    Read-Host 'Press Enter to close this launcher (servers will keep running)'
 } catch {
     Write-Host "`nLSPDMS setup/startup failed: $($_.Exception.Message)" -ForegroundColor Red
     Write-Host "Setup logs, when available: $LogRoot" -ForegroundColor Yellow
