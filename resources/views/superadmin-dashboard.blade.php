@@ -4,99 +4,123 @@
 
 @section('content')
 <style>
+    /* =====================================================================
+       Superadmin Dashboard — monochrome / Vercel-style theme
+       Monochrome theme styles.
+       HTML and JS stay untouched (all selectors/classes are preserved).
+       Colors come from your layout's theme variables (--bg, --surface,
+       --border, --text, --text-muted) so light/dark still follows the app.
+       Color is used ONLY for success / danger states.
+       ===================================================================== */
     :root {
-        --sa-accent: var(--accent, #0a6bd6);
-        --sa-accent-hover: var(--accent-hover, #0a4a8a);
-        --sa-navy: var(--text, #101828);
-        --sa-ink-soft: var(--text-muted, #64748b);
+        --sa-fg: var(--text, #000000);
+        --sa-on-fg: var(--bg, #ffffff);
+        --sa-accent: var(--sa-fg);                 /* primary = foreground (black on light, white on dark) */
+        --sa-accent-hover: color-mix(in srgb, var(--sa-fg) 80%, var(--sa-on-fg));
+        --sa-navy: var(--sa-fg);
+        --sa-ink-soft: var(--text-muted, #666666);
         --sa-surface: var(--surface, #ffffff);
-        --sa-border: var(--border, #e3e8ee);
-        --sa-bg: var(--bg, #f6f8fa);
-        --sa-danger: #dc2626;
-        --sa-danger-bg: color-mix(in srgb,var(--sa-danger) 12%,var(--sa-surface));
-        --sa-success: #16a34a;
-        --sa-success-bg: color-mix(in srgb,var(--sa-success) 12%,var(--sa-surface));
+        --sa-border: var(--border, #eaeaea);
+        --sa-bg: var(--bg, #fafafa);
+        --sa-hover: color-mix(in srgb, var(--sa-fg) 5%, transparent);
+        --sa-danger: #e5484d;
+        --sa-danger-bg: color-mix(in srgb, var(--sa-danger) 10%, var(--sa-surface));
+        --sa-success: #18a058;
+        --sa-success-bg: color-mix(in srgb, var(--sa-success) 10%, var(--sa-surface));
+        /* Rounded corners: set --sa-radius to 0 for fully square UI */
+                --sa-radius: 6px;
+        --sa-radius-lg: 10px;                       /* cards, modals, panels */                  /* cards, modals, panels */
+        --sa-mono: ui-monospace, SFMono-Regular, 'Geist Mono', Consolas, monospace;
     }
     html[data-theme="dark"] {
-        --sa-danger: #f87171;
-        --sa-success: #4ade80;
+        --sa-danger: #ff6369;
+        --sa-success: #3ecf8e;
     }
     .sa-page {
-        font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+        font-family: 'Geist', 'Inter', -apple-system, 'Helvetica Neue', Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
     }
 
-    .sa-header { margin-bottom: 1.4rem; }
-    .sa-header h1 { font-size: 1.4rem; margin: 0 0 0.3rem; color: var(--sa-navy); }
+    .sa-header {
+        margin-bottom: 1.5rem;
+        padding-bottom: 1.25rem;
+        border-bottom: 1px solid var(--sa-border);
+    }
+    .sa-header h1 { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.03em; margin: 0 0 0.3rem; color: var(--sa-navy); }
     .sa-header p { margin: 0; color: var(--sa-ink-soft); font-size: 0.9rem; }
 
     /* ===== Tabs ===== */
     .sa-tabs {
         display: flex;
-        gap: 0.3rem;
+        gap: 0.2rem;
         border-bottom: 1px solid var(--sa-border);
         margin-bottom: 1.6rem;
         overflow-x: auto;
     }
     .sa-tab-btn {
         font-family: inherit;
-        font-size: 0.9rem;
-        font-weight: 600;
+        font-size: 0.875rem;
+        font-weight: 500;
         color: var(--sa-ink-soft);
         background: none;
         border: none;
         border-bottom: 2px solid transparent;
-        padding: 0.85rem 1.1rem;
+        margin-bottom: -1px;
+        padding: 0.8rem 0.95rem;
         cursor: pointer;
         display: flex;
         align-items: center;
         gap: 0.5rem;
         white-space: nowrap;
+        transition: color .12s ease, border-color .12s ease;
     }
     .sa-tab-btn:hover { color: var(--sa-navy); }
-    .sa-tab-btn.active { color: var(--sa-accent); border-bottom-color: var(--sa-accent); }
+    .sa-tab-btn.active { color: var(--sa-navy); border-bottom-color: var(--sa-navy); }
     .sa-tab-panel { display: none; }
     .sa-tab-panel.active { display: block; }
+
+    /* ===== SMTP alert / setup ===== */
     .smtp-setup-alert {
         display:flex; align-items:center; justify-content:space-between; gap:1rem; margin:0 0 1.2rem;
-        padding:1rem 1.15rem; border:1px solid color-mix(in srgb,#b7791f 35%,var(--sa-border));
-        border-left:4px solid #b7791f; border-radius:10px; background:var(--sa-surface); color:var(--sa-navy);
+        padding:1rem 1.15rem; border:1px solid var(--sa-border);
+        border-left:2px solid var(--sa-navy); border-radius:var(--sa-radius-lg); background:var(--sa-surface); color:var(--sa-navy);
     }
     .smtp-setup-alert[hidden], .smtp-security-alert[hidden] { display:none !important; }
     .smtp-setup-alert-copy { display:flex; align-items:flex-start; gap:.8rem; min-width:0; }
-    .smtp-setup-alert-icon { display:grid; width:2rem; height:2rem; flex:0 0 2rem; place-items:center; border-radius:50%; background:color-mix(in srgb,#b7791f 14%,var(--sa-surface)); color:#946200; font-weight:800; }
-    .smtp-setup-alert strong { display:block; margin-bottom:.15rem; font-size:.9rem; }
+    .smtp-setup-alert-icon { display:grid; width:1.6rem; height:1.6rem; flex:0 0 1.6rem; place-items:center; border-radius:50%; border:1px solid var(--sa-border); color:var(--sa-navy); font-size:.8rem; font-weight:700; }
+    .smtp-setup-alert strong { display:block; margin-bottom:.15rem; font-size:.9rem; font-weight:600; }
     .smtp-setup-alert p { margin:0; color:var(--sa-ink-soft); font-size:.82rem; line-height:1.45; }
     .smtp-setup-alert .sa-btn { flex:none; }
     .smtp-setup-wrap { width:min(100%,1080px); margin:0 auto; }
     .smtp-setup-card { overflow:hidden; padding:0; }
     .smtp-setup-heading { padding:1.45rem 1.6rem 1.2rem; border-bottom:1px solid var(--sa-border); }
     .smtp-setup-heading-top { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
-    .smtp-setup-heading h2 { margin:0; color:var(--sa-navy); font-size:1.15rem; letter-spacing:-.02em; }
+    .smtp-setup-heading h2 { margin:0; color:var(--sa-navy); font-size:1.1rem; font-weight:600; letter-spacing:-.02em; }
     .smtp-setup-heading p { margin:.35rem 0 0; color:var(--sa-ink-soft); font-size:.86rem; line-height:1.5; }
-    .smtp-setup-status { display:inline-flex; align-items:center; gap:.45rem; flex:none; padding:.4rem .65rem; border:1px solid var(--sa-border); border-radius:999px; color:var(--sa-ink-soft); font-size:.74rem; font-weight:700; white-space:nowrap; }
-    .smtp-setup-status::before { width:.48rem; height:.48rem; border-radius:50%; background:#b7791f; content:""; }
-    .smtp-setup-status.is-configured::before { background:#16835d; }
+    .smtp-setup-status { display:inline-flex; align-items:center; gap:.45rem; flex:none; padding:.3rem .65rem; border:1px solid var(--sa-border); border-radius:var(--sa-radius); color:var(--sa-ink-soft); font-size:.74rem; font-weight:500; white-space:nowrap; }
+    .smtp-setup-status::before { width:.45rem; height:.45rem; border-radius:50%; background:var(--sa-ink-soft); content:""; }
+    .smtp-setup-status.is-configured::before { background:var(--sa-success); }
     .smtp-setup-grid { display:grid; grid-template-columns:minmax(250px,.85fr) minmax(0,1.15fr); }
     .smtp-guide { padding:1.4rem 1.6rem; border-right:1px solid var(--sa-border); background:var(--sa-bg); }
-    .smtp-guide h3, .smtp-form h3 { margin:0; color:var(--sa-navy); font-size:.9rem; }
+    .smtp-guide h3, .smtp-form h3 { margin:0; color:var(--sa-navy); font-size:.9rem; font-weight:600; }
     .smtp-guide-intro { margin:.35rem 0 1rem; color:var(--sa-ink-soft); font-size:.8rem; line-height:1.5; }
     .smtp-guide ol { display:grid; gap:.9rem; margin:0; padding:0; list-style:none; counter-reset:smtp-setup; }
     .smtp-guide li { position:relative; min-height:1.75rem; padding-left:2.25rem; color:var(--sa-ink-soft); font-size:.8rem; line-height:1.5; counter-increment:smtp-setup; }
-    .smtp-guide li::before { position:absolute; left:0; top:0; display:grid; width:1.5rem; height:1.5rem; place-items:center; border:1px solid var(--sa-border); border-radius:50%; background:var(--sa-surface); color:var(--sa-navy); font-size:.72rem; font-weight:750; content:counter(smtp-setup); }
-    .smtp-guide li strong { color:var(--sa-navy); }
-    .smtp-guide a { color:var(--sa-accent); font-weight:650; text-underline-offset:2px; }
+    .smtp-guide li::before { position:absolute; left:0; top:0; display:grid; width:1.5rem; height:1.5rem; place-items:center; border:1px solid var(--sa-border); border-radius:50%; background:var(--sa-surface); color:var(--sa-navy); font-size:.72rem; font-weight:600; content:counter(smtp-setup); }
+    .smtp-guide li strong { color:var(--sa-navy); font-weight:600; }
+    .smtp-guide a { color:var(--sa-navy); font-weight:500; text-underline-offset:3px; }
     .smtp-guide-note { margin:1.1rem 0 0; padding-top:.9rem; border-top:1px solid var(--sa-border); color:var(--sa-ink-soft); font-size:.75rem; line-height:1.5; }
     .smtp-form { display:flex; flex-direction:column; padding:1.4rem 1.6rem; }
     .smtp-form h3 { margin-bottom:1rem; }
     .smtp-field { display:grid; gap:.4rem; margin-bottom:1rem; }
-    .smtp-field label { color:var(--sa-navy); font-size:.8rem; font-weight:700; }
-    .smtp-field input { width:100%; min-height:43px; padding:.65rem .75rem; border:1px solid var(--sa-border); border-radius:8px; background:var(--sa-surface); color:var(--sa-navy); font:inherit; font-size:.87rem; }
-    .smtp-field input:focus-visible { outline:2px solid var(--sa-accent); outline-offset:2px; border-color:var(--sa-accent); }
+    .smtp-field label { color:var(--sa-navy); font-size:.8rem; font-weight:500; }
+    .smtp-field input { width:100%; min-height:40px; padding:.55rem .75rem; border:1px solid var(--sa-border); border-radius:var(--sa-radius); background:var(--sa-surface); color:var(--sa-navy); font:inherit; font-size:.87rem; }
+    .smtp-field input:focus-visible { outline:none; border-color:var(--sa-navy); box-shadow:0 0 0 1px var(--sa-navy); }
     .smtp-field-hint { color:var(--sa-ink-soft); font-size:.74rem; line-height:1.45; }
     .smtp-save-row { display:flex; align-items:center; justify-content:space-between; gap:.8rem; margin-top:auto; padding-top:.9rem; border-top:1px solid var(--sa-border); }
     .smtp-save-row p { margin:0; color:var(--sa-ink-soft); font-size:.74rem; line-height:1.4; }
-    .smtp-security-alert { margin:0 0 1rem; padding:.8rem .95rem; border:1px solid color-mix(in srgb,#b7791f 32%,var(--sa-border)); border-radius:9px; background:color-mix(in srgb,#b7791f 6%,var(--sa-surface)); color:var(--sa-navy); font-size:.82rem; line-height:1.5; }
-    .smtp-security-alert button { margin-left:.25rem; padding:0; border:0; background:none; color:var(--sa-accent); font:inherit; font-weight:700; text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
+    .smtp-security-alert { margin:0 0 1rem; padding:.8rem .95rem; border:1px solid var(--sa-border); border-left:2px solid var(--sa-navy); border-radius:var(--sa-radius-lg); background:var(--sa-bg); color:var(--sa-navy); font-size:.82rem; line-height:1.5; }
+    .smtp-security-alert button { margin-left:.25rem; padding:0; border:0; background:none; color:var(--sa-navy); font:inherit; font-weight:600; text-decoration:underline; text-underline-offset:3px; cursor:pointer; }
     @media(max-width:760px) {
         .smtp-setup-grid { grid-template-columns:1fr; }
         .smtp-guide { border-right:0; border-bottom:1px solid var(--sa-border); }
@@ -108,50 +132,58 @@
         .smtp-save-row { align-items:flex-start; flex-direction:column; }
         .smtp-save-row .sa-btn { width:100%; }
     }
-    #bnhResetGeneratedCode { display:inline-block; margin:.4rem 0; padding:.55rem .75rem; border:1px solid var(--sa-border); border-radius:8px; background:var(--sa-bg); font-size:1.1rem; font-weight:800; letter-spacing:.12em; user-select:none; -webkit-user-select:none; }
+
+    /* ===== BNH reset ===== */
     .bnh-reset-grid { grid-template-columns:1fr; }
     .bnh-reset-field { width:100%; }
     .bnh-reset-state[hidden], .bnh-reset-code-panel[hidden] { display:none !important; }
-    .bnh-reset-state { display:flex; width:100%; min-height:300px; box-sizing:border-box; flex-direction:column; align-items:center; justify-content:center; gap:1rem; padding:2rem; border:1px solid var(--sa-border); border-radius:12px; background:var(--sa-surface); color:var(--sa-navy); text-align:center; }
+    .bnh-reset-state { display:flex; width:100%; min-height:300px; box-sizing:border-box; flex-direction:column; align-items:center; justify-content:center; gap:1rem; padding:2rem; border:1px solid var(--sa-border); border-radius:var(--sa-radius-lg); background:var(--sa-surface); color:var(--sa-navy); text-align:center; }
     .bnh-reset-state-copy { width:min(100%,680px); }
-    .bnh-reset-state-title { margin:0 0 .4rem; color:var(--sa-navy); font-size:1.1rem; font-weight:750; line-height:1.35; }
-    .bnh-reset-state p { margin:0; color:var(--sa-ink-soft); font-size:.92rem; line-height:1.6; }
-    .bnh-reset-state-icon { display:grid; width:3.25rem; height:3.25rem; flex:0 0 3.25rem; place-items:center; border-radius:50%; background:color-mix(in srgb,var(--sa-accent) 13%,var(--sa-surface)); color:var(--sa-accent); }
+    .bnh-reset-state-title { margin:0 0 .4rem; color:var(--sa-navy); font-size:1.05rem; font-weight:600; line-height:1.35; }
+    .bnh-reset-state p { margin:0; color:var(--sa-ink-soft); font-size:.9rem; line-height:1.6; }
+    .bnh-reset-state-icon { display:grid; width:3rem; height:3rem; flex:0 0 3rem; place-items:center; border-radius:50%; border:1px solid var(--sa-border); background:var(--sa-bg); color:var(--sa-navy); }
     .bnh-reset-state-icon svg { width:1.25rem; height:1.25rem; }
-    .bnh-reset-code-panel { display:flex; width:100%; min-height:300px; box-sizing:border-box; flex-direction:column; align-items:center; justify-content:center; padding:clamp(1.25rem,3vw,2rem); border:1px solid var(--sa-border); border-radius:12px; background:var(--sa-bg); text-align:center; }
-    .bnh-reset-code-title { width:min(100%,680px); margin:0 auto 1.5rem; color:var(--sa-navy); font-size:1.15rem; font-weight:750; line-height:1.45; }
+    .bnh-reset-code-panel { display:flex; width:100%; min-height:300px; box-sizing:border-box; flex-direction:column; align-items:center; justify-content:center; padding:clamp(1.25rem,3vw,2rem); border:1px solid var(--sa-border); border-radius:var(--sa-radius-lg); background:var(--sa-bg); text-align:center; }
+    .bnh-reset-code-title { width:min(100%,680px); margin:0 auto 1.5rem; color:var(--sa-navy); font-size:1.1rem; font-weight:600; line-height:1.45; }
     .bnh-reset-code-content { display:flex; width:100%; flex-direction:column; gap:1.25rem; align-items:center; }
     .bnh-reset-code-display { width:min(100%,560px); min-width:0; }
-    .bnh-reset-code-label { display:block; margin-bottom:.55rem; color:var(--sa-ink-soft); font-size:.8rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
-    #bnhResetGeneratedCode { display:block; width:100%; box-sizing:border-box; margin:0; padding:1rem 1.1rem; border:1px solid var(--sa-border); border-radius:9px; background:var(--sa-surface); color:var(--sa-navy); font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:clamp(1.25rem,3vw,1.75rem); font-weight:800; letter-spacing:.18em; text-align:center; user-select:none; -webkit-user-select:none; }
-    .bnh-reset-countdown { height:8px; margin-top:.85rem; overflow:hidden; border-radius:999px; background:color-mix(in srgb,var(--sa-accent) 14%,var(--sa-bg)); }
-    .bnh-reset-countdown > div { width:100%; height:100%; border-radius:inherit; background:var(--sa-accent); transition:width .12s linear; }
-    .bnh-reset-code-timer { margin:.45rem 0 0; color:var(--sa-ink-soft); font-size:.82rem; text-align:center; }
+    .bnh-reset-code-label { display:block; margin-bottom:.55rem; color:var(--sa-ink-soft); font-size:.78rem; font-weight:500; }
+    #bnhResetGeneratedCode { display:block; width:100%; box-sizing:border-box; margin:0; padding:1rem 1.1rem; border:1px solid var(--sa-border); border-radius:var(--sa-radius); background:var(--sa-surface); color:var(--sa-navy); font-family:var(--sa-mono); font-size:clamp(1.25rem,3vw,1.75rem); font-weight:700; letter-spacing:.18em; text-align:center; user-select:none; -webkit-user-select:none; }
+    .bnh-reset-countdown { height:3px; margin-top:.85rem; overflow:hidden; background:var(--sa-border); }
+    .bnh-reset-countdown > div { width:100%; height:100%; background:var(--sa-navy); transition:width .12s linear; }
+    .bnh-reset-code-timer { margin:.45rem 0 0; color:var(--sa-ink-soft); font-size:.8rem; text-align:center; }
     .bnh-reset-confirmation { width:min(100%,420px); }
-    .bnh-reset-confirmation label { display:block; margin-bottom:.55rem; color:var(--sa-navy); font-size:.86rem; font-weight:700; text-align:center; }
-    .bnh-reset-confirmation input { box-sizing:border-box; width:100%; min-height:48px; padding:.7rem .8rem; border:1px solid var(--sa-border); border-radius:9px; background:var(--sa-surface); color:var(--sa-navy); font:inherit; letter-spacing:.08em; text-align:center; }
-    .bnh-reset-confirmation input:focus { outline:3px solid color-mix(in srgb,var(--sa-accent) 20%,transparent); border-color:var(--sa-accent); }
-    .bnh-reset-confirmation input:disabled { background:var(--sa-surface); opacity:.7; }
+    .bnh-reset-confirmation label { display:block; margin-bottom:.55rem; color:var(--sa-navy); font-size:.84rem; font-weight:500; text-align:center; }
+    .bnh-reset-confirmation input { box-sizing:border-box; width:100%; min-height:44px; padding:.65rem .8rem; border:1px solid var(--sa-border); border-radius:var(--sa-radius); background:var(--sa-surface); color:var(--sa-navy); font:inherit; letter-spacing:.08em; text-align:center; }
+    .bnh-reset-confirmation input:focus { outline:none; border-color:var(--sa-navy); box-shadow:0 0 0 1px var(--sa-navy); }
+    .bnh-reset-confirmation input:disabled { opacity:.6; }
     @media (max-width:700px) { .bnh-reset-state, .bnh-reset-code-panel { min-height:240px; padding:1.25rem; } }
     #tab-maintenance .sa-card-head { justify-content:center; text-align:center; }
     #tab-maintenance.sa-tab-panel.active { min-height:calc(100vh - 14rem); display:flex; align-items:center; justify-content:center; }
     #tab-maintenance > .sa-card { width:min(100%,760px); margin:0 auto; box-sizing:border-box; }
-    .hakbang-status-tabs { display:flex; gap:.5rem; margin:0 0 1rem; }
-    .hakbang-status-btn { border:1px solid var(--sa-border); border-radius:8px; padding:.55rem 1rem; color:var(--sa-ink-soft); background:var(--sa-bg); font:inherit; font-weight:700; cursor:pointer; }
-    .hakbang-status-btn.active { color:#fff; background:var(--sa-accent); border-color:var(--sa-accent); }
-    .hakbang-add-form { display:grid; grid-template-columns:minmax(110px, .7fr) minmax(220px, 2fr) auto; gap:.7rem; align-items:end; margin-bottom:1.2rem; }
-    .hakbang-field label { display:block; margin-bottom:.35rem; color:var(--sa-ink-soft); font-size:.8rem; font-weight:600; }
-    .hakbang-field input { width:100%; box-sizing:border-box; padding:.6rem .7rem; border:1px solid var(--sa-border); border-radius:8px; font:inherit; }
-    .hakbang-row-input { width:100%; min-width:100px; box-sizing:border-box; padding:.5rem .6rem; border:1px solid var(--sa-border); border-radius:7px; font:inherit; }
+    #tab-maintenance .bnh-reset-grid { grid-template-columns:minmax(0,1fr); }
+    #tab-maintenance .bnh-reset-field { grid-column:1 / -1; }
+
+    /* ===== R4-02 Hakbang ===== */
+    .hakbang-status-tabs { display:inline-flex; gap:0; margin:0 0 1rem; border:1px solid var(--sa-border); border-radius:var(--sa-radius); overflow:hidden; }
+    .hakbang-status-btn { border:0; border-right:1px solid var(--sa-border); padding:.5rem 1.1rem; color:var(--sa-ink-soft); background:transparent; font:inherit; font-size:.85rem; font-weight:500; cursor:pointer; }
+    .hakbang-status-btn:last-child { border-right:0; }
+    .hakbang-status-btn:hover { color:var(--sa-navy); background:var(--sa-hover); }
+    .hakbang-status-btn.active { color:var(--sa-on-fg); background:var(--sa-accent); }
+    .hakbang-add-form { display:grid; grid-template-columns:minmax(110px, .7fr) minmax(220px, 2fr) auto; gap:.7rem; align-items:end; margin-bottom:1.2rem; padding-bottom:1.2rem; border-bottom:1px solid var(--sa-border); }
+    .hakbang-field label { display:block; margin-bottom:.35rem; color:var(--sa-ink-soft); font-size:.8rem; font-weight:500; }
+    .hakbang-field input { width:100%; box-sizing:border-box; padding:.55rem .7rem; border:1px solid var(--sa-border); border-radius:var(--sa-radius); background:var(--sa-bg); color:var(--sa-navy); font:inherit; }
+    .hakbang-row-input { width:100%; min-width:100px; box-sizing:border-box; padding:.45rem .6rem; border:1px solid var(--sa-border); border-radius:var(--sa-radius); background:var(--sa-bg); color:var(--sa-navy); font:inherit; }
+    .hakbang-field input:focus, .hakbang-row-input:focus { outline:none; border-color:var(--sa-navy); box-shadow:0 0 0 1px var(--sa-navy); }
     .hakbang-description-input { min-width:240px; }
     .hakbang-actions { display:flex; gap:.4rem; }
     @media (max-width:700px) { .hakbang-add-form { grid-template-columns:1fr; } }
 
-    /* ===== Shared card ===== */
+    /* ===== Cards ===== */
     .sa-card {
         background: var(--sa-surface);
         border: 1px solid var(--sa-border);
-        border-radius: 14px;
+        border-radius: var(--sa-radius-lg);
         padding: 1.5rem 1.7rem;
         margin-bottom: 1.5rem;
     }
@@ -159,70 +191,38 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin-bottom: 1.2rem;
+        margin-bottom: 1.3rem;
+        padding-bottom: 1.1rem;
+        border-bottom: 1px solid var(--sa-border);
         gap: 1rem;
         flex-wrap: wrap;
     }
-    .sa-card-head h2 { font-size: 1.05rem; margin: 0; color: var(--sa-navy); }
-    .sa-card-head p { margin: 0.2rem 0 0; font-size: 0.85rem; color: var(--sa-ink-soft); }
+    .sa-card-head h2 { font-size: 1.05rem; font-weight: 600; letter-spacing: -0.02em; margin: 0; color: var(--sa-navy); }
+    .sa-card-head p { margin: 0.25rem 0 0; font-size: 0.85rem; color: var(--sa-ink-soft); }
+    .sa-card-head-actions { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
 
-    .sa-card-head-actions {
-        display: flex;
-        align-items: center;
-        gap: 0.6rem;
-        flex-wrap: wrap;
-    }
     .head-secretary-transfer-controls {
         display: grid;
         grid-template-columns: minmax(260px, 1.3fr) minmax(220px, 1fr) auto;
         align-items: end;
         gap: 0.8rem;
     }
-    .head-secretary-transfer-controls .gv-field {
-        min-width: 0;
-        margin: 0;
-    }
-    .head-secretary-transfer-controls .gv-field > span {
-        display: block;
-        margin-bottom: 0.4rem;
-        color: var(--sa-navy);
-        font-size: 0.83rem;
-        font-weight: 600;
-    }
-    .head-secretary-transfer-controls .sa-btn {
-        min-height: 42px;
-    }
-    .head-secretary-transfer-controls .sa-select {
-        box-sizing: border-box;
-        width: 100%;
-        height: 42px;
-    }
+    .head-secretary-transfer-controls .gv-field { min-width: 0; margin: 0; }
+    .head-secretary-transfer-controls .gv-field > span { display: block; margin-bottom: 0.4rem; color: var(--sa-navy); font-size: 0.83rem; font-weight: 500; }
+    .head-secretary-transfer-controls .sa-btn { min-height: 40px; }
+    .head-secretary-transfer-controls .sa-select { box-sizing: border-box; width: 100%; height: 40px; }
     .head-secretary-transfer-controls input[type="password"] {
-        box-sizing: border-box;
-        width: 100%;
-        height: 42px;
-        padding: 0.6rem 0.8rem;
-        border: 1px solid var(--sa-border);
-        border-radius: 8px;
-        background: var(--sa-bg);
-        color: var(--sa-navy);
-        font: inherit;
+        box-sizing: border-box; width: 100%; height: 40px; padding: 0.55rem 0.8rem;
+        border: 1px solid var(--sa-border); border-radius: var(--sa-radius);
+        background: var(--sa-bg); color: var(--sa-navy); font: inherit;
     }
-    .head-secretary-transfer-controls input[type="password"]:focus {
-        outline: none;
-        border-color: var(--sa-accent);
-        background: var(--sa-surface);
-    }
+    .head-secretary-transfer-controls input[type="password"]:focus { outline: none; border-color: var(--sa-navy); box-shadow: 0 0 0 1px var(--sa-navy); background: var(--sa-surface); }
     @media (max-width: 760px) {
         .head-secretary-transfer-controls { grid-template-columns: 1fr; }
         .head-secretary-transfer-controls .sa-btn { justify-content: center; }
     }
 
-    .sa-page-actions {
-        display: flex;
-        justify-content: flex-start;
-        margin-bottom: 0.9rem;
-    }
+    .sa-page-actions { display: flex; justify-content: flex-start; margin-bottom: 0.9rem; }
     .sa-audit-filters {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
@@ -231,702 +231,340 @@
         margin-bottom: 1rem;
         padding: 1rem;
         border: 1px solid var(--sa-border);
-        border-radius: 10px;
+        border-radius: var(--sa-radius-lg);
         background: var(--sa-bg);
     }
-    .sa-audit-filters label span {
-        display: block;
-        margin-bottom: 0.35rem;
-        color: var(--sa-ink-soft);
-        font-size: 0.8rem;
-        font-weight: 600;
-    }
+    .sa-audit-filters label span { display: block; margin-bottom: 0.35rem; color: var(--sa-ink-soft); font-size: 0.8rem; font-weight: 500; }
     .sa-audit-filters input {
-        box-sizing: border-box;
-        width: 100%;
-        min-width: 0;
-        padding: 0.55rem 0.65rem;
-        border: 1px solid var(--sa-border);
-        border-radius: 7px;
-        background: var(--sa-surface);
-        color: var(--sa-navy);
-        font: inherit;
+        box-sizing: border-box; width: 100%; min-width: 0; padding: 0.5rem 0.65rem;
+        border: 1px solid var(--sa-border); border-radius: var(--sa-radius);
+        background: var(--sa-surface); color: var(--sa-navy); font: inherit;
     }
+    .sa-audit-filters input:focus { outline: none; border-color: var(--sa-navy); box-shadow: 0 0 0 1px var(--sa-navy); }
     .sa-audit-filter-error { grid-column: 1 / -1; margin: 0; color: var(--sa-danger); font-size: 0.85rem; }
 
+    /* ===== Buttons ===== */
     .sa-btn {
         font-family: inherit;
-        font-size: 0.87rem;
-        font-weight: 600;
-        border-radius: 8px;
-        padding: 0.55rem 1.1rem;
+        font-size: 0.85rem;
+        font-weight: 500;
+        border-radius: var(--sa-radius);
+        padding: 0.5rem 1rem;
         cursor: pointer;
-        border: none;
+        border: 1px solid transparent;
         display: inline-flex;
         align-items: center;
+        justify-content: center;
         gap: 0.45rem;
         white-space: nowrap;
+        text-decoration: none;
+        transition: background .12s ease, border-color .12s ease, color .12s ease;
     }
-    .sa-btn-primary { background: var(--sa-accent); color: #fff; }
-    .sa-btn-primary:hover { background: var(--sa-accent-hover); }
-    .sa-btn-ghost { background: var(--sa-bg); color: var(--sa-navy); border: 1px solid var(--sa-border); }
-    .sa-btn-ghost:hover { background: var(--sa-border); }
-    .sa-btn-danger { background: var(--sa-danger-bg); color: var(--sa-danger); }
-    .sa-btn-danger:hover { background: color-mix(in srgb,var(--sa-danger) 20%,var(--sa-surface)); }
-    .sa-btn-sm { padding: 0.4rem 0.75rem; font-size: 0.8rem; }
+    .sa-btn:focus-visible { outline: 2px solid var(--sa-navy); outline-offset: 2px; }
+    .sa-btn-primary { background: var(--sa-accent); color: var(--sa-on-fg); border-color: var(--sa-accent); }
+    .sa-btn-primary:hover { background: var(--sa-accent-hover); border-color: var(--sa-accent-hover); }
+    .sa-btn-ghost { background: transparent; color: var(--sa-navy); border-color: var(--sa-border); }
+    .sa-btn-ghost:hover { background: var(--sa-hover); border-color: var(--sa-ink-soft); }
+    .sa-btn-danger { background: transparent; color: var(--sa-danger); border-color: color-mix(in srgb, var(--sa-danger) 40%, var(--sa-border)); }
+    .sa-btn-danger:hover { background: var(--sa-danger-bg); border-color: var(--sa-danger); }
+    .sa-btn:disabled { opacity: .45; cursor: not-allowed; }
+    .sa-btn-sm { padding: 0.35rem 0.7rem; font-size: 0.78rem; }
 
     .sa-search {
-        width: 100%;
-        max-width: 280px;
-        padding: 0.55rem 0.8rem;
-        border-radius: 8px;
-        border: 1px solid var(--sa-border);
-        font-size: 0.87rem;
-        font-family: inherit;
-        background: var(--sa-bg);
-        color: var(--sa-navy);
+        width: 100%; max-width: 280px; padding: 0.5rem 0.8rem;
+        border-radius: var(--sa-radius); border: 1px solid var(--sa-border);
+        font-size: 0.87rem; font-family: inherit; background: var(--sa-bg); color: var(--sa-navy);
     }
-    .sa-search:focus { outline: none; border-color: var(--sa-accent); background: var(--sa-surface); }
+    .sa-search:focus { outline: none; border-color: var(--sa-navy); box-shadow: 0 0 0 1px var(--sa-navy); background: var(--sa-surface); }
 
-    /* ===== Tables (shared: users + permissions) ===== */
+    /* ===== Tables ===== */
     .sa-table-wrap { overflow-x: auto; }
     table.sa-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
     table.sa-table th {
-        text-align: left;
-        font-size: 0.72rem;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        color: var(--sa-ink-soft);
-        font-weight: 700;
-        padding: 0.6rem 0.7rem;
-        border-bottom: 1px solid var(--sa-border);
-        white-space: nowrap;
+        text-align: left; font-size: 0.78rem; font-weight: 500; color: var(--sa-ink-soft);
+        padding: 0.65rem 0.7rem; border-bottom: 1px solid var(--sa-border); white-space: nowrap;
     }
     table.sa-table th.center, table.sa-table td.center { text-align: center; }
-    table.sa-table td {
-        padding: 0.7rem;
-        border-bottom: 1px solid var(--sa-border);
-        color: var(--sa-navy);
-        vertical-align: middle;
-    }
+    table.sa-table td { padding: 0.75rem 0.7rem; border-bottom: 1px solid var(--sa-border); color: var(--sa-navy); vertical-align: middle; }
+    table.sa-table tbody tr:hover td { background: var(--sa-hover); }
     table.sa-table tr:last-child td { border-bottom: none; }
     .sa-user-cell { display: flex; align-items: center; gap: 0.65rem; }
-    .sa-user-cell img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; background: var(--sa-border); flex-shrink: 0; }
-    .sa-user-avatar { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--sa-accent); color: #fff; font-weight: 700; flex-shrink: 0; }
-    .sa-user-name { font-weight: 600; font-size: 0.88rem; }
+    .sa-user-cell img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: var(--sa-border); flex-shrink: 0; }
+    .sa-user-avatar { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--sa-accent); color: var(--sa-on-fg); font-size: .85rem; font-weight: 600; flex-shrink: 0; }
+    .sa-user-name { font-weight: 500; font-size: 0.88rem; }
     .sa-user-email { font-size: 0.78rem; color: var(--sa-ink-soft); }
 
     .sa-select {
-        font-family: inherit;
-        font-size: 0.85rem;
-        padding: 0.4rem 0.6rem;
-        border-radius: 7px;
-        border: 1px solid var(--sa-border);
-        background: var(--sa-bg);
-        color: var(--sa-navy);
-        cursor: pointer;
+        font-family: inherit; font-size: 0.85rem; padding: 0.4rem 0.6rem;
+        border-radius: var(--sa-radius); border: 1px solid var(--sa-border);
+        background: var(--sa-bg); color: var(--sa-navy); cursor: pointer;
     }
-    .sa-select:focus { outline: none; border-color: var(--sa-accent); }
+    .sa-select:focus { outline: none; border-color: var(--sa-navy); box-shadow: 0 0 0 1px var(--sa-navy); }
 
     .sa-status-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.35rem;
-        font-size: 0.76rem;
-        font-weight: 700;
-        padding: 0.28rem 0.6rem;
-        border-radius: 999px;
+        display: inline-flex; align-items: center; gap: 0.4rem;
+        font-size: 0.76rem; font-weight: 500; padding: 0.22rem 0.6rem;
+        border-radius: var(--sa-radius); border: 1px solid var(--sa-border); background: transparent;
     }
-    .sa-status-pill.on { background: var(--sa-success-bg); color: var(--sa-success); }
-    .sa-status-pill.off { background: var(--sa-danger-bg); color: var(--sa-danger); }
-    .sa-status-pill svg { width: 8px; height: 8px; }
+    .sa-status-pill.on { color: var(--sa-navy); }
+    .sa-status-pill.on svg { color: var(--sa-success); }
+    .sa-status-pill.off { color: var(--sa-ink-soft); }
+    .sa-status-pill.off svg { color: var(--sa-danger); }
+    .sa-status-pill svg { width: 7px; height: 7px; }
 
-    /* Toggle switch */
-    .sa-toggle {
-        position: relative;
-        display: inline-block;
-        width: 40px;
-        height: 22px;
-        flex-shrink: 0;
-    }
+    /* Toggle switch (pill shape kept — it is the control's affordance) */
+    .sa-toggle { position: relative; display: inline-block; width: 38px; height: 22px; flex-shrink: 0; }
     .sa-toggle input { opacity: 0; width: 0; height: 0; }
     .sa-toggle-track {
-        position: absolute;
-        inset: 0;
-        background: var(--sa-border);
-        border-radius: 999px;
-        cursor: pointer;
-        transition: background 0.15s ease;
+        position: absolute; inset: 0; background: transparent; border: 1px solid var(--sa-border);
+        border-radius: 999px; cursor: pointer; transition: background .15s ease, border-color .15s ease;
     }
     .sa-toggle-track::before {
-        content: "";
-        position: absolute;
-        width: 16px;
-        height: 16px;
-        left: 3px;
-        top: 3px;
-        background: #fff;
-        border-radius: 50%;
-        transition: transform 0.15s ease;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+        content: ""; position: absolute; width: 14px; height: 14px; left: 3px; top: 3px;
+        background: var(--sa-ink-soft); border-radius: 50%; transition: transform .15s ease, background .15s ease;
     }
-    .sa-toggle input:checked + .sa-toggle-track { background: var(--sa-success); }
-    .sa-toggle input:checked + .sa-toggle-track::before { transform: translateX(18px); }
+    .sa-toggle input:checked + .sa-toggle-track { background: var(--sa-accent); border-color: var(--sa-accent); }
+    .sa-toggle input:checked + .sa-toggle-track::before { transform: translateX(16px); background: var(--sa-on-fg); }
+    .sa-toggle input:focus-visible + .sa-toggle-track { outline: 2px solid var(--sa-navy); outline-offset: 2px; }
 
-    .sa-checkbox {
-        width: 17px;
-        height: 17px;
-        accent-color: var(--sa-accent);
-        cursor: pointer;
-    }
-
+    .sa-checkbox { width: 16px; height: 16px; accent-color: var(--sa-accent); cursor: pointer; }
     .sa-actions-cell { display: flex; gap: 0.5rem; align-items: center; }
 
     /* ===== Signatories (Purok) ===== */
     .purok-list { display: flex; flex-direction: column; gap: 1rem; }
-    .purok-card {
-        border: 1px solid var(--sa-border);
-        border-radius: 12px;
-        overflow: hidden;
-    }
+    .purok-card { border: 1px solid var(--sa-border); border-radius: var(--sa-radius-lg); overflow: hidden; }
     .purok-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 0.9rem 1.1rem;
-        background: var(--sa-bg);
-        gap: 0.8rem;
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 0.8rem 1.1rem; background: var(--sa-bg); border-bottom: 1px solid var(--sa-border); gap: 0.8rem;
     }
     .purok-head-left { display: flex; align-items: center; gap: 0.7rem; flex: 1; min-width: 0; }
     .purok-name-wrap { flex: 1; min-width: 0; }
     .purok-name-view { display: flex; align-items: center; gap: 0.4rem; }
-    .purok-name-display {
-        font-weight: 700;
-        font-size: 0.95rem;
-        color: var(--sa-navy);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
+    .purok-name-display { font-weight: 600; font-size: 0.95rem; color: var(--sa-navy); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .purok-edit-btn {
-        background: none;
-        border: 1px solid transparent;
-        color: var(--sa-ink-soft);
-        border-radius: 6px;
-        width: 28px;
-        height: 28px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        flex-shrink: 0;
+        background: none; border: 1px solid transparent; color: var(--sa-ink-soft); border-radius: var(--sa-radius);
+        width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
     }
-    .purok-edit-btn:hover { background: var(--sa-surface); border-color: var(--sa-border); color: var(--sa-accent); }
+    .purok-edit-btn:hover { background: var(--sa-surface); border-color: var(--sa-border); color: var(--sa-navy); }
     .purok-name-edit { display: none; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
     .purok-name-edit.active { display: flex; }
     .purok-name-input {
-        font-family: inherit;
-        font-weight: 700;
-        font-size: 0.95rem;
-        color: var(--sa-navy);
-        background: var(--sa-surface);
-        border: 1px solid var(--sa-border);
-        border-radius: 6px;
-        padding: 0.35rem 0.55rem;
-        width: 200px;
-        max-width: 100%;
+        font-family: inherit; font-weight: 600; font-size: 0.95rem; color: var(--sa-navy);
+        background: var(--sa-surface); border: 1px solid var(--sa-border); border-radius: var(--sa-radius);
+        padding: 0.35rem 0.55rem; width: 200px; max-width: 100%;
     }
-    .purok-name-input:focus { outline: none; border-color: var(--sa-accent); }
+    .purok-name-input:focus { outline: none; border-color: var(--sa-navy); }
     .purok-name-input.invalid { border-color: var(--sa-danger); }
     .purok-body { padding: 1.1rem; display: flex; flex-direction: column; gap: 0.9rem; }
 
-    .signatory-row {
-        display: grid;
-        grid-template-columns: 150px 1fr;
-        gap: 0.7rem;
-        align-items: center;
-    }
+    .signatory-row { display: grid; grid-template-columns: 150px 1fr; gap: 0.7rem; align-items: center; }
     @media (max-width: 640px) {
         .signatory-row { grid-template-columns: 1fr; }
         .sakop-range-inputs { grid-template-columns: 1fr; }
     }
     .signatory-role-badge {
-        font-size: 0.76rem;
-        font-weight: 700;
-        color: var(--sa-accent);
-        background: rgba(10,107,214,0.08);
-        padding: 0.4rem 0.7rem;
-        border-radius: 7px;
-        text-align: center;
+        font-size: 0.8rem; font-weight: 500; color: var(--sa-ink-soft);
+        background: transparent; padding: 0.4rem 0; text-align: left;
     }
     .signatory-input {
-        font-family: inherit;
-        font-size: 0.88rem;
-        padding: 0.55rem 0.75rem;
-        border-radius: 8px;
-        border: 1px solid var(--sa-border);
-        background: var(--sa-bg);
-        color: var(--sa-navy);
-        width: 100%;
+        font-family: inherit; font-size: 0.88rem; padding: 0.5rem 0.75rem;
+        border-radius: var(--sa-radius); border: 1px solid var(--sa-border);
+        background: var(--sa-bg); color: var(--sa-navy); width: 100%; box-sizing: border-box;
     }
-    .signatory-input:focus { outline: none; border-color: var(--sa-accent); background: var(--sa-surface); }
+    .signatory-input:focus { outline: none; border-color: var(--sa-navy); box-shadow: 0 0 0 1px var(--sa-navy); background: var(--sa-surface); }
 
-    /* Sakop na Grupo range block */
-    .sakop-row {
-        display: grid;
-        grid-template-columns: 150px 1fr;
-        gap: 0.7rem;
-        align-items: start;
-        transition: opacity 0.15s ease;
-    }
-    @media (max-width: 640px) {
-        .sakop-row { grid-template-columns: 1fr; }
-    }
+    .sakop-row { display: grid; grid-template-columns: 150px 1fr; gap: 0.7rem; align-items: start; transition: opacity 0.15s ease; }
+    @media (max-width: 640px) { .sakop-row { grid-template-columns: 1fr; } }
     .sakop-row.disabled { opacity: 0.5; }
     .sakop-row.disabled .signatory-input { cursor: not-allowed; color: var(--sa-ink-soft); }
-    .sakop-row.disabled .sakop-preview { color: var(--sa-ink-soft); background: var(--sa-bg); }
+    .sakop-row.disabled .sakop-preview { color: var(--sa-ink-soft); }
 
-    /* Complete Purok checkbox row */
     .complete-row {
-        display: flex;
-        align-items: flex-start;
-        gap: 0.65rem;
-        padding: 0.8rem 0.9rem;
-        margin-top: 0.2rem;
-        border: 1px solid var(--sa-border);
-        border-radius: 10px;
-        background: var(--sa-bg);
-        cursor: pointer;
+        display: flex; align-items: flex-start; gap: 0.65rem; padding: 0.8rem 0.9rem; margin-top: 0.2rem;
+        border: 1px solid var(--sa-border); border-radius: var(--sa-radius); background: var(--sa-bg); cursor: pointer;
     }
-    .complete-row input[type="checkbox"] {
-        width: 17px; height: 17px;
-        margin-top: 0.1rem;
-        accent-color: var(--sa-accent);
-        cursor: pointer;
-        flex-shrink: 0;
-    }
-    .complete-row-text strong { display: block; font-size: 0.88rem; color: var(--sa-navy); }
+    .complete-row input[type="checkbox"] { width: 16px; height: 16px; margin-top: 0.1rem; accent-color: var(--sa-accent); cursor: pointer; flex-shrink: 0; }
+    .complete-row-text strong { display: block; font-size: 0.88rem; font-weight: 600; color: var(--sa-navy); }
     .complete-row-text span { font-size: 0.78rem; color: var(--sa-ink-soft); }
-    .sakop-range-inputs {
-        display: grid;
-        grid-template-columns: 1fr auto 1fr;
-        gap: 0.6rem;
-        align-items: center;
-    }
+    .sakop-range-inputs { display: grid; grid-template-columns: 1fr auto 1fr; gap: 0.6rem; align-items: center; }
     .sakop-range-inputs span { color: var(--sa-ink-soft); font-size: 0.85rem; text-align: center; }
     .sakop-preview {
-        margin-top: 0.5rem;
-        font-size: 0.8rem;
-        font-weight: 600;
-        color: var(--sa-accent);
-        background: rgba(10,107,214,0.06);
-        padding: 0.45rem 0.7rem;
-        border-radius: 7px;
-        display: inline-block;
+        margin-top: 0.5rem; font-family: var(--sa-mono); font-size: 0.78rem; font-weight: 500; color: var(--sa-navy);
+        background: transparent; border: 1px dashed var(--sa-border); padding: 0.4rem 0.7rem;
+        border-radius: var(--sa-radius); display: inline-block;
     }
 
     .add-purok-btn {
-        width: 100%;
-        border: 1.5px dashed var(--sa-border);
-        background: transparent;
-        color: var(--sa-ink-soft);
-        border-radius: 12px;
-        padding: 0.9rem;
-        font-family: inherit;
-        font-weight: 600;
-        font-size: 0.88rem;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.5rem;
+        width: 100%; border: 1px dashed var(--sa-border); background: transparent; color: var(--sa-ink-soft);
+        border-radius: var(--sa-radius-lg); padding: 0.9rem; font-family: inherit; font-weight: 500; font-size: 0.88rem;
+        cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem;
     }
-    .add-purok-btn:hover { border-color: var(--sa-accent); color: var(--sa-accent); background: rgba(10,107,214,0.04); }
+    .add-purok-btn:hover { border-color: var(--sa-navy); color: var(--sa-navy); background: var(--sa-hover); }
 
     /* ===== Global variables ===== */
-    .gv-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 1.1rem 1.4rem;
-    }
-    #tab-maintenance .bnh-reset-grid { grid-template-columns:minmax(0,1fr); }
-    #tab-maintenance .bnh-reset-field { grid-column:1 / -1; }
-    @media (max-width: 720px) {
-        .gv-grid { grid-template-columns: 1fr; }
-    }
-    .gv-field label {
-        display: block;
-        font-size: 0.83rem;
-        font-weight: 600;
-        color: var(--sa-navy);
-        margin-bottom: 0.4rem;
-    }
+    .gv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem 1.4rem; }
+    @media (max-width: 720px) { .gv-grid { grid-template-columns: 1fr; } }
+    .gv-field label { display: block; font-size: 0.83rem; font-weight: 500; color: var(--sa-navy); margin-bottom: 0.4rem; }
     .gv-field input[type="text"],
     .gv-field input[type="date"],
     .gv-field select {
-        width: 100%;
-        padding: 0.6rem 0.8rem;
-        border-radius: 8px;
-        border: 1px solid var(--sa-border);
-        font-size: 0.88rem;
-        font-family: inherit;
-        color: var(--sa-navy);
-        background: var(--sa-bg);
+        width: 100%; box-sizing: border-box; padding: 0.55rem 0.8rem; border-radius: var(--sa-radius);
+        border: 1px solid var(--sa-border); font-size: 0.88rem; font-family: inherit; color: var(--sa-navy); background: var(--sa-bg);
     }
-    .gv-field input:focus, .gv-field select:focus {
-        outline: none;
-        border-color: var(--sa-accent);
-        background: var(--sa-surface);
-    }
+    .gv-field input:focus, .gv-field select:focus { outline: none; border-color: var(--sa-navy); box-shadow: 0 0 0 1px var(--sa-navy); background: var(--sa-surface); }
     .gv-field.disabled label { color: var(--sa-ink-soft); }
-    .gv-field.disabled input, .gv-field.disabled select {
-        background: var(--sa-bg);
-        color: var(--sa-ink-soft);
-        cursor: not-allowed;
-        opacity: 0.65;
-    }
+    .gv-field.disabled input, .gv-field.disabled select { background: var(--sa-bg); color: var(--sa-ink-soft); cursor: not-allowed; opacity: 0.6; }
     .gv-hint { font-size: 0.76rem; color: var(--sa-ink-soft); margin-top: 0.35rem; }
+
     .sql-dropzone {
-        box-sizing: border-box;
-        min-height: 240px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: .65rem;
-        padding: 2rem;
-        border: 2px dashed var(--sa-border);
-        border-radius: 14px;
-        background: var(--sa-bg);
-        color: var(--sa-navy);
-        cursor: pointer;
-        text-align: center;
-        transition: border-color .15s ease, background-color .15s ease, transform .15s ease;
+        box-sizing: border-box; min-height: 240px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: .65rem; padding: 2rem; border: 1px dashed var(--sa-border); border-radius: var(--sa-radius-lg);
+        background: var(--sa-bg); color: var(--sa-navy); cursor: pointer; text-align: center;
+        transition: border-color .15s ease, background-color .15s ease;
     }
-    .sql-dropzone:hover, .sql-dropzone.is-dragging {
-        border-color: var(--sa-accent);
-        background: color-mix(in srgb, var(--sa-accent) 5%, var(--sa-bg));
-    }
-    .sql-dropzone.is-dragging { transform: scale(1.005); }
-    .sql-dropzone:focus-within {
-        outline: 2px solid var(--sa-accent);
-        outline-offset: 2px;
-    }
+    .sql-dropzone:hover, .sql-dropzone.is-dragging { border-color: var(--sa-navy); background: var(--sa-hover); }
+    .sql-dropzone:focus-within { outline: 2px solid var(--sa-navy); outline-offset: 2px; }
     .sql-dropzone-icon {
-        width: 52px;
-        height: 52px;
-        display: grid;
-        place-items: center;
-        border-radius: 14px;
-        background: color-mix(in srgb, var(--sa-accent) 9%, var(--sa-surface));
-        color: var(--sa-accent);
+        width: 48px; height: 48px; display: grid; place-items: center; border-radius: var(--sa-radius);
+        border: 1px solid var(--sa-border); background: var(--sa-surface); color: var(--sa-navy);
     }
-    .sql-dropzone-icon svg { width: 28px; height: 28px; }
-    .sql-dropzone-title { font-size: 1.05rem; font-weight: 700; }
+    .sql-dropzone-icon svg { width: 26px; height: 26px; }
+    .sql-dropzone-title { font-size: 1rem; font-weight: 600; }
     .sql-dropzone-hint, .sql-file-status { color: var(--sa-ink-soft); font-size: .88rem; }
-    .sql-dropzone-hint strong { color: var(--sa-accent); }
+    .sql-dropzone-hint strong { color: var(--sa-navy); font-family: var(--sa-mono); font-weight: 600; }
     .sql-file-status { min-height: 1.25rem; }
-    @media (max-width: 600px) {
-        .sql-dropzone { min-height: 200px; padding: 1.5rem 1rem; }
-    }
-    .sql-file-input {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        padding: 0;
-        overflow: hidden;
-        clip: rect(0, 0, 0, 0);
-        white-space: nowrap;
-        clip-path: inset(50%);
-    }
+    @media (max-width: 600px) { .sql-dropzone { min-height: 200px; padding: 1.5rem 1rem; } }
+    .sql-file-input { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; clip-path: inset(50%); }
     .sql-file-error { margin: .5rem 0 0; color: var(--sa-danger); font-size: .8rem; }
 
-    .gv-subsection {
-        margin-top: 0.4rem;
-        padding-top: 1.3rem;
-        border-top: 1px dashed var(--sa-border);
-    }
-    .gv-subsection-title { font-size: 0.95rem; font-weight: 700; color: var(--sa-navy); margin: 0 0 0.2rem; }
+    .gv-subsection { margin-top: 1.4rem; padding-top: 1.3rem; border-top: 1px solid var(--sa-border); }
+    .gv-subsection-title { font-size: 0.95rem; font-weight: 600; color: var(--sa-navy); margin: 0 0 0.2rem; }
     .gv-subsection-sub { font-size: 0.83rem; color: var(--sa-ink-soft); margin: 0 0 1rem; }
 
     .delist-checks { display: flex; flex-direction: column; gap: 0.7rem; }
     .delist-check-row {
-        display: flex;
-        align-items: flex-start;
-        gap: 0.65rem;
-        padding: 0.8rem 0.9rem;
-        border: 1px solid var(--sa-border);
-        border-radius: 10px;
-        background: var(--sa-bg);
+        display: flex; align-items: flex-start; gap: 0.65rem; padding: 0.8rem 0.9rem;
+        border: 1px solid var(--sa-border); border-radius: var(--sa-radius); background: var(--sa-bg);
     }
-    .delist-check-row input[type="checkbox"] {
-        width: 17px; height: 17px;
-        margin-top: 0.1rem;
-        accent-color: var(--sa-accent);
-        cursor: pointer;
-        flex-shrink: 0;
-    }
+    .delist-check-row input[type="checkbox"] { width: 16px; height: 16px; margin-top: 0.1rem; accent-color: var(--sa-accent); cursor: pointer; flex-shrink: 0; }
     .delist-check-text label { font-weight: 600; font-size: 0.88rem; color: var(--sa-navy); display: block; cursor: pointer; }
-    .delist-check-text span { font-size: 0.78rem; color: var(--sa-ink-soft); }
+    .delist-check-text span, .delist-check-text small { font-size: 0.78rem; color: var(--sa-ink-soft); }
+    .delist-check-text strong { font-weight: 600; }
+    .delist-check-text small { display: block; }
 
-    /* Security Settings — visually distinct from Requirements (toggles instead of checkboxes) */
-    .settings-list { display: flex; flex-direction: column; gap: 0.7rem; }
+    /* Security settings: one bordered list with divider lines */
+    .settings-list { display: flex; flex-direction: column; border: 1px solid var(--sa-border); border-radius: var(--sa-radius-lg); }
     .settings-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 1rem;
-        padding: 0.8rem 0.9rem;
-        border: 1px solid var(--sa-border);
-        border-radius: 10px;
-        background: var(--sa-bg);
+        display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.1rem;
+        border-bottom: 1px solid var(--sa-border); background: transparent;
     }
+    .settings-row:last-child { border-bottom: none; }
     .settings-row-text label { font-weight: 600; font-size: 0.88rem; color: var(--sa-navy); display: block; }
     .settings-row-text span { font-size: 0.78rem; color: var(--sa-ink-soft); }
 
-    .sa-save-bar {
-        display: flex;
-        justify-content: flex-end;
-        gap: 0.7rem;
-        margin-top: 0.2rem;
-    }
-    #saveSignatoriesBtn:disabled {
-        background: #cbd5e1;
-        color: #64748b;
-        cursor: not-allowed;
-        box-shadow: none;
-    }
+    .sa-save-bar { display: flex; justify-content: flex-end; gap: 0.7rem; margin-top: 1.3rem; padding-top: 1.1rem; border-top: 1px solid var(--sa-border); }
+    #saveSignatoriesBtn:disabled { background: transparent; color: var(--sa-ink-soft); border-color: var(--sa-border); cursor: not-allowed; opacity: .6; }
 
-    .sa-empty {
-        text-align: center;
-        padding: 2rem 1rem;
-        color: var(--sa-ink-soft);
-        font-size: 0.88rem;
-    }
-
+    .sa-empty { text-align: center; padding: 2rem 1rem; color: var(--sa-ink-soft); font-size: 0.88rem; }
     .sa-note {
-        font-size: 0.82rem;
-        color: var(--sa-ink-soft);
-        background: var(--sa-bg);
-        border: 1px solid var(--sa-border);
-        border-radius: 8px;
-        padding: 0.7rem 0.9rem;
-        margin-bottom: 1.2rem;
+        font-size: 0.82rem; color: var(--sa-ink-soft); background: var(--sa-bg);
+        border: 1px solid var(--sa-border); border-radius: var(--sa-radius); padding: 0.7rem 0.9rem; margin-bottom: 1.2rem;
     }
 
+    /* ===== Toasts ===== */
     .sa-toast-container {
-        position: fixed;
-        top: max(1rem, env(safe-area-inset-top));
-        right: max(1rem, env(safe-area-inset-right));
-        z-index: 100100;
-        display: grid;
-        gap: 0.65rem;
-        width: min(420px, calc(100vw - 2rem));
-        pointer-events: none;
+        position: fixed; top: max(1rem, env(safe-area-inset-top)); right: max(1rem, env(safe-area-inset-right));
+        z-index: 100100; display: grid; gap: 0.65rem; width: min(420px, calc(100vw - 2rem)); pointer-events: none;
     }
     .sa-toast {
-        display: flex;
-        align-items: flex-start;
-        gap: 0.75rem;
-        padding: 0.9rem 1rem;
-        border: 1px solid var(--sa-border);
-        border-left: 4px solid var(--sa-accent);
-        border-radius: 10px;
-        background: var(--sa-surface);
-        color: var(--sa-navy);
-        box-shadow: 0 12px 32px rgba(16, 24, 40, 0.18);
-        pointer-events: auto;
-        animation: sa-toast-in 220ms ease-out both;
+        display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.85rem 1rem;
+        border: 1px solid var(--sa-border); border-left: 2px solid var(--sa-navy); border-radius: var(--sa-radius);
+        background: var(--sa-surface); color: var(--sa-navy); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+        pointer-events: auto; animation: sa-toast-in 200ms ease-out both;
     }
     .sa-toast[data-type="success"] { border-left-color: var(--sa-success); }
     .sa-toast[data-type="error"] { border-left-color: var(--sa-danger); }
     .sa-toast-icon {
-        display: grid;
-        place-items: center;
-        width: 1.35rem;
-        height: 1.35rem;
-        flex: 0 0 1.35rem;
-        border-radius: 50%;
-        background: var(--sa-bg);
-        color: var(--sa-accent);
-        font-weight: 700;
+        display: grid; place-items: center; width: 1.3rem; height: 1.3rem; flex: 0 0 1.3rem; border-radius: 50%;
+        border: 1px solid var(--sa-border); background: transparent; color: var(--sa-navy); font-size: .75rem; font-weight: 700;
     }
     .sa-toast[data-type="success"] .sa-toast-icon { color: var(--sa-success); }
     .sa-toast[data-type="error"] .sa-toast-icon { color: var(--sa-danger); }
-    .sa-toast-message { flex: 1; font-size: 0.9rem; line-height: 1.45; overflow-wrap: anywhere; }
-    .sa-toast-close {
-        border: 0;
-        padding: 0;
-        background: transparent;
-        color: var(--sa-ink-soft);
-        font-size: 1.2rem;
-        line-height: 1;
-        cursor: pointer;
-    }
-    .sa-toast.sa-toast-leaving { animation: sa-toast-out 180ms ease-in both; }
+    .sa-toast-message { flex: 1; font-size: 0.88rem; line-height: 1.45; overflow-wrap: anywhere; }
+    .sa-toast-close { border: 0; padding: 0; background: transparent; color: var(--sa-ink-soft); font-size: 1.2rem; line-height: 1; cursor: pointer; }
+    .sa-toast-close:hover { color: var(--sa-navy); }
+    .sa-toast.sa-toast-leaving { animation: sa-toast-out 160ms ease-in both; }
     @media (max-width: 600px) {
-        .sa-toast-container {
-            top: max(.65rem, env(safe-area-inset-top));
-            right: max(.65rem, env(safe-area-inset-right));
-            left: max(.65rem, env(safe-area-inset-left));
-            width: auto;
-        }
+        .sa-toast-container { top: max(.65rem, env(safe-area-inset-top)); right: max(.65rem, env(safe-area-inset-right)); left: max(.65rem, env(safe-area-inset-left)); width: auto; }
         .sa-modal-overlay { align-items: flex-start; padding: max(.75rem, env(safe-area-inset-top)) .65rem; }
         .sa-modal { max-height: calc(100dvh - 1.5rem); padding: 1.1rem; }
         .sa-modal-save-bar { flex-wrap: wrap; }
         .sa-modal-save-bar .sa-btn { flex: 1 1 auto; justify-content: center; }
     }
-    @keyframes sa-toast-in {
-        from { opacity: 0; transform: translateY(-8px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    @keyframes sa-toast-out {
-        to { opacity: 0; transform: translateY(-6px); }
-    }
+    @keyframes sa-toast-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes sa-toast-out { to { opacity: 0; transform: translateY(-4px); } }
 
-    /* ===== Modal (Edit Permissions of Secretaries) ===== */
-    /* Rendered as a direct child of <body> by JS on load, so position:fixed is
-       always relative to the viewport and can't be broken by a transformed
-       or overflow:hidden ancestor elsewhere in the page layout. */
+    /* ===== Modals ===== */
     .sa-modal-overlay {
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        bottom: 0 !important;
-        width: 100% !important;
-        height: 100% !important;
-        margin: 0 !important;
-        background: rgba(16, 24, 40, 0.55) !important;
-        display: none;
-        align-items: flex-start;
-        justify-content: center;
-        padding: 3.5rem 1rem;
-        z-index: 99999 !important;
-        overflow-y: auto;
-        box-sizing: border-box;
+        position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+        width: 100% !important; height: 100% !important; margin: 0 !important;
+        background: rgba(0, 0, 0, 0.65) !important;
+        display: none; align-items: flex-start; justify-content: center; padding: 3.5rem 1rem;
+        z-index: 99999 !important; overflow-y: auto; box-sizing: border-box;
     }
     .sa-modal-overlay.active { display: flex !important; }
     .sa-modal {
-        background: var(--sa-surface);
-        border-radius: 14px;
-        width: 100%;
-        max-width: 820px;
-        max-height: calc(100vh - 5rem);
-        overflow-y: auto;
-        box-sizing: border-box;
-        padding: 1.5rem 1.7rem;
-        box-shadow: 0 20px 50px rgba(16,24,40,0.35);
-        font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+        background: var(--sa-surface); border: 1px solid var(--sa-border); border-radius: var(--sa-radius-lg);
+        width: 100%; max-width: 820px; max-height: calc(100vh - 5rem); overflow-y: auto; box-sizing: border-box;
+        padding: 1.5rem 1.7rem; box-shadow: 0 24px 60px rgba(0,0,0,0.5);
+        font-family: 'Geist', 'Inter', -apple-system, 'Helvetica Neue', Arial, sans-serif;
     }
     .sa-modal-header {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 1rem;
-        margin-bottom: 1.2rem;
+        display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
+        margin-bottom: 1.2rem; padding-bottom: 1.1rem; border-bottom: 1px solid var(--sa-border);
     }
-    .sa-modal-header h2 { font-size: 1.05rem; margin: 0; color: var(--sa-navy); }
-    .sa-modal-header p { margin: 0.2rem 0 0; font-size: 0.85rem; color: var(--sa-ink-soft); }
+    .sa-modal-header h2 { font-size: 1.05rem; font-weight: 600; letter-spacing: -0.02em; margin: 0; color: var(--sa-navy); }
+    .sa-modal-header p { margin: 0.25rem 0 0; font-size: 0.85rem; color: var(--sa-ink-soft); }
     .sa-modal-close {
-        background: var(--sa-bg);
-        border: 1px solid var(--sa-border);
-        color: var(--sa-ink-soft);
-        border-radius: 8px;
-        width: 30px;
-        height: 30px;
-        font-size: 1.1rem;
-        line-height: 1;
-        cursor: pointer;
-        flex-shrink: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        background: transparent; border: 1px solid var(--sa-border); color: var(--sa-ink-soft); border-radius: var(--sa-radius);
+        width: 30px; height: 30px; font-size: 1.1rem; line-height: 1; cursor: pointer; flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center;
     }
-    .sa-modal-close:hover { background: var(--sa-border); color: var(--sa-navy); }
+    .sa-modal-close:hover { background: var(--sa-hover); color: var(--sa-navy); }
     .sa-modal-search-row { margin-bottom: 1rem; }
-    .sa-modal-save-bar {
-        display: flex;
-        justify-content: flex-end;
-        gap: 0.7rem;
-        margin-top: 1.2rem;
-    }
+    .sa-modal-save-bar { display: flex; justify-content: flex-end; gap: 0.7rem; margin-top: 1.2rem; padding-top: 1.1rem; border-top: 1px solid var(--sa-border); }
+
     .database-import-modal { max-width: 680px; }
     .database-import-warning {
-        margin: 0 0 1rem;
-        padding: .9rem 1rem;
-        border: 1px solid var(--sa-danger);
-        border-radius: 10px;
-        background: var(--sa-danger-bg);
-        color: var(--sa-danger);
-        font-size: .88rem;
-        font-weight: 600;
+        margin: 0 0 1rem; padding: .85rem 1rem; border: 1px solid var(--sa-danger); border-radius: var(--sa-radius);
+        background: var(--sa-danger-bg); color: var(--sa-danger); font-size: .88rem; font-weight: 500;
     }
-    .database-import-summary {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 1rem;
-        margin: 1rem 0;
-    }
-    .database-import-summary section {
-        min-width: 0;
-        padding: .9rem;
-        border: 1px solid var(--sa-border);
-        border-radius: 10px;
-        background: var(--sa-bg);
-    }
-    .database-import-summary h3 {
-        margin: 0 0 .5rem;
-        color: var(--sa-navy);
-        font-size: .85rem;
-    }
-    .database-import-summary ul {
-        max-height: 150px;
-        overflow: auto;
-        margin: 0;
-        padding-left: 1.2rem;
-        color: var(--sa-ink-soft);
-        font-size: .8rem;
-    }
-    .database-import-confirm-fields {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: .9rem;
-        margin-top: 1rem;
-    }
-    .database-import-confirm-fields label {
-        display: grid;
-        align-content: start;
-        gap: .4rem;
-        color: var(--sa-navy);
-        font-size: .82rem;
-        font-weight: 600;
-    }
+    .database-import-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0; }
+    .database-import-summary section { min-width: 0; padding: .9rem; border: 1px solid var(--sa-border); border-radius: var(--sa-radius); background: var(--sa-bg); }
+    .database-import-summary h3 { margin: 0 0 .5rem; color: var(--sa-navy); font-size: .85rem; font-weight: 600; }
+    .database-import-summary ul { max-height: 150px; overflow: auto; margin: 0; padding-left: 1.2rem; color: var(--sa-ink-soft); font-family: var(--sa-mono); font-size: .78rem; }
+    .database-import-confirm-fields { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem; margin-top: 1rem; }
+    .database-import-confirm-fields label { display: grid; align-content: start; gap: .4rem; color: var(--sa-navy); font-size: .82rem; font-weight: 500; }
     .database-import-confirm-fields input {
-        box-sizing: border-box;
-        width: 100%;
-        min-height: 42px;
-        padding: .6rem .75rem;
-        border: 1px solid var(--sa-border);
-        border-radius: 8px;
-        background: var(--sa-bg);
-        color: var(--sa-navy);
-        font: inherit;
+        box-sizing: border-box; width: 100%; min-height: 40px; padding: .55rem .75rem; border: 1px solid var(--sa-border);
+        border-radius: var(--sa-radius); background: var(--sa-bg); color: var(--sa-navy); font: inherit;
     }
-    .database-import-confirm-fields input:focus {
-        outline: none;
-        border-color: var(--sa-accent);
-        background: var(--sa-surface);
-    }
-    .database-import-error {
-        margin: .8rem 0 0;
-        color: var(--sa-danger);
-        font-size: .85rem;
-        font-weight: 600;
-    }
-    @media (max-width: 620px) {
-        .database-import-summary, .database-import-confirm-fields { grid-template-columns: 1fr; }
-    }
+    .database-import-confirm-fields input:focus { outline: none; border-color: var(--sa-navy); box-shadow: 0 0 0 1px var(--sa-navy); background: var(--sa-surface); }
+    .database-import-error { margin: .8rem 0 0; color: var(--sa-danger); font-size: .85rem; font-weight: 500; }
+    @media (max-width: 620px) { .database-import-summary, .database-import-confirm-fields { grid-template-columns: 1fr; } }
+  /* ===== Global Variables groups ===== */
+    .gv-group { margin-bottom: 1.5rem; }
+    .gv-group-head { margin-bottom: 1.2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--sa-border); }
+    .gv-group-head h2 { margin: 0; font-size: 1.05rem; font-weight: 600; letter-spacing: -0.02em; color: var(--sa-navy); }
+    .gv-group-head p { margin: .25rem 0 0; font-size: .85rem; color: var(--sa-ink-soft); }
+    .gv-group-tag { display: inline-block; margin-left: .5rem; padding: .1rem .45rem; border: 1px solid var(--sa-border); border-radius: var(--sa-radius); font-family: var(--sa-mono); font-size: .7rem; font-weight: 500; color: var(--sa-ink-soft); vertical-align: middle; }
+    .gv-effect { margin-top: .9rem; padding: .7rem .9rem; border: 1px solid var(--sa-border); border-left: 2px solid var(--sa-navy); border-radius: var(--sa-radius); background: var(--sa-bg); color: var(--sa-ink-soft); font-size: .82rem; line-height: 1.5; }
+    .gv-effect strong { color: var(--sa-navy); font-weight: 600; }
+    .gv-grid .gv-span { grid-column: 1 / -1; }
+    .gv-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.1rem; border: 1px solid var(--sa-border); border-radius: var(--sa-radius); }
+    .gv-toggle-row .text label { display: block; font-weight: 600; font-size: .88rem; color: var(--sa-navy); }
+    .gv-toggle-row .text span { font-size: .78rem; color: var(--sa-ink-soft); }
+    .gv-conditional { margin-top: 1rem; }
 </style>
 
 <div class="sa-page">
@@ -958,7 +596,7 @@
     <div class="sa-tabs">
         <button type="button" class="sa-tab-btn active" data-tab="users">
             <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="6.5" r="3"/><path d="M1.5 17c.8-3 3-5 5.5-5s4.7 2 5.5 5"/><circle cx="15" cy="7" r="2.3"/><path d="M13 11.3c2 .2 3.6 1.9 4.2 4.2"/></svg>
-            User Management
+            Secretaries Management
         </button>
         <button type="button" class="sa-tab-btn" data-tab="signatories">
             <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3h9l3 3v11H4z"/><path d="M13 3v3h3"/><path d="M7 10h6M7 13h6"/></svg>
@@ -974,9 +612,9 @@
         </button>
         <button type="button" class="sa-tab-btn" data-tab="r402-hakbangs">Mga R4-02 Hakbang</button>
         <button type="button" class="sa-tab-btn" data-tab="maintenance">BNH FORM RESET</button>
-        <button type="button" class="sa-tab-btn" data-tab="record-audit">Record Activity</button>
+        <button type="button" class="sa-tab-btn" data-tab="record-audit">Secretary Activity Portal</button>
         <button type="button" class="sa-tab-btn" data-tab="smtp-settings">SMTP Settings</button>
-        <button type="button" class="sa-tab-btn" data-tab="database">Database</button>
+        <button type="button" class="sa-tab-btn" data-tab="database">Database Configuration</button>
     </div>
 
     <!-- ============ USER MANAGEMENT ============ -->
@@ -1017,7 +655,7 @@
         <div class="sa-card">
             <div class="sa-card-head">
                 <div>
-                    <h2>Registered Users</h2>
+                    <h2>Secretaries</h2>
                     <p>Assign roles and grant or revoke system access.</p>
                 </div>
                 <input type="text" class="sa-search" id="userSearch" placeholder="Search by name or email...">
@@ -1233,7 +871,7 @@
                     <button type="submit" class="sa-btn sa-btn-primary">Download entire database (lspdms.sql)</button>
                 </div>
             </form>
-            <p class="sa-note">Unchecked tables are included. SMTP credentials are always excluded.</p>
+            <p class="sa-note" style="margin-top:1.2rem;">Unchecked tables are included. SMTP credentials are always excluded.</p>
         </div>
 
         <div class="sa-card">
@@ -1257,7 +895,9 @@
                 </label>
                 <p class="sql-file-error" id="databaseSqlFileError" role="alert" hidden></p>
                 <p class="gv-hint">Before applying an import, LSPDMS creates a private safety backup. Data in tables included in the file is replaced. Tables omitted from the file are retained.</p>
-                <button type="submit" class="sa-btn sa-btn-danger" id="importDatabaseBtn" disabled>Review and Import SQL</button>
+                <div class="sa-save-bar">
+                    <button type="submit" class="sa-btn sa-btn-danger" id="importDatabaseBtn" disabled>Review and Import SQL</button>
+                </div>
             </form>
         </div>
 
@@ -1365,175 +1005,6 @@
                 @if ($puroks->isEmpty())
                     <div class="sa-empty" id="noPuroksMessage">No Purok signatories are configured yet.</div>
                 @endif
-                @if (false)
-                <!-- Sample Purok 1: full range 1–24 -->
-                <div class="purok-card">
-                    <div class="purok-head">
-                        <div class="purok-head-left">
-                            <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" style="color:var(--sa-ink-soft); flex-shrink:0;"><path d="M3 8l7-5 7 5v9H3z"/><path d="M8 17v-5h4v5"/></svg>
-                            <div class="purok-name-wrap">
-                                <div class="purok-name-view">
-                                    <span class="purok-name-display">Purok 1</span>
-                                    <button type="button" class="purok-edit-btn" title="Edit Purok name" aria-label="Edit Purok name"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 3.5l3 3L7 16H4v-3z"/><path d="M12 5l3 3"/></svg></button>
-                                </div>
-                                <div class="purok-name-edit">
-                                    <input type="text" class="purok-name-input" value="Purok 1" maxlength="40">
-                                    <button type="button" class="sa-btn sa-btn-primary sa-btn-sm purok-name-save">Save</button>
-                                    <button type="button" class="sa-btn sa-btn-ghost sa-btn-sm purok-name-cancel">Cancel</button>
-                                </div>
-                            </div>
-                        </div>
-                        <button type="button" class="sa-btn sa-btn-danger sa-btn-sm remove-purok-btn">Remove</button>
-                    </div>
-                    <div class="purok-body">
-                        <div class="signatory-row">
-                            <span class="signatory-role-badge">Assigned Number</span>
-                            <input type="number" class="signatory-input purok-number-input" placeholder="e.g. 1" min="1" value="1">
-                        </div>                        <div class="signatory-row">
-                            <span class="signatory-role-badge">Secretary</span>
-                            <input type="text" class="signatory-input" placeholder="Full name">
-                        </div>
-                        <div class="signatory-row">
-                            <span class="signatory-role-badge">Manggagawa</span>
-                            <input type="text" class="signatory-input" placeholder="Full name">
-                        </div>
-                        <div class="signatory-row">
-                            <span class="signatory-role-badge">ID Number</span>
-                            <input type="text" class="signatory-input purok-id-input" placeholder="Ministerial ID number">
-                        </div>
-                        <label class="complete-row">
-                            <input type="checkbox" class="complete-purok-check" checked>
-                            <div class="complete-row-text">
-                                <strong>Complete Purok</strong>
-                                <span>Includes every group that starts with this Purok number (e.g. 1-1, 1-2, 1-3 ...).</span>
-                            </div>
-                        </label>
-                        <div class="sakop-row disabled">
-                            <span class="signatory-role-badge">Sakop na Grupo</span>
-                            <div>
-                                <div class="sakop-range-inputs">
-                                    <input type="number" class="signatory-input sakop-from" disabled placeholder="From" value="1" min="0">
-                                    <span>to</span>
-                                    <input type="number" class="signatory-input sakop-to" disabled placeholder="To" value="24" min="0">
-                                </div>
-                                <div class="sakop-preview">All groups: Purok 1-1, 1-2, 1-3 ...</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Sample Purok 2a: sub-group range 1–6 -->
-                <div class="purok-card">
-                    <div class="purok-head">
-                        <div class="purok-head-left">
-                            <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" style="color:var(--sa-ink-soft); flex-shrink:0;"><path d="M3 8l7-5 7 5v9H3z"/><path d="M8 17v-5h4v5"/></svg>
-                            <div class="purok-name-wrap">
-                                <div class="purok-name-view">
-                                    <span class="purok-name-display">Purok 2a</span>
-                                    <button type="button" class="purok-edit-btn" title="Edit Purok name" aria-label="Edit Purok name"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 3.5l3 3L7 16H4v-3z"/><path d="M12 5l3 3"/></svg></button>
-                                </div>
-                                <div class="purok-name-edit">
-                                    <input type="text" class="purok-name-input" value="Purok 2a" maxlength="40">
-                                    <button type="button" class="sa-btn sa-btn-primary sa-btn-sm purok-name-save">Save</button>
-                                    <button type="button" class="sa-btn sa-btn-ghost sa-btn-sm purok-name-cancel">Cancel</button>
-                                </div>
-                            </div>
-                        </div>
-                        <button type="button" class="sa-btn sa-btn-danger sa-btn-sm remove-purok-btn">Remove</button>
-                    </div>
-                    <div class="purok-body">
-                        <div class="signatory-row">
-                            <span class="signatory-role-badge">Assigned Number</span>
-                            <input type="number" class="signatory-input purok-number-input" placeholder="e.g. 1" min="1" value="2">
-                        </div>                        <div class="signatory-row">
-                            <span class="signatory-role-badge">Secretary</span>
-                            <input type="text" class="signatory-input" placeholder="Full name">
-                        </div>
-                        <div class="signatory-row">
-                            <span class="signatory-role-badge">Manggagawa</span>
-                            <input type="text" class="signatory-input" placeholder="Full name">
-                        </div>
-                        <div class="signatory-row">
-                            <span class="signatory-role-badge">ID Number</span>
-                            <input type="text" class="signatory-input purok-id-input" placeholder="Ministerial ID number">
-                        </div>
-                        <label class="complete-row">
-                            <input type="checkbox" class="complete-purok-check">
-                            <div class="complete-row-text">
-                                <strong>Complete Purok</strong>
-                                <span>Includes every group that starts with this Purok number (e.g. 1-1, 1-2, 1-3 ...).</span>
-                            </div>
-                        </label>
-                        <div class="sakop-row">
-                            <span class="signatory-role-badge">Sakop na Grupo</span>
-                            <div>
-                                <div class="sakop-range-inputs">
-                                    <input type="number" class="signatory-input sakop-from" placeholder="From" value="1" min="0">
-                                    <span>to</span>
-                                    <input type="number" class="signatory-input sakop-to" placeholder="To" value="6" min="0">
-                                </div>
-                                <div class="sakop-preview">Range: Purok 2-1 to 2-6</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Sample Purok 2b: sub-group range 7–10 -->
-                <div class="purok-card">
-                    <div class="purok-head">
-                        <div class="purok-head-left">
-                            <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" style="color:var(--sa-ink-soft); flex-shrink:0;"><path d="M3 8l7-5 7 5v9H3z"/><path d="M8 17v-5h4v5"/></svg>
-                            <div class="purok-name-wrap">
-                                <div class="purok-name-view">
-                                    <span class="purok-name-display">Purok 2b</span>
-                                    <button type="button" class="purok-edit-btn" title="Edit Purok name" aria-label="Edit Purok name"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 3.5l3 3L7 16H4v-3z"/><path d="M12 5l3 3"/></svg></button>
-                                </div>
-                                <div class="purok-name-edit">
-                                    <input type="text" class="purok-name-input" value="Purok 2b" maxlength="40">
-                                    <button type="button" class="sa-btn sa-btn-primary sa-btn-sm purok-name-save">Save</button>
-                                    <button type="button" class="sa-btn sa-btn-ghost sa-btn-sm purok-name-cancel">Cancel</button>
-                                </div>
-                            </div>
-                        </div>
-                        <button type="button" class="sa-btn sa-btn-danger sa-btn-sm remove-purok-btn">Remove</button>
-                    </div>
-                    <div class="purok-body">
-                        <div class="signatory-row">
-                            <span class="signatory-role-badge">Assigned Number</span>
-                            <input type="number" class="signatory-input purok-number-input" placeholder="e.g. 1" min="1" value="2">
-                        </div>                        <div class="signatory-row">
-                            <span class="signatory-role-badge">Secretary</span>
-                            <input type="text" class="signatory-input" placeholder="Full name">
-                        </div>
-                        <div class="signatory-row">
-                            <span class="signatory-role-badge">Manggagawa</span>
-                            <input type="text" class="signatory-input" placeholder="Full name">
-                        </div>
-                        <div class="signatory-row">
-                            <span class="signatory-role-badge">ID Number</span>
-                            <input type="text" class="signatory-input purok-id-input" placeholder="Ministerial ID number">
-                        </div>
-                        <label class="complete-row">
-                            <input type="checkbox" class="complete-purok-check">
-                            <div class="complete-row-text">
-                                <strong>Complete Purok</strong>
-                                <span>Includes every group that starts with this Purok number (e.g. 1-1, 1-2, 1-3 ...).</span>
-                            </div>
-                        </label>
-                        <div class="sakop-row">
-                            <span class="signatory-role-badge">Sakop na Grupo</span>
-                            <div>
-                                <div class="sakop-range-inputs">
-                                    <input type="number" class="signatory-input sakop-from" placeholder="From" value="7" min="0">
-                                    <span>to</span>
-                                    <input type="number" class="signatory-input sakop-to" placeholder="To" value="10" min="0">
-                                </div>
-                                <div class="sakop-preview">Range: Purok 2-7 to 2-10</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                @endif
             </div>
 
             <button type="button" class="add-purok-btn" id="addPurokBtn" style="margin-top:1rem;">
@@ -1568,7 +1039,7 @@
             <div class="settings-list">
                 <div class="settings-row">
                     <div class="settings-row-text">
-                        <label for="settingSample1">Require OTP</label>
+                        <label for="requireOtpSetting">Require OTP</label>
                         <span>When enabled, every account must verify an emailed code after entering a password.</span>
                     </div>
                     <label class="sa-toggle">
@@ -1578,7 +1049,7 @@
                 </div>
                 <div class="settings-row">
                     <div class="settings-row-text">
-                        <label for="settingSample2">Allow Forgot Password</label>
+                        <label for="allowForgotPasswordSetting">Allow Forgot Password</label>
                         <span>When disabled, the forgot-password link and password reset endpoints are unavailable.</span>
                     </div>
                     <label class="sa-toggle">
@@ -2693,21 +2164,14 @@
         const closePermissionsModal = document.getElementById('closePermissionsModal');
         const cancelPermissionsBtn = document.getElementById('cancelPermissionsBtn');
 
-        // Move the modal to be a direct child of <body>. If left nested inside
-        // the page layout, an ancestor with a CSS transform/filter/overflow
-        // (common in dashboard shells) can make "position: fixed" behave like
-        // "absolute" relative to that ancestor instead of the viewport, which
-        // is what made the overlay render mispositioned/undimmed. Reparenting
-        // guarantees it always sits above and covers the real viewport.
+        // Move the modal to be a direct child of <body> so position:fixed is
+        // always relative to the viewport (not a transformed ancestor).
         if (permModalOverlay && permModalOverlay.parentElement !== document.body) {
             document.body.appendChild(permModalOverlay);
         }
 
-        // Force the critical visual properties as inline styles. Inline
-        // styles win over ANY external stylesheet rule regardless of load
-        // order or !important, so this guarantees the dimmed backdrop shows
-        // even if the app's global CSS has its own conflicting ".overlay"-type
-        // rule (e.g. a Bootstrap/theme reset making backgrounds transparent).
+        // Force critical visual properties inline so the dimmed backdrop shows
+        // even if the app's global CSS has conflicting overlay rules.
         if (permModalOverlay) {
             permModalOverlay.style.position = 'fixed';
             permModalOverlay.style.top = '0';
@@ -2718,7 +2182,7 @@
             permModalOverlay.style.height = '100%';
             permModalOverlay.style.margin = '0';
             permModalOverlay.style.zIndex = '99999';
-            permModalOverlay.style.background = 'rgba(16, 24, 40, 0.55)';
+            permModalOverlay.style.background = 'rgba(0, 0, 0, 0.65)';
             permModalOverlay.style.justifyContent = 'center';
             permModalOverlay.style.overflowY = 'auto';
             permModalOverlay.style.boxSizing = 'border-box';
@@ -2897,7 +2361,7 @@
                 </div>
                 <div class="purok-body">
                     <div class="signatory-row">
-                        <span class="signatory-role-badge">Assigned Number</span>
+                        <span class="signatory-role-badge">Header Number</span>
                         <input type="number" class="signatory-input purok-number-input" placeholder="e.g. 1" min="1" value="${number}">
                     </div>
                     <div class="signatory-row">
@@ -3072,9 +2536,6 @@
             if (e.key === 'Enter') { e.preventDefault(); saveName(card); }
             if (e.key === 'Escape') { e.stopPropagation(); closeNameEditor(card); }
         });
-
-        // Compute previews for the sample Puroks already on the page
-        purokList?.querySelectorAll('.purok-card').forEach(updateSakopPreview);
 
         // ===== Global Variables: de-listment requirement gray-out logic =====
         document.querySelectorAll('[data-controls]').forEach(checkbox => {

@@ -10,225 +10,300 @@
         'logout' => '<path d="M8 17H4V3h4"/><path d="M13 13l4-3-4-3"/><path d="M17 10H8"/>',
         'search-edit' => '<circle cx="8.5" cy="8.5" r="5.5"/><path d="M12.5 12.5 17 17"/><path d="M12 15.5l2-2 1.5 1.5-2 2H12v-1.5z"/>',
         'filter' => '<path d="M3 4h14l-5.5 6.5v5l-3 1.5v-6.5L3 4z"/>',
+        'card' => '<rect x="2.5" y="4.5" width="15" height="11" rx="2"/><path d="M6 9h4M6 12h2.5"/><circle cx="14" cy="10" r="1.6"/>',
     ];
     $role = mb_strtolower(trim(preg_replace('/\s+/', ' ', (string) ($authenticatedUser['tungkulin'] ?? '')) ?? ''));
     $isHeadSecretary = in_array($role, ['head secretary', 'secretary head'], true);
+    $can = fn (?string $feature) => $feature === null || $isHeadSecretary || ($authenticatedUser[$feature] ?? false);
+
+    // Same destinations and permission keys as before, grouped by purpose.
+    // [route, label, icon, active pattern, permission key (null = everyone)]
+    $navGroups = [
+        ['label' => 'Overview', 'items' => [
+            ['home', 'Home', 'home', 'home', null],
+            ['dashboard', 'Dashboard', 'grid', 'dashboard', 'dashboard_allow'],
+        ]],
+        ['label' => 'Records', 'items' => [
+            ['inquire-modify', 'Inquire / Modify', 'search-edit', 'inquire-modify', 'Inquire_Allow'],
+            ['de-listment', 'De-Listment', 'user-x', 'de-listment', 'Delistment_allow'],
+        ]],
+        ['label' => 'Tools', 'items' => [
+            ['form-generator', 'Form Generator', 'file', 'form-generator', 'form_generator_allow'],
+            ['tarheta-status', 'Tarheta Status Checker', 'card', 'tarheta-status*', 'tarheta_status_allow'],
+            ['filter-bnh-helper', 'Filter & BNH Helper', 'filter', 'filter-bnh-helper*', 'filter_bnh_helper_allow'],
+        ]],
+    ];
+
+    $displayName = trim(($authenticatedUser['first_name'] ?? '') . ' ' . ($authenticatedUser['last_name'] ?? ''));
+    $displayName = $displayName !== '' ? $displayName : ($authenticatedUser['gmail'] ?? 'User');
+    $initials = mb_strtoupper(mb_substr(trim((string) ($authenticatedUser['first_name'] ?? '')), 0, 1) . mb_substr(trim((string) ($authenticatedUser['last_name'] ?? '')), 0, 1));
+    $initials = $initials !== '' ? $initials : mb_strtoupper(mb_substr($displayName, 0, 1));
+    $avatarUrl = !empty($authenticatedUser['profile_picture']) ? asset('storage/' . $authenticatedUser['profile_picture']) : null;
 @endphp
 <!DOCTYPE html>
 <html lang="en" data-theme="{{ (($authenticatedUser['dark_mode'] ?? false)) ? 'dark' : 'light' }}">
     <head>
         <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
         <meta name="csrf-token" content="{{ csrf_token() }}">
         <title>@yield('title', 'Dashboard') - {{ config('app.name', 'LSPDMS') }}</title>
         @include('components.brand-meta')
+        {{-- Apply the saved sidebar state before first paint so the layout never jumps on load. --}}
+        <script>try { if (localStorage.getItem('sidebarCollapsed') === '1') document.documentElement.classList.add('sb-collapsed'); } catch (e) {}</script>
         <style>
             :root {
                 color-scheme: light;
-                --bg: #f6f8fa;
+                --bg: #fafafa;
                 --surface: #ffffff;
-                --border: #e3e8ee;
-                --text: #101828;
-                --text-muted: #64748b;
-                --accent: #0a6bd6;
-                --accent-hover: #0a4a8a;
-                --sidebar-bg: #101828;
-                --sidebar-text: #cbd5e1;
-                --sidebar-text-active: #ffffff;
-                --sidebar-active-bg: rgba(255,255,255,0.08);
-                --danger: #dc2626;
-                --sidebar-width: 268px;
-                --sidebar-width-collapsed: 76px;
-
+                --border: #eaeaea;
+                --text: #171717;
+                --text-muted: #666666;
+                --accent: #0070f3;
+                --accent-hover: #0060d1;
+                --danger: #e5484d;
+                --hover: #f5f5f5;
+                --sidebar-bg: #fafafa;
+                --sidebar-text: #666666;
+                --sidebar-label: #737373;
+                --sidebar-text-active: #171717;
+                --sidebar-active-bg: #eaeaea;
+                --sidebar-hover-bg: #f2f2f2;
+                --sidebar-border: #eaeaea;
+                --sidebar-logo-filter: brightness(0);
+                --sidebar-width: 256px;
+                --sidebar-width-collapsed: 68px;
+                --bar-height: 56px;
+                --inset-top: env(safe-area-inset-top, 0px);
             }
             html[data-theme="dark"] {
                 color-scheme: dark;
-                --bg: #0b1220;
-                --surface: #141b2d;
-                --border: #263043;
-                --text: #e5e9f0;
-                --text-muted: #93a0b4;
-                --accent: #3b93ff;
-                --accent-hover: #63acff;
-                --danger: #f87171;
-                --sidebar-bg: #0a0f1a;
-                --sidebar-text: #93a0b4;
-                --sidebar-text-active: #ffffff;
-                --sidebar-active-bg: rgba(255,255,255,0.06);
-
+                --bg: #000000;
+                --surface: #0a0a0a;
+                --border: #262626;
+                --text: #ededed;
+                --text-muted: #a1a1a1;
+                --accent: #3291ff;
+                --accent-hover: #52a8ff;
+                --danger: #ff6369;
+                --hover: #1a1a1a;
+                --sidebar-bg: #000000;
+                --sidebar-text: #a1a1a1;
+                --sidebar-label: #8a8a8a;
+                --sidebar-text-active: #ededed;
+                --sidebar-active-bg: #1f1f1f;
+                --sidebar-hover-bg: #161616;
+                --sidebar-border: #262626;
+                --sidebar-logo-filter: none;
             }
             * { box-sizing: border-box; }
+            html.nav-open { overflow: hidden; }
             body {
                 margin: 0;
-                font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+                font-family: 'Geist', -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+                -webkit-font-smoothing: antialiased;
                 background: var(--bg);
                 color: var(--text);
                 display: flex;
                 min-height: 100vh;
             }
+            .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
-            /* Sidebar */
+            /* ---------- Sidebar ---------- */
             .sidebar {
                 width: var(--sidebar-width);
                 flex-shrink: 0;
                 background: var(--sidebar-bg);
+                border-right: 1px solid var(--sidebar-border);
                 position: fixed;
                 top: 0; bottom: 0; left: 0;
                 display: flex;
                 flex-direction: column;
-                transform: translateX(0);
-                transition: transform 0.2s ease, width 0.2s ease;
+                padding-bottom: env(safe-area-inset-bottom, 0px);
+                padding-left: env(safe-area-inset-left, 0px);
+                transition: transform 0.2s ease, width 0.2s ease, visibility 0s;
                 z-index: 40;
-                box-shadow: 1px 0 0 rgba(255,255,255,0.04) inset, 4px 0 24px rgba(0,0,0,0.18);
             }
-            .sidebar.collapsed { width: var(--sidebar-width-collapsed); }
             .sidebar-top {
-                position: relative;
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
-                padding: 1.3rem 1.2rem 1.1rem;
-                border-bottom: 1px solid rgba(255,255,255,0.08);
-                margin-bottom: 0.6rem;
+                gap: 0.5rem;
+                height: calc(var(--bar-height) + var(--inset-top));
+                padding: var(--inset-top) 0.75rem 0 1rem;
+                border-bottom: 1px solid var(--sidebar-border);
+                flex: none;
             }
-            .sidebar-brand { display: flex; align-items: center; flex: 1; min-width: 0; overflow: hidden; }
-            .sidebar-brand img { display: block; width: 132px; max-width: 100%; max-height: 62px; object-fit: contain; object-position: left center; }
-            .sidebar.collapsed .sidebar-brand { display: none; }
+            .sidebar a.sidebar-brand { display: flex; align-items: center; flex: 1; min-width: 0; height: auto; overflow: hidden; padding: 0; margin: 0; }
+            .sidebar a.sidebar-brand::before { display: none; }
+            .sidebar a.sidebar-brand:hover { background: none; }
+            .sidebar-brand img { display: block; width: 104px; max-width: 100%; max-height: 40px; object-fit: contain; object-position: left center; filter: var(--sidebar-logo-filter, none); }
             .collapse-btn {
-                background: rgba(255,255,255,0.06);
-                border: none;
-                width: 30px; height: 30px;
-                border-radius: 7px;
+                background: transparent;
+                border: 1px solid var(--sidebar-border);
+                width: 28px; height: 28px;
+                border-radius: 6px;
                 color: var(--sidebar-text);
                 display: flex; align-items: center; justify-content: center;
                 cursor: pointer;
                 flex-shrink: 0;
+                transition: background 0.15s ease, color 0.15s ease;
             }
-            .collapse-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+            .collapse-btn:hover { background: var(--sidebar-hover-bg); color: var(--sidebar-text-active); }
             .collapse-btn svg { transition: transform 0.2s ease; }
-            .sidebar.collapsed .collapse-btn svg { transform: rotate(180deg); }
 
-            .sidebar nav { position: relative; flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0.4rem 0.9rem; }
+            .sidebar nav { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0.5rem 0.5rem 0.25rem; }
+            .nav-group + .nav-group { margin-top: 0.35rem; }
+            .sidebar-section-label {
+                font-size: 0.72rem;
+                letter-spacing: 0.02em;
+                color: var(--sidebar-label);
+                padding: 0.65rem 0.75rem 0.3rem;
+                font-weight: 600;
+            }
             .sidebar a {
+                position: relative;
                 display: flex;
                 align-items: center;
-                gap: 0.85rem;
-                padding: 0.8rem 0.9rem;
-                margin-bottom: 0.25rem;
-                border-radius: 10px;
+                gap: 0.75rem;
+                height: 36px;
+                padding: 0 0.75rem;
+                margin-bottom: 2px;
+                border-radius: 6px;
                 color: var(--sidebar-text);
                 text-decoration: none;
-                font-size: 0.95rem;
+                font-size: 0.875rem;
                 font-weight: 500;
                 white-space: nowrap;
-                transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+                transition: background 0.15s ease, color 0.15s ease;
             }
-            .sidebar a svg { flex-shrink: 0; width: 21px; height: 21px; }
-            .sidebar a:hover { background: var(--sidebar-active-bg); color: var(--sidebar-text-active); }
-            .sidebar a.active {
-                background: var(--accent);
-                color: #ffffff;
-            }
-            .sidebar.collapsed a span.label { display: none; }
-            .sidebar.collapsed a { justify-content: center; padding: 0.8rem; }
+            .sidebar a svg { flex-shrink: 0; width: 18px; height: 18px; }
+            .sidebar a:hover { background: var(--sidebar-hover-bg); color: var(--sidebar-text-active); }
+            .sidebar a.active { background: var(--sidebar-active-bg); color: var(--sidebar-text-active); }
+            .sidebar a.active::before { content: ""; position: absolute; left: -0.5rem; top: 8px; bottom: 8px; width: 2px; border-radius: 0 2px 2px 0; background: var(--sidebar-text-active); }
+            .sidebar a:focus-visible, .collapse-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+            .sidebar-admin { border-top: 1px solid var(--sidebar-border); padding: 0.35rem 0.5rem 0.75rem; }
 
-            .sidebar-section-label {
-                position: relative;
-                font-size: 0.68rem;
-                text-transform: uppercase;
-                letter-spacing: 0.08em;
-                color: #56617a;
-                padding: 0.9rem 0.9rem 0.4rem;
-                font-weight: 700;
-            }
-            .sidebar.collapsed .sidebar-section-label { display: none; }
-            .sidebar-admin { position: relative; border-top: 1px solid rgba(255,255,255,0.08); padding: 0.4rem 0.9rem 1rem; }
-
-            /* Main area */
+            /* ---------- Main area ---------- */
             .main { margin-left: var(--sidebar-width); flex: 1; min-width: 0; display: flex; flex-direction: column; transition: margin-left 0.2s ease; }
-            .main.collapsed { margin-left: var(--sidebar-width-collapsed); }
             .has-messages-page { height: 100vh; overflow: hidden; }
             .has-messages-page .main { height: 100vh; min-height: 0; overflow: hidden; }
             .has-messages-page .topbar { flex: 0 0 auto; }
             .has-messages-page .content { display: flex; min-height: 0; overflow: hidden; }
+
+            /* ---------- Topbar ---------- */
             .topbar {
                 position: sticky;
                 top: 0;
                 z-index: 20;
+                height: calc(var(--bar-height) + var(--inset-top));
+                padding: var(--inset-top) 1.5rem 0;
                 background: var(--surface);
                 border-bottom: 1px solid var(--border);
-                padding: 0.9rem 1.5rem;
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
                 gap: 1rem;
-                box-shadow: 0 1px 0 rgba(15,23,42,0.04), 0 6px 18px rgba(15,23,42,0.05);
             }
-            .topbar-title { font-weight: 700; font-size: 1.05rem; }
+            .topbar-left { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
+            .topbar-title { font-weight: 600; font-size: 0.95rem; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
             .menu-toggle {
                 display: none;
+                align-items: center; justify-content: center;
+                width: 40px; height: 40px;
                 background: none;
-                border: none;
+                border: 1px solid transparent;
+                border-radius: 8px;
                 cursor: pointer;
-                padding: 0.4rem;
                 color: var(--text);
             }
+            .menu-toggle:hover { background: var(--hover); border-color: var(--border); }
+            .menu-toggle:focus-visible, .user-chip:focus-visible, .user-dropdown a:focus-visible, .user-dropdown button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-            /* User menu */
-            .user-menu { position: relative; }
+            /* Avatar: photo, or initials when there is no photo or it fails to load */
+            .avatar { flex: none; width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: var(--border); }
+            .avatar-initials { display: inline-grid; place-items: center; border: 1px solid var(--border); background: var(--hover); color: var(--text); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.02em; }
+
+            /* ---------- User menu ---------- */
+            .user-menu { position: relative; flex: none; }
             .user-chip {
-                display: flex; align-items: center; gap: 0.6rem;
-                background: none; border: none; cursor: pointer;
-                padding: 0.3rem 0.5rem 0.3rem 0.3rem;
-                border-radius: 999px;
+                display: flex; align-items: center; gap: 0.65rem;
+                background: none; border: 1px solid transparent; cursor: pointer;
+                padding: 0.25rem 0.6rem 0.25rem 0.25rem;
+                border-radius: 8px;
                 color: inherit;
+                font: inherit;
+                transition: background 0.15s ease, border-color 0.15s ease;
             }
-            .user-chip:hover { background: var(--bg); }
-            .user-chip img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; background: var(--border); }
-            .user-chip-name { font-size: 0.85rem; font-weight: 600; line-height: 1.2; text-align: left; }
-            .user-chip-role { font-size: 0.72rem; color: var(--text-muted); text-align: left; }
+            .user-chip:hover, .user-chip[aria-expanded="true"] { background: var(--hover); border-color: var(--border); }
+            .user-chip-text { display: grid; max-width: 180px; text-align: left; }
+            .user-chip-name { font-size: 0.82rem; font-weight: 600; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            .user-chip-role { font-size: 0.72rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
             .user-dropdown {
                 position: absolute;
                 top: calc(100% + 8px);
                 right: 0;
-                width: 220px;
+                width: 248px;
                 background: var(--surface);
                 border: 1px solid var(--border);
-                border-radius: 12px;
-                box-shadow: 0 12px 28px rgba(15,23,42,0.14);
-                padding: 0.4rem;
+                border-radius: 10px;
+                box-shadow: 0 8px 30px rgba(0,0,0,0.18);
+                padding: 0.3rem;
                 display: none;
                 z-index: 50;
             }
             .user-dropdown.open { display: block; }
+            .user-dropdown-head { display: grid; gap: 0.1rem; padding: 0.55rem 0.6rem 0.6rem; }
+            .user-dropdown-name { font-size: 0.85rem; font-weight: 600; overflow-wrap: anywhere; }
+            .user-dropdown-sub { color: var(--text-muted); font-size: 0.75rem; overflow-wrap: anywhere; }
             .user-dropdown a, .user-dropdown button {
-                display: flex; align-items: center; gap: 0.7rem;
+                display: flex; align-items: center; gap: 0.65rem;
                 width: 100%; text-align: left;
                 background: none; border: none; cursor: pointer;
-                padding: 0.65rem 0.7rem;
-                border-radius: 8px;
-                font-size: 0.88rem;
+                padding: 0.5rem 0.6rem;
+                min-height: 36px;
+                border-radius: 6px;
+                font-size: 0.85rem;
                 color: var(--text);
                 text-decoration: none;
                 font-family: inherit;
             }
-            .user-dropdown a:hover, .user-dropdown button:hover { background: var(--bg); }
-            .user-dropdown svg { width: 17px; height: 17px; flex-shrink: 0; color: var(--text-muted); }
-            .user-dropdown .divider { height: 1px; background: var(--border); margin: 0.3rem 0.2rem; }
-            .theme-switch-row { display:flex; align-items:center; justify-content:space-between; gap:.75rem; padding:.55rem .7rem; color:var(--text); font-size:.86rem; font-weight:600; }
-            .theme-switch { position:relative; display:inline-flex; width:42px; height:24px; flex:none; }
-            .theme-switch input { position:absolute; width:1px; height:1px; opacity:0; }
-            .theme-switch-track { position:absolute; inset:0; border:1px solid var(--border); border-radius:999px; background:var(--border); cursor:pointer; transition:background .15s,border-color .15s; }
-            .theme-switch-track::before { position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%; background:var(--surface); content:""; transition:transform .15s; }
-            .theme-switch input:checked + .theme-switch-track { border-color:var(--accent); background:var(--accent); }
-            .theme-switch input:checked + .theme-switch-track::before { transform:translateX(18px); }
-            .theme-switch input:focus-visible + .theme-switch-track { outline:3px solid color-mix(in srgb,var(--accent) 35%,transparent); outline-offset:2px; }
-            .theme-switch-status { padding:0 .7rem .45rem; color:var(--text-muted); font-size:.72rem; }
-            .user-dropdown button.logout-item { color: var(--danger); }
-            .user-dropdown button.logout-item svg { color: var(--danger); }
+            .user-dropdown a:hover, .user-dropdown button:hover { background: var(--hover); }
+            /* Name / email / role block is a link to the profile page */
+            .user-dropdown a.user-dropdown-head { display: grid; align-items: start; gap: 0.1rem; padding: 0.55rem 0.6rem 0.6rem; min-height: 0; }
+            .user-dropdown svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--text-muted); }
+            .user-dropdown .divider { height: 1px; background: var(--border); margin: 0.3rem 0; }
+            .theme-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.55rem 0.6rem; color: var(--text); font-size: 0.85rem; font-weight: 500; }
+            .theme-switch { position: relative; display: inline-flex; width: 42px; height: 24px; flex: none; }
+            .theme-switch input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+            .theme-switch-track { position: absolute; inset: 0; border: 1px solid var(--border); border-radius: 999px; background: var(--border); cursor: pointer; transition: background .15s, border-color .15s; }
+            .theme-switch-track::before { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--surface); content: ""; transition: transform .15s; }
+            .theme-switch input:checked + .theme-switch-track { border-color: var(--accent); background: var(--accent); }
+            .theme-switch input:checked + .theme-switch-track::before { transform: translateX(18px); }
+            .theme-switch input:focus-visible + .theme-switch-track { outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent); outline-offset: 2px; }
+            .theme-switch input:disabled + .theme-switch-track { opacity: .6; cursor: default; }
+            .theme-switch-status { padding: 0 0.6rem 0.45rem; color: var(--danger); font-size: 0.72rem; }
+            .theme-switch-status:empty { display: none; }
+            .user-dropdown button.logout-item, .user-dropdown button.logout-item svg { color: var(--danger); }
 
-            .content { padding: 1.6rem; flex: 1; }
+            .content { padding: 1.6rem; padding-left: max(1.6rem, env(safe-area-inset-left, 0px)); padding-right: max(1.6rem, env(safe-area-inset-right, 0px)); flex: 1; }
+
+            /* ---------- Desktop: collapsed sidebar (class lives on <html> so it is applied before first paint) ---------- */
+            @media (min-width: 901px) {
+                html.sb-collapsed .sidebar { width: var(--sidebar-width-collapsed); }
+                html.sb-collapsed .main { margin-left: var(--sidebar-width-collapsed); }
+                html.sb-collapsed .sidebar-brand { display: none; }
+                html.sb-collapsed .sidebar-top { justify-content: center; padding-left: 0; padding-right: 0; }
+                html.sb-collapsed .collapse-btn svg { transform: rotate(180deg); }
+                html.sb-collapsed .sidebar-section-label { display: none; }
+                html.sb-collapsed .nav-group + .nav-group { margin-top: 0.35rem; padding-top: 0.35rem; border-top: 1px solid var(--sidebar-border); }
+                html.sb-collapsed .sidebar a { justify-content: center; padding: 0; }
+                html.sb-collapsed .sidebar a.active::before { left: -0.5rem; }
+                /* Hidden visually, still announced by screen readers */
+                html.sb-collapsed .sidebar a .label { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+            }
+
+            /* ---------- Chat widget (unchanged) ---------- */
             .chat-widget {
                 position: fixed;
                 right: 24px;
@@ -330,16 +405,26 @@
                 z-index: 30;
             }
 
+            /* ---------- Tablet / mobile: drawer ---------- */
             @media (max-width: 900px) {
-                .sidebar { transform: translateX(-100%); width: var(--sidebar-width) !important; }
-                .sidebar.open { transform: translateX(0); }
-                .main, .main.collapsed { margin-left: 0; }
+                .sidebar { transform: translateX(-100%); visibility: hidden; transition: transform 0.2s ease, visibility 0s 0.2s; width: min(var(--sidebar-width), 86vw); box-shadow: none; }
+                .sidebar.open { transform: translateX(0); visibility: visible; transition: transform 0.2s ease, visibility 0s; box-shadow: 0 0 40px rgba(0,0,0,0.3); }
+                .main { margin-left: 0; }
                 .menu-toggle { display: inline-flex; }
                 .overlay.open { display: block; }
                 .collapse-btn { display: none; }
-                .sidebar.collapsed a span.label { display: inline; }
-                .sidebar.collapsed a { justify-content: flex-start; padding: 0.8rem 0.9rem; }
-                .sidebar.collapsed .sidebar-brand { display: block; }
+                .sidebar a { height: 44px; }
+                .sidebar a.active::before { top: 10px; bottom: 10px; }
+                .topbar { padding-left: max(1rem, env(safe-area-inset-left, 0px)); padding-right: max(1rem, env(safe-area-inset-right, 0px)); }
+                .content { padding: 1.2rem; padding-left: max(1.2rem, env(safe-area-inset-left, 0px)); padding-right: max(1.2rem, env(safe-area-inset-right, 0px)); }
+                .user-dropdown a, .user-dropdown button { min-height: 44px; }
+                .user-dropdown a.user-dropdown-head { min-height: 0; }
+            }
+            @media (max-width: 640px) {
+                .user-chip-text { display: none; }
+                .user-chip { padding: 0.25rem; }
+                .user-dropdown { width: min(248px, calc(100vw - 2rem)); }
+                .content { padding: 1rem; padding-left: max(1rem, env(safe-area-inset-left, 0px)); padding-right: max(1rem, env(safe-area-inset-right, 0px)); }
             }
             @media (max-width: 600px) {
                 .chat-widget { right: 12px; bottom: 16px; }
@@ -348,6 +433,9 @@
                 .has-smart-helper .chat-window { height: min(560px, calc(100dvh - 190px)); }
                 .chat-head-launcher { width: 56px; height: 56px; }
             }
+            @media (prefers-reduced-motion: reduce) {
+                .sidebar, .main, .collapse-btn svg, .theme-switch-track, .theme-switch-track::before, .chat-head-launcher { transition: none !important; }
+            }
         </style>
         @stack('styles')
     </head>
@@ -355,85 +443,43 @@
         <x-flash-toast :message="session('status')" />
         <div class="overlay" id="sidebarOverlay"></div>
 
-        <aside class="sidebar" id="sidebar">
+        <aside class="sidebar" id="sidebar" aria-label="Main navigation">
             <div class="sidebar-top">
                 <a class="sidebar-brand" href="{{ route('home') }}" aria-label="LSPDMS home">
                     <img src="{{ asset('images/LSP_logo_white.png') }}" alt="LSPDMS — LSP's Data Management System">
                 </a>
-                <button class="collapse-btn" id="collapseToggle" aria-label="Collapse sidebar">
-                    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l-6 6 6 6"/></svg>
+                <button class="collapse-btn" id="collapseToggle" type="button" aria-label="Collapse sidebar" aria-controls="sidebar" aria-expanded="true">
+                    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4l-6 6 6 6"/></svg>
                 </button>
             </div>
 
-            @php
-                $icons = [
-                    'home' => '<path d="M3 10.5 10 4l7 6.5"/><path d="M5 9v7h10V9"/>',
-                    'grid' => '<rect x="3" y="3" width="6" height="6" rx="1"/><rect x="11" y="3" width="6" height="6" rx="1"/><rect x="3" y="11" width="6" height="6" rx="1"/><rect x="11" y="11" width="6" height="6" rx="1"/>',
-                    'file' => '<path d="M6 2h6l4 4v12H6z"/><path d="M12 2v4h4"/><path d="M8 11h6M8 14h6"/>',
-                    'user-x' => '<circle cx="8" cy="7" r="3"/><path d="M2 17c0-3 2.5-5 6-5"/><path d="M14 8l4 4M18 8l-4 4"/>',
-                    'shield' => '<path d="M10 2l7 3v5c0 4.5-3 7.5-7 8-4-.5-7-3.5-7-8V5l7-3z"/>',
-                    'profile' => '<circle cx="10" cy="7" r="3.2"/><path d="M3.5 17c1-3.2 3.6-5 6.5-5s5.5 1.8 6.5 5"/>',
-                    'logout' => '<path d="M8 17H4V3h4"/><path d="M13 13l4-3-4-3"/><path d="M17 10H8"/>',
-                    'search-edit' => '<circle cx="8.5" cy="8.5" r="5.5"/><path d="M12.5 12.5 17 17"/><path d="M12 15.5l2-2 1.5 1.5-2 2H12v-1.5z"/>',
-                    'filter' => '<path d="M3 4h14l-5.5 6.5v5l-3 1.5v-6.5L3 4z"/>',
-                ];
-                $role = mb_strtolower(trim(preg_replace('/\s+/', ' ', (string) ($authenticatedUser['tungkulin'] ?? '')) ?? ''));
-                $isHeadSecretary = in_array($role, ['head secretary', 'secretary head'], true);
-
-            @endphp
-
             <nav>
-                <a href="{{ route('home') }}" class="{{ request()->routeIs('home') ? 'active' : '' }}">
-                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['home'] !!}</svg>
-                    <span class="label">Home</span>
-                </a>
-
-                @if ($isHeadSecretary || ($authenticatedUser['dashboard_allow'] ?? false))
-                    <a data-feature="dashboard_allow" href="{{ route('dashboard') }}" class="{{ request()->routeIs('dashboard') ? 'active' : '' }}">
-                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['grid'] !!}</svg>
-                        <span class="label">Dashboard</span>
-                    </a>
-                @endif
-
-                @if ($isHeadSecretary || ($authenticatedUser['form_generator_allow'] ?? false))
-                    <a data-feature="form_generator_allow" href="{{ route('form-generator') }}" class="{{ request()->routeIs('form-generator') ? 'active' : '' }}">
-                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['file'] !!}</svg>
-                        <span class="label">Form Generator</span>
-                    </a>
-                @endif
-
-                @if ($isHeadSecretary || ($authenticatedUser['Inquire_Allow'] ?? false))
-                    <a data-feature="Inquire_Allow" href="{{ route('inquire-modify') }}" class="{{ request()->routeIs('inquire-modify') ? 'active' : '' }}">
-                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['search-edit'] !!}</svg>
-                        <span class="label">Inquire / Modify</span>
-                    </a>
-                @endif
-                @if ($isHeadSecretary || ($authenticatedUser['tarheta_status_allow'] ?? false))
-                    <a data-feature="tarheta_status_allow" href="{{ route('tarheta-status') }}" class="{{ request()->routeIs('tarheta-status*') ? 'active' : '' }}">
-                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['search-edit'] !!}</svg>
-                        <span class="label">Tarheta Status Checker</span>
-                    </a>
-                @endif
-                @if ($isHeadSecretary || ($authenticatedUser['filter_bnh_helper_allow'] ?? false))
-                    <a data-feature="filter_bnh_helper_allow" href="{{ route('filter-bnh-helper') }}" class="{{ request()->routeIs('filter-bnh-helper*') ? 'active' : '' }}">
-                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['filter'] !!}</svg>
-                        <span class="label">Filter &amp; BNH Helper</span>
-                    </a>
-                @endif
-
-                @if ($isHeadSecretary || ($authenticatedUser['Delistment_allow'] ?? false))
-                    <a data-feature="Delistment_allow" href="{{ route('de-listment') }}" class="{{ request()->routeIs('de-listment') ? 'active' : '' }}">
-                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['user-x'] !!}</svg>
-                        <span class="label">De-Listment</span>
-                    </a>
-                @endif
+                @foreach ($navGroups as $group)
+                    @php $visibleItems = array_values(array_filter($group['items'], fn ($item) => $can($item[4]))); @endphp
+                    @if (count($visibleItems))
+                        <div class="nav-group" data-nav-group>
+                            <div class="sidebar-section-label">{{ $group['label'] }}</div>
+                            @foreach ($visibleItems as [$routeName, $label, $icon, $pattern, $feature])
+                                @php $isActive = request()->routeIs($pattern); @endphp
+                                <a @if ($feature) data-feature="{{ $feature }}" @endif
+                                   href="{{ route($routeName) }}"
+                                   class="{{ $isActive ? 'active' : '' }}"
+                                   title="{{ $label }}"
+                                   @if ($isActive) aria-current="page" @endif>
+                                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{!! $icons[$icon] !!}</svg>
+                                    <span class="label">{{ $label }}</span>
+                                </a>
+                            @endforeach
+                        </div>
+                    @endif
+                @endforeach
             </nav>
 
             @if ($isHeadSecretary)
                 <div class="sidebar-admin" data-feature="head_secretary">
                     <div class="sidebar-section-label">Administration</div>
-                    <a href="{{ route('superadmin-dashboard') }}" class="{{ request()->routeIs('superadmin-dashboard') ? 'active' : '' }}">
-                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['shield'] !!}</svg>
+                    <a href="{{ route('superadmin-dashboard') }}" title="Superadmin Dashboard" class="{{ request()->routeIs('superadmin-dashboard') ? 'active' : '' }}" @if (request()->routeIs('superadmin-dashboard')) aria-current="page" @endif>
+                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{!! $icons['shield'] !!}</svg>
                         <span class="label">Superadmin Dashboard</span>
                     </a>
                 </div>
@@ -442,35 +488,40 @@
 
         <div class="main" id="mainArea">
             <header class="topbar">
-                <div style="display:flex; align-items:center; gap:0.8rem;">
-                    <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
-                        <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 5h14M3 10h14M3 15h14"/></svg>
+                <div class="topbar-left">
+                    <button class="menu-toggle" id="menuToggle" type="button" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false">
+                        <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14"/></svg>
                     </button>
                     <span class="topbar-title">@yield('title', 'Dashboard')</span>
                 </div>
 
-                @php
-                    $displayName = trim(($authenticatedUser['first_name'] ?? '') . ' ' . ($authenticatedUser['last_name'] ?? ''));
-                    $displayName = $displayName !== '' ? $displayName : ($authenticatedUser['gmail'] ?? 'User');
-                @endphp
-
                 <div class="user-menu">
-                    <button class="user-chip" id="userChipBtn">
-                        <img src="{{ !empty($authenticatedUser['profile_picture']) ? asset('storage/' . $authenticatedUser['profile_picture']) : asset('images/avatar-default.svg') }}" alt="">
-                        <span>
-                            <div class="user-chip-name">{{ $displayName }}</div>
-                            <div class="user-chip-role">{{ $authenticatedUser['tungkulin'] ?? '' }}</div>
+                    <button class="user-chip" id="userChipBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="userDropdown" aria-label="Account menu for {{ $displayName }}">
+                        @if ($avatarUrl)
+                            <img class="avatar" src="{{ $avatarUrl }}" alt="" width="32" height="32" data-avatar data-initials="{{ $initials }}" decoding="async">
+                        @else
+                            <span class="avatar avatar-initials" aria-hidden="true">{{ $initials }}</span>
+                        @endif
+                        <span class="user-chip-text">
+                            <span class="user-chip-name">{{ $displayName }}</span>
+                            <span class="user-chip-role">{{ $authenticatedUser['tungkulin'] ?? '' }}</span>
                         </span>
                     </button>
 
-                    <div class="user-dropdown" id="userDropdown">
-                        <a href="{{ route('profile') }}">
-                            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['profile'] !!}</svg>
-                            Profile
+                    <div class="user-dropdown" id="userDropdown" role="group" aria-label="Account">
+                        <a class="user-dropdown-head" href="{{ route('profile') }}" title="Open profile">
+                            <span class="user-dropdown-name">{{ $displayName }}</span>
+                            @if (!empty($authenticatedUser['gmail']) && $displayName !== $authenticatedUser['gmail'])
+                                <span class="user-dropdown-sub">{{ $authenticatedUser['gmail'] }}</span>
+                            @endif
+                            @if (!empty($authenticatedUser['tungkulin']))
+                                <span class="user-dropdown-sub">{{ $authenticatedUser['tungkulin'] }}</span>
+                            @endif
                         </a>
+                        <div class="divider"></div>
                         <div class="theme-switch-row">
                             <span id="themeSwitchLabel">Dark mode</span>
-                            <label class="theme-switch" aria-label="Toggle dark mode">
+                            <label class="theme-switch">
                                 <input type="checkbox" id="themeSwitch" role="switch" aria-labelledby="themeSwitchLabel" @checked(($authenticatedUser['dark_mode'] ?? false))>
                                 <span class="theme-switch-track"></span>
                             </label>
@@ -480,7 +531,7 @@
                         <form method="POST" action="{{ url('/logout') }}">
                             @csrf
                             <button type="submit" class="logout-item">
-                                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['logout'] !!}</svg>
+                                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{!! $icons['logout'] !!}</svg>
                                 Log out
                             </button>
                         </form>
@@ -519,6 +570,7 @@
         @endunless
 
         <script>
+            const root = document.documentElement;
             const sidebar = document.getElementById('sidebar');
             const mainArea = document.getElementById('mainArea');
             const overlay = document.getElementById('sidebarOverlay');
@@ -531,6 +583,7 @@
             const chatMinimize = document.getElementById('chatMinimize');
             const chatFrame = chatWindow?.querySelector('iframe');
 
+            /* ---------- Chat panel (unchanged) ---------- */
             function notifyChatPanelOpened() {
                 if (!chatWindow || chatWindow.hidden || !chatFrame?.contentWindow) return;
                 chatFrame.contentWindow.postMessage({ type: 'chat:panel-opened' }, window.location.origin);
@@ -551,6 +604,8 @@
                 setChatOpen(false);
                 chatLauncher?.focus();
             });
+
+            /* ---------- Theme switch (unchanged behaviour) ---------- */
             const themeSwitch = document.getElementById('themeSwitch');
             const themeSwitchStatus = document.getElementById('themeSwitchStatus');
             let themeSaveController = null;
@@ -563,7 +618,7 @@
                 const chatDocument = chatFrame?.contentDocument;
                 if (chatDocument?.documentElement) chatDocument.documentElement.dataset.theme = darkMode ? 'dark' : 'light';
                 themeSwitch.disabled = true;
-                themeSwitchStatus.textContent = 'Saving…';
+                themeSwitchStatus.textContent = '';
                 try {
                     const response = await fetch(@json(route('settings.update')), {
                         method: 'PUT',
@@ -578,7 +633,7 @@
                     });
                     const result = await response.json().catch(() => ({}));
                     if (!response.ok) throw new Error(result.message || 'Could not save the theme preference.');
-                    themeSwitchStatus.textContent = 'Saved';
+                    themeSwitchStatus.textContent = '';
                 } catch (error) {
                     document.documentElement.dataset.theme = previousTheme;
                     if (chatDocument?.documentElement) chatDocument.documentElement.dataset.theme = previousTheme;
@@ -588,50 +643,111 @@
                     themeSwitch.disabled = false;
                 }
             });
-            document.addEventListener('keydown', event => {
-                if (event.key === 'Escape' && chatWindow && !chatWindow.hidden) setChatOpen(false);
-            });
 
+            /* ---------- Mobile drawer ---------- */
+            const visible = nodes => [...nodes].filter(node => node.offsetParent !== null);
+            const drawerOpen = () => sidebar.classList.contains('open');
             function openSidebar() {
                 sidebar.classList.add('open');
                 overlay.classList.add('open');
+                root.classList.add('nav-open');
+                menuToggle?.setAttribute('aria-expanded', 'true');
+                visible(sidebar.querySelectorAll('a'))[0]?.focus();
             }
-            function closeSidebar() {
+            function closeSidebar(restoreFocus = false) {
+                const wasOpen = drawerOpen();
                 sidebar.classList.remove('open');
                 overlay.classList.remove('open');
+                root.classList.remove('nav-open');
+                menuToggle?.setAttribute('aria-expanded', 'false');
+                if (wasOpen && restoreFocus) menuToggle?.focus();
             }
+            menuToggle?.addEventListener('click', () => (drawerOpen() ? closeSidebar(true) : openSidebar()));
+            overlay?.addEventListener('click', () => closeSidebar(true));
+            // Selecting a destination closes the drawer so it can never stay stuck behind the overlay.
+            sidebar.addEventListener('click', event => { if (event.target.closest('a')) closeSidebar(); });
+            // Restoring the page from the back/forward cache must not show an open drawer.
+            window.addEventListener('pageshow', () => { closeSidebar(); setUserMenu(false); });
+            window.matchMedia('(min-width: 901px)').addEventListener('change', event => { if (event.matches) closeSidebar(); });
 
-            menuToggle?.addEventListener('click', openSidebar);
-            overlay?.addEventListener('click', closeSidebar);
-
-            // Desktop collapse, persisted across page loads
-            try {
-                if (localStorage.getItem('sidebarCollapsed') === '1') {
-                    sidebar.classList.add('collapsed');
-                    mainArea.classList.add('collapsed');
-                }
-            } catch (e) {}
-
+            /* ---------- Desktop collapse (state is applied to <html> before first paint) ---------- */
+            const syncCollapseButton = () => {
+                const collapsed = root.classList.contains('sb-collapsed');
+                collapseToggle?.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
+                collapseToggle?.setAttribute('aria-expanded', String(!collapsed));
+            };
+            syncCollapseButton();
             collapseToggle?.addEventListener('click', () => {
-                const isCollapsed = sidebar.classList.toggle('collapsed');
-                mainArea.classList.toggle('collapsed', isCollapsed);
-                try { localStorage.setItem('sidebarCollapsed', isCollapsed ? '1' : '0'); } catch (e) {}
+                const collapsed = root.classList.toggle('sb-collapsed');
+                try { localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0'); } catch (e) {}
+                syncCollapseButton();
             });
 
-            // User dropdown
-            userChipBtn?.addEventListener('click', (e) => {
-                e.stopPropagation();
-                userDropdown.classList.toggle('open');
+            /* ---------- Account menu ---------- */
+            const menuItems = () => [...userDropdown.querySelectorAll('a, button:not(:disabled), input:not(:disabled)')];
+            function setUserMenu(open, focusFirst = false) {
+                if (!userDropdown || !userChipBtn) return;
+                userDropdown.classList.toggle('open', open);
+                userChipBtn.setAttribute('aria-expanded', String(open));
+                if (open && focusFirst) menuItems()[0]?.focus();
+            }
+            userChipBtn?.addEventListener('click', event => {
+                event.stopPropagation();
+                setUserMenu(!userDropdown.classList.contains('open'));
             });
-            document.addEventListener('click', (e) => {
-                if (!userDropdown.contains(e.target) && e.target !== userChipBtn) {
-                    userDropdown.classList.remove('open');
-                }
+            userChipBtn?.addEventListener('keydown', event => {
+                if (event.key === 'ArrowDown') { event.preventDefault(); setUserMenu(true, true); }
+            });
+            userDropdown?.addEventListener('keydown', event => {
+                const items = menuItems();
+                const index = items.indexOf(document.activeElement);
+                if (event.key === 'ArrowDown') { event.preventDefault(); items[(index + 1) % items.length]?.focus(); }
+                else if (event.key === 'ArrowUp') { event.preventDefault(); items[(index - 1 + items.length) % items.length]?.focus(); }
+                else if (event.key === 'Home') { event.preventDefault(); items[0]?.focus(); }
+                else if (event.key === 'End') { event.preventDefault(); items[items.length - 1]?.focus(); }
+                else if (event.key === 'Tab' && ((!event.shiftKey && index === items.length - 1) || (event.shiftKey && index === 0))) setUserMenu(false);
+            });
+            userDropdown?.addEventListener('click', event => { if (event.target.closest('a')) setUserMenu(false); });
+            document.addEventListener('click', event => {
+                if (!userDropdown.contains(event.target) && !userChipBtn.contains(event.target)) setUserMenu(false);
+            });
+
+            /* ---------- Escape closes whatever is open (account menu, drawer, chat) ---------- */
+            document.addEventListener('keydown', event => {
+                if (event.key !== 'Escape') return;
+                if (userDropdown?.classList.contains('open')) { setUserMenu(false); userChipBtn.focus(); }
+                else if (drawerOpen()) closeSidebar(true);
+                else if (chatWindow && !chatWindow.hidden) setChatOpen(false);
+            });
+            // Keep Tab inside the drawer while it is open.
+            document.addEventListener('keydown', event => {
+                if (event.key !== 'Tab' || !drawerOpen()) return;
+                const focusable = visible(sidebar.querySelectorAll('a, button'));
+                if (!focusable.length) return;
+                const first = focusable[0], last = focusable[focusable.length - 1];
+                if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+                else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+            });
+
+            /* ---------- Avatar fallback: show initials if the photo is missing or fails to load ---------- */
+            document.querySelectorAll('img[data-avatar]').forEach(img => {
+                const useInitials = () => {
+                    const badge = document.createElement('span');
+                    badge.className = 'avatar avatar-initials';
+                    badge.textContent = img.dataset.initials || '';
+                    badge.setAttribute('aria-hidden', 'true');
+                    img.replaceWith(badge);
+                };
+                if (img.complete && img.naturalWidth === 0) useInitials();
+                else img.addEventListener('error', useInitials, { once: true });
             });
         </script>
         <script>
             (() => {
+                let checking = false;
                 const checkSession = async () => {
+                    if (checking || !navigator.onLine) return; // never overlap requests
+                    checking = true;
                     try {
                         const response = await fetch(@json(route('session.status')), {
                             headers: { 'Accept': 'application/json' },
@@ -651,6 +767,12 @@
                                 link.hidden = !allowed;
                                 link.style.display = allowed ? '' : 'none';
                             });
+                            // Hide a group's heading when none of its links are allowed any more.
+                            document.querySelectorAll('[data-nav-group]').forEach(group => {
+                                const anyAllowed = [...group.querySelectorAll('a')].some(link => !link.hidden);
+                                group.hidden = !anyAllowed;
+                                group.style.display = anyAllowed ? '' : 'none';
+                            });
                             const currentFeature = Object.entries({
                                 '/dashboard': 'dashboard_allow',
                                 '/de-listment': 'Delistment_allow',
@@ -666,11 +788,15 @@
                         }
                     } catch (error) {
                         console.error('Session access check failed:', error);
+                    } finally {
+                        checking = false;
                     }
                 };
                 window.setInterval(() => {
                     if (!document.hidden) checkSession();
                 }, 10000);
+                // Re-check right away when the tab becomes visible again instead of waiting for the next tick.
+                document.addEventListener('visibilitychange', () => { if (!document.hidden) checkSession(); });
             })();
         </script>
         @stack('scripts')

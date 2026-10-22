@@ -2,129 +2,10 @@
 
 @section('title', 'Home')
 
-@section('content')
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Jost:wght@300;400;500&display=swap');
-
-    .faith-page {
-        --navy: #0b1630; --navy-2: #121f40; --ivory: #f6f2e9; --ink: #141b2d;
-        --gold: #b9964f; --gold-soft: #e3cf9c; --muted: #6b7384; --line: rgba(185, 150, 79, .35);
-        --ease: cubic-bezier(.2, .8, .2, 1);
-        margin-top: 1.2rem; overflow: hidden; background: var(--ivory); color: var(--ink);
-        font-family: 'Jost', -apple-system, 'Helvetica Neue', Arial, sans-serif; font-weight: 300;
-    }
-    .faith-page a { text-decoration: none; color: inherit; }
-    .faith-page .serif { font-family: 'Cormorant Garamond', Georgia, serif; }
-    .wrap { max-width: 1100px; margin: 0 auto; padding: 0 clamp(1.4rem, 5vw, 3rem); }
-
-    /* Buttons: sharp rectangles */
-    .btn {
-        display: inline-block; padding: 1.05rem 2.2rem; border: 1px solid var(--gold); border-radius: 0; cursor: pointer;
-        font: 400 .74rem/1 'Jost', sans-serif; letter-spacing: .2em; text-transform: uppercase; background: transparent;
-        transition: background .35s var(--ease), color .35s var(--ease);
-    }
-    .btn-gold { background: var(--gold); color: var(--navy); }
-    .btn-gold:hover { background: var(--gold-soft); border-color: var(--gold-soft); }
-    .btn-light { color: var(--gold-soft); }
-    .btn-light:hover { background: var(--gold); color: var(--navy); }
-    .btn-dark { color: var(--navy); }
-    .btn-dark:hover { background: var(--navy); color: var(--gold-soft); border-color: var(--navy); }
-
-    /* Hero: the verse is the centerpiece */
-    .hero {
-        position: relative; background: var(--navy); color: #fff; text-align: center;
-        padding: 2.4rem 1.4rem 6rem; min-height: 600px; display: flex; flex-direction: column; align-items: center;
-    }
-    .brand { font-size: 1.5rem; font-weight: 500; letter-spacing: .12em; color: var(--gold-soft); }
-    .brand-logo { display: block; width: min(190px, 45vw); max-height: 90px; margin: 0 auto 1rem; object-fit: contain; }
-    .brand::after { content: ""; display: block; width: 40px; height: 1px; margin: 1rem auto 0; background: var(--gold); }
-    .verse { flex: 1; display: flex; flex-direction: column; justify-content: center; max-width: 920px; padding-top: 3.5rem; transition: opacity .4s ease; }
-    .verse.out { opacity: 0; }
-    .verse blockquote { margin: 0; }
-    .verse p {
-        margin: 0 0 1.8rem; font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-weight: 500;
-        font-size: clamp(2rem, 5.4vw, 3.9rem); line-height: 1.28; color: #fff;
-    }
-    .verse.long p { font-size: clamp(1.6rem, 3.8vw, 2.7rem); }
-    .verse cite { font-style: normal; font-size: .85rem; letter-spacing: .22em; color: var(--gold-soft); }
-    .hero .btn { margin-top: 3rem; }
-    .lang-toggle { display: inline-flex; margin-top: 1.6rem; border: 1px solid rgba(227, 207, 156, .4); }
-    .lang-toggle button { padding: .55rem 1.1rem; border: 0; background: transparent; color: #aab4c8; cursor: pointer; font: 400 .72rem/1 'Jost', sans-serif; letter-spacing: .18em; text-transform: uppercase; transition: background .3s var(--ease), color .3s var(--ease); }
-    .lang-toggle button[aria-pressed="true"] { background: var(--gold); color: var(--navy); }
-    .lang-toggle button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
-
-    /* Sections */
-    .sec { padding: 6.5rem 0 0; }
-    .sec-head { text-align: center; margin-bottom: 3.5rem; }
-    .sec-head h2 { margin: 0; font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 500; font-size: clamp(2rem, 4.4vw, 3rem); line-height: 1.15; }
-    .sec-head p { margin: .9rem auto 0; max-width: 46ch; color: var(--muted); line-height: 1.8; }
-    .sec-head::after { content: ""; display: block; width: 40px; height: 1px; margin: 1.6rem auto 0; background: var(--gold); }
-
-    /* Featured read: arch cover + text, no card */
-    .feature { display: grid; gap: 3rem; align-items: center; justify-items: center; }
-    @media (min-width: 820px) { .feature { grid-template-columns: 5fr 6fr; gap: 5rem; justify-items: stretch; } }
-    .arch {
-        width: min(100%, 340px); aspect-ratio: 3 / 4; justify-self: center; border-radius: 999px 999px 0 0;
-        display: grid; place-content: center; text-align: center; color: #fff; position: relative;
-        background: var(--navy);
-        box-shadow: 0 0 0 8px var(--ivory), 0 0 0 9px var(--gold);
-    }
-    .arch h3 { margin: 0; font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 500; font-size: 3rem; letter-spacing: .06em; }
-    .arch span { display: block; margin-top: .5rem; color: var(--gold-soft); font-size: .85rem; letter-spacing: .24em; }
-    .feature-body h3 { margin: 0 0 1.2rem; font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 500; font-size: clamp(1.8rem, 3.4vw, 2.5rem); line-height: 1.2; }
-    .feature-body p { margin: 0 0 2.2rem; max-width: 52ch; color: var(--muted); line-height: 1.9; }
-
-    /* Where to go next: open editorial rows, no boxes */
-    .go { border-top: 1px solid var(--line); }
-    .go a {
-        display: grid; grid-template-columns: 1fr; gap: 1.2rem; align-items: center; padding: 2.6rem 1rem;
-        border-bottom: 1px solid var(--line); position: relative; isolation: isolate; transition: color .5s var(--ease);
-    }
-    @media (min-width: 860px) { .go a { grid-template-columns: 1.1fr 1.3fr auto; gap: 3rem; padding: 2.8rem 2rem; } }
-    .go a::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--navy); transform: scaleY(0); transform-origin: bottom; transition: transform .55s var(--ease); }
-    .go a:hover::before, .go a:focus-visible::before { transform: none; }
-    .go a:hover, .go a:focus-visible { color: #fff; }
-    .go h3 { margin: 0; font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 500; font-size: clamp(1.7rem, 3vw, 2.2rem); line-height: 1.15; }
-    .go p { margin: 0; color: var(--muted); line-height: 1.8; font-size: .98rem; transition: color .5s var(--ease); }
-    .go a:hover p, .go a:focus-visible p { color: #c3cadb; }
-    .go a:hover .btn-dark, .go a:focus-visible .btn-dark { background: var(--gold); border-color: var(--gold); color: var(--navy); }
-
-    /* Official channels: round emblems on navy */
-    .official { margin-top: 7rem; padding: 6.5rem 0 5.5rem; background: var(--navy); color: #fff; }
-    .official .sec-head p { color: #aab4c8; }
-    .official .sec-head h2 { color: #fff; }
-    .tabs { display: flex; justify-content: center; flex-wrap: wrap; gap: 1.2rem 2.2rem; margin-bottom: 4rem; }
-    .tab { background: none; border: 0; cursor: pointer; display: grid; justify-items: center; gap: .7rem; color: #aab4c8; font: 400 .78rem 'Jost', sans-serif; letter-spacing: .14em; transition: color .3s; }
-    .tab .orb { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; border: 1px solid rgba(227, 207, 156, .4); color: var(--gold-soft); transition: background .35s var(--ease), color .35s var(--ease), border-color .35s; }
-    .tab svg, .orb svg { fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; width: 26px; height: 26px; }
-    .tab:hover .orb { border-color: var(--gold); }
-    .tab.on { color: #fff; }
-    .tab.on .orb { background: var(--gold); border-color: var(--gold); color: var(--navy); }
-    .tab:focus-visible { outline: 2px solid var(--gold); outline-offset: 6px; }
-
-    .panel { display: none; justify-content: center; flex-wrap: wrap; gap: 2.6rem 1.2rem; }
-    .panel.on { display: flex; animation: panelIn .6s var(--ease); }
-    @keyframes panelIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-    .emblem { width: 140px; display: grid; justify-items: center; gap: 1rem; text-align: center; }
-    .emblem .orb {
-        display: grid; place-items: center; width: 84px; height: 84px; border-radius: 50%;
-        border: 1px solid var(--gold); color: var(--gold-soft); background: rgba(255, 255, 255, .03);
-        font-family: 'Cormorant Garamond', Georgia, serif; font-size: 1.4rem; font-weight: 600; letter-spacing: .04em;
-        box-shadow: 0 0 0 5px rgba(11, 22, 48, 1), 0 0 0 6px rgba(185, 150, 79, .3);
-        transition: background .4s var(--ease), color .4s var(--ease), transform .5s var(--ease);
-    }
-    .emblem .orb svg { width: 30px; height: 30px; }
-    .emblem .name { font-size: .88rem; line-height: 1.4; color: #dbe1ee; overflow-wrap: anywhere; }
-    .emblem:hover .orb, .emblem:focus-visible .orb { background: var(--gold); color: var(--navy); transform: translateY(-6px); }
-    .emblem:focus-visible { outline: 2px solid var(--gold); outline-offset: 6px; }
-
-    .foot { padding: 2.4rem 1rem; background: var(--deep, #070d1d); background: #070d1d; color: #8f9ab0; text-align: center; font-size: .85rem; }
-
-    .faith-page a:focus-visible, .faith-page button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
-    @media (prefers-reduced-motion: reduce) { .faith-page *, .faith-page *::before { animation: none !important; transition: none !important; } }
-</style>
-
 @php
+    // Pasugo section picture (public/images/pgmHomepage-001.jpeg). Change the path here if yours lives elsewhere, e.g. 'img/pgmHomepage-001.jpeg'.
+    $pasugoImage = asset('images/pgmHomepage-001.jpeg');
+
     $icons = [
         'globe'     => '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.8 3 2.8 15 0 18M12 3c-2.8 3-2.8 15 0 18"/></svg>',
         'facebook'  => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 21v-8h2.7l.4-3.2h-3.1V7.9c0-.9.3-1.5 1.6-1.5h1.7V3.5c-.3 0-1.3-.2-2.4-.2-2.4 0-4 1.4-4 4.1v2.4H8.7V13h2.7v8z"/></svg>',
@@ -198,102 +79,107 @@
             ['@INCGivingShow', 'https://twitter.com/INCGivingShow'],
         ]],
     ];
+
+    $destinations = [
+        ['Accessible schedule of worship service', 'Not sure when or where the nearest worship service is? This directory helps you find a congregation near you, along with service times.', 'https://iglesianicristo.net/directory/', 'Find a schedule'],
+        ['News about God\'s Church', 'The official home for announcements, updates and stories from across the Iglesia Ni Cristo community, kept fresh and easy to browse.', 'https://iglesianicristo.net/', 'Catch up on news'],
+        ['True Christian activities', 'From heartfelt programs to community outreach, INC Media captures everyday moments of faith in action, wherever you are.', 'https://incmedia.org/', 'See what\'s happening'],
+        ['Know the true Church\'s history', 'The Iglesia Ni Cristo Museum walks you through the church\'s history, a meaningful visit for anyone curious about how it all began.', 'https://incmuseum.net/', 'Explore the history'],
+    ];
 @endphp
 
+@section('content')
 <div class="faith-page">
 
-    {{-- Hero: the verse takes centre stage --}}
-    <section class="hero" id="top" aria-label="Talata mula sa Biblia">
-        <div class="brand serif">
-            <img class="brand-logo" src="{{ asset('images/LSP_logo_white.png') }}" alt="LSPDMS — LSP's Data Management System">
-            The Daily Faith
-        </div>
-        <div class="verse" id="verse">
+    {{-- Verse of the day: picked once per page load. Without JavaScript the default verse below stays visible. --}}
+    <section class="hm-hero" id="top" aria-label="Talata mula sa Biblia">
+        <p class="hm-eyebrow">The Daily Faith</p>
+        <div class="hm-verse" id="verse">
+            <div class="hm-verse-sk" aria-hidden="true">
+                <span class="sk" style="height:2.4rem;width:100%"></span>
+                <span class="sk" style="height:2.4rem;width:82%"></span>
+                <span class="sk" style="height:.9rem;width:9rem;margin-top:.9rem"></span>
+            </div>
             <blockquote lang="tl" id="verse-quote">
                 <p id="verse-text">Ang Panginoon ay aking pastor; hindi ako magkukulang.</p>
                 <cite id="verse-ref">Awit 23:1 · Ang Dating Biblia</cite>
             </blockquote>
         </div>
-        <button type="button" class="btn btn-light" id="verse-next">Another verse</button>
-        <div class="lang-toggle" role="group" aria-label="Verse language">
+        <div class="hm-seg" role="group" aria-label="Verse language">
             <button type="button" data-lang="tl" aria-pressed="true">Tagalog</button>
             <button type="button" data-lang="en" aria-pressed="false">English</button>
         </div>
+        <div class="hm-actions">
+            <a class="hm-btn" href="{{ $destinations[0][2] }}" target="_blank" rel="noopener">Find a worship schedule <span aria-hidden="true">↗</span><span class="sr-only">(opens in a new tab)</span></a>
+            <a class="hm-btn hm-btn-ghost" href="https://www.pasugo.com.ph/" target="_blank" rel="noopener">Read Pasugo <span aria-hidden="true">↗</span><span class="sr-only">(opens in a new tab)</span></a>
+        </div>
     </section>
+    <noscript><style>.hm-verse-sk { display: none !important; } .hm-verse:not([data-ready]) blockquote { display: block !important; }</style></noscript>
 
     {{-- Featured read --}}
-    <section class="sec" id="read">
-        <div class="wrap">
-            <div class="feature">
-                <div class="arch" aria-hidden="true">
-                    <div><h3>Pasugo</h3><span>God's Message</span></div>
+    <section class="hm-sec" id="read" aria-labelledby="read-title">
+        <div class="hm-feature">
+            <div class="hm-feature-media" id="feature-media">
+                <span class="sk hm-img-sk" aria-hidden="true"></span>
+                <img src="{{ $pasugoImage }}" alt="Pasugo: God's Message" loading="lazy" decoding="async">
+                <div class="hm-img-error" role="alert">
+                    <p>The image couldn't load.</p>
+                    <button type="button" class="hm-retry" id="img-retry">Retry</button>
                 </div>
-                <div class="feature-body">
-                    <h3 class="serif">Read God's Message here</h3>
-                    <p>There's something grounding about sitting down with God's word, especially when life gets busy. Pasugo: God's Message has been sharing articles, reflections and stories of faith for years, and it's a wonderful place to start or continue your spiritual reading. Whether you have five minutes or an hour, there's always something worth discovering.</p>
-                    <a class="btn btn-dark" href="https://www.pasugo.com.ph/" target="_blank" rel="noopener">Visit Pasugo</a>
-                </div>
+            </div>
+            <div class="hm-feature-body">
+                <p class="hm-kicker">Featured read</p>
+                <h2 id="read-title">Read God's Message here</h2>
+                <p>There's something grounding about sitting down with God's word, especially when life gets busy. Pasugo: God's Message has been sharing articles, reflections and stories of faith for years, and it's a wonderful place to start or continue your spiritual reading. Whether you have five minutes or an hour, there's always something worth discovering.</p>
+                <a class="hm-btn" href="https://www.pasugo.com.ph/" target="_blank" rel="noopener">Visit Pasugo <span aria-hidden="true">↗</span><span class="sr-only">(opens in a new tab)</span></a>
             </div>
         </div>
     </section>
 
     {{-- Where to go next --}}
-    <section class="sec" id="explore">
-        <div class="wrap">
-            <div class="sec-head">
-                <h2>Where to go next</h2>
-                <p>Four places worth a visit. Each opens in a new tab.</p>
-            </div>
-            <div class="go">
-                <a href="https://iglesianicristo.net/directory/" target="_blank" rel="noopener">
-                    <h3>Accessible schedule of worship service</h3>
-                    <p>Not sure when or where the nearest worship service is? This directory helps you find a congregation near you, along with service times.</p>
-                    <span class="btn btn-dark">Find a schedule</span>
+    <section class="hm-sec hm-deferred" id="explore" aria-labelledby="explore-title">
+        <div class="hm-head">
+            <h2 id="explore-title">Where to go next</h2>
+            <p>Four places worth a visit. Each opens in a new tab.</p>
+        </div>
+        <div class="hm-go">
+            @foreach ($destinations as $n => $d)
+                <a href="{{ $d[2] }}" target="_blank" rel="noopener" aria-label="{{ $d[0] }}: {{ $d[3] }} (opens in a new tab)">
+                    <span class="hm-num">{{ str_pad($n + 1, 2, '0', STR_PAD_LEFT) }}</span>
+                    <h3>{{ $d[0] }}</h3>
+                    <p>{{ $d[1] }}</p>
+                    <span class="hm-arrow" aria-hidden="true">↗</span>
                 </a>
-                <a href="https://iglesianicristo.net/" target="_blank" rel="noopener">
-                    <h3>News about God's Church</h3>
-                    <p>The official home for announcements, updates and stories from across the Iglesia Ni Cristo community, kept fresh and easy to browse.</p>
-                    <span class="btn btn-dark">Catch up on news</span>
-                </a>
-                <a href="https://incmedia.org/" target="_blank" rel="noopener">
-                    <h3>True Christian activities</h3>
-                    <p>From heartfelt programs to community outreach, INC Media captures everyday moments of faith in action, wherever you are.</p>
-                    <span class="btn btn-dark">See what's happening</span>
-                </a>
-                <a href="https://incmuseum.net/" target="_blank" rel="noopener">
-                    <h3>Know the true Church's history</h3>
-                    <p>The Iglesia Ni Cristo Museum walks you through the church's history, a meaningful visit for anyone curious about how it all began.</p>
-                    <span class="btn btn-dark">Explore the history</span>
-                </a>
-            </div>
+            @endforeach
         </div>
     </section>
 
     {{-- Official channels --}}
-    <section class="official" id="official">
-        <div class="wrap">
-            <div class="sec-head">
-                <h2>Official sites &amp; social media</h2>
-                <p>The official Iglesia Ni Cristo websites and pages (2026 update). Choose a platform; each link opens in a new tab.</p>
-            </div>
+    <section class="hm-sec hm-deferred" id="official" aria-labelledby="official-title">
+        <div class="hm-head">
+            <h2 id="official-title">Official sites &amp; social media</h2>
+            <p>The official Iglesia Ni Cristo websites and pages (2026 update). Choose a platform; each link opens in a new tab.</p>
+        </div>
 
-            <div class="tabs" role="tablist" aria-label="Platforms">
+        <div class="hm-channels">
+            <div class="hm-tabs" role="tablist" aria-label="Platforms">
                 @foreach ($official as $i => $g)
-                    <button type="button" class="tab {{ $i === 0 ? 'on' : '' }}" role="tab" aria-selected="{{ $i === 0 ? 'true' : 'false' }}" data-panel="panel-{{ $i }}">
-                        <span class="orb">{!! $icons[$g['icon']] !!}</span>
+                    <button type="button" class="hm-tab" role="tab" id="tab-{{ $i }}" tabindex="{{ $i === 0 ? '0' : '-1' }}" aria-selected="{{ $i === 0 ? 'true' : 'false' }}" aria-controls="panel-{{ $i }}" data-panel="panel-{{ $i }}">
+                        {!! $icons[$g['icon']] !!}
                         <span>{{ $g['name'] }}</span>
                     </button>
                 @endforeach
             </div>
 
             @foreach ($official as $i => $g)
-                <div class="panel {{ $i === 0 ? 'on' : '' }}" id="panel-{{ $i }}" role="tabpanel">
+                <div class="hm-links" id="panel-{{ $i }}" role="tabpanel" aria-labelledby="tab-{{ $i }}" @if ($i !== 0) hidden @endif>
                     @foreach ($g['items'] as $item)
-                        <a class="emblem" href="{{ $item[1] }}" target="_blank" rel="noopener noreferrer">
-                            <span class="orb" aria-hidden="true">
+                        <a class="hm-link" href="{{ $item[1] }}" target="_blank" rel="noopener noreferrer">
+                            <span class="hm-ico" aria-hidden="true">
                                 @if (!empty($item[2])) {{ $item[2] }} @else {!! $icons[$g['icon']] !!} @endif
                             </span>
-                            <span class="name">{{ $item[0] }}</span>
+                            <span class="hm-name">{{ $item[0] }}<span class="sr-only"> (opens in a new tab)</span></span>
+                            <span class="hm-out" aria-hidden="true">↗</span>
                         </a>
                     @endforeach
                 </div>
@@ -301,17 +187,151 @@
         </div>
     </section>
 
-    <footer class="foot">
+    <footer class="hm-foot">
         &copy; {{ date('Y') }} Iglesia Ni Cristo (Church of Christ)
     </footer>
 </div>
 @endsection
 
+@push('styles')
+{{-- Loaded as a normal stylesheet (not @import) so it doesn't block rendering in series; only the verse uses it. --}}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap">
+<style>
+    /* Theme: inherits --bg / --surface / --border / --text / --text-muted / --accent from the layout,
+       so it follows the navbar's light/dark switch (html[data-theme]). Black and white only;
+       --mark (the layout accent) is used sparingly to emphasize. */
+    .faith-page {
+        --card: var(--surface); --ink: var(--text); --muted: var(--text-muted); --line: var(--border);
+        --soft: #f5f5f5; --mark: var(--accent, #16a34a);
+        max-width: 1500px; margin: 0 auto; padding: 0 0 1rem;
+        color: var(--ink); background: none; font-variant-numeric: tabular-nums;
+    }
+    html[data-theme="dark"] .faith-page { --soft: #171717; }
+    .faith-page h2, .faith-page h3, .faith-page p, .faith-page blockquote { margin: 0; padding: 0; }
+    .faith-page a { color: inherit; text-decoration: none; }
+    .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+    /* Skeleton (only used while the verse is being chosen and while the image loads) */
+    .sk { display: block; border-radius: 6px; background: linear-gradient(90deg, var(--soft) 25%, var(--line) 37%, var(--soft) 63%); background-size: 400% 100%; animation: hm-shimmer 1.4s ease infinite; }
+    @keyframes hm-shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+
+    /* Hero */
+    .hm-hero {
+        display: grid; justify-items: center; text-align: center;
+        padding: clamp(2.6rem, 7vw, 5rem) clamp(1.2rem, 4vw, 3rem) clamp(2rem, 5vw, 3rem);
+        border: 1px solid var(--line); border-radius: 10px; background: var(--card);
+    }
+    .hm-eyebrow { display: inline-flex; align-items: center; gap: .8rem; color: var(--muted); font-size: .74rem; font-weight: 600; letter-spacing: .24em; text-transform: uppercase; }
+    .hm-eyebrow::before, .hm-eyebrow::after { content: ""; width: 28px; height: 1px; background: var(--line); }
+    .hm-verse { width: 100%; max-width: 920px; margin-top: 2.2rem; }
+    .hm-verse-sk { display: grid; justify-items: center; gap: .6rem; min-height: 9rem; padding-top: .4rem; }
+    .hm-verse[data-ready] .hm-verse-sk { display: none; }
+    .hm-verse:not([data-ready]) blockquote { display: none; }
+    .hm-verse p {
+        margin-bottom: 1.6rem; font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-weight: 500;
+        font-size: clamp(1.9rem, 4.6vw, 3.4rem); line-height: 1.25; letter-spacing: -.01em;
+    }
+    .hm-verse.long p { font-size: clamp(1.5rem, 3.2vw, 2.3rem); }
+    .hm-verse cite { display: inline-block; color: var(--mark); font-size: .78rem; font-style: normal; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+
+    /* Segmented control (same look as the dashboard's filters) */
+    .hm-seg { display: inline-flex; gap: 3px; margin-top: 2rem; padding: 3px; border: 1px solid var(--line); border-radius: 8px; background: var(--soft); }
+    .hm-seg button { min-width: 88px; padding: .42rem .9rem; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font: inherit; font-size: .78rem; font-weight: 600; cursor: pointer; transition: background .18s ease, color .18s ease; }
+    .hm-seg button:hover { color: var(--ink); background: var(--card); }
+    .hm-seg button[aria-pressed="true"] { background: var(--ink); color: var(--card); }
+
+    .hm-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: .6rem; margin-top: 1.6rem; }
+
+    /* Buttons: primary is solid, ghost is outlined */
+    .faith-page .hm-btn { display: inline-flex; align-items: center; gap: .6rem; height: 40px; padding: 0 1.1rem; border: 1px solid var(--ink); border-radius: 6px; background: var(--ink); color: var(--card); font-size: .85rem; font-weight: 600; transition: opacity .15s ease, background .15s ease, color .15s ease; }
+    .faith-page .hm-btn:hover { opacity: .85; }
+    .faith-page .hm-btn-ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+    .faith-page .hm-btn-ghost:hover { opacity: 1; border-color: var(--ink); background: var(--soft); }
+
+    /* Sections. Below-the-fold sections skip rendering work until they are near the viewport. */
+    .hm-sec { margin-top: clamp(2.2rem, 5vw, 3.2rem); }
+    .hm-deferred { content-visibility: auto; contain-intrinsic-size: auto 520px; }
+    .hm-head { display: flex; justify-content: space-between; align-items: flex-end; gap: .6rem 2rem; flex-wrap: wrap; margin-bottom: 1.1rem; }
+    .hm-head h2 { font-size: 1.35rem; font-weight: 700; letter-spacing: -.02em; }
+    .hm-head p { max-width: 52ch; color: var(--muted); font-size: .88rem; line-height: 1.6; }
+
+    /* Featured read */
+    .hm-feature { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+    .hm-feature-media { position: relative; display: grid; place-items: center; min-height: 320px; padding: clamp(1.4rem, 3vw, 2.4rem); background: #fff; border-right: 1px solid var(--line); }
+    .hm-feature-media img { display: block; width: 100%; max-width: 420px; max-height: 340px; object-fit: contain; filter: grayscale(1) contrast(1.05); }
+    html[data-theme="dark"] .hm-feature-media img { filter: grayscale(1) contrast(1.05) brightness(.92); }
+    .hm-img-sk, .hm-img-error { display: none; }
+    .hm-feature-media.is-loading .hm-img-sk { display: block; position: absolute; inset: clamp(1.4rem, 3vw, 2.4rem); background-color: #f0f0f0; }
+    .hm-feature-media.is-loading img { opacity: 0; }
+    .hm-feature-media.is-error img { display: none; }
+    .hm-feature-media.is-error .hm-img-error { display: grid; justify-items: center; gap: .6rem; color: #525252; font-size: .85rem; text-align: center; }
+    .hm-retry { padding: .35rem .8rem; border: 1px solid #171717; border-radius: 6px; background: transparent; color: #171717; font: inherit; font-size: .8rem; font-weight: 600; cursor: pointer; }
+    .hm-retry:hover { background: #171717; color: #fff; }
+    .hm-feature-body { display: grid; align-content: center; justify-items: start; gap: 1rem; padding: clamp(1.6rem, 4vw, 3rem); }
+    .hm-kicker { color: var(--muted); font-size: .72rem; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; }
+    .hm-feature-body h2 { font-size: clamp(1.6rem, 3vw, 2.2rem); font-weight: 700; letter-spacing: -.03em; line-height: 1.15; }
+    .hm-feature-body p:not(.hm-kicker) { max-width: 54ch; margin-bottom: .6rem; color: var(--muted); font-size: .95rem; line-height: 1.85; }
+
+    /* Where to go next: clean editorial rows */
+    .hm-go { overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+    .hm-go a { display: grid; grid-template-columns: 2.6rem minmax(0, 1.1fr) minmax(0, 1.5fr) auto; align-items: center; gap: 1.5rem; padding: 1.4rem 1.6rem; border-bottom: 1px solid var(--line); transition: background .15s ease; }
+    .hm-go a:last-child { border-bottom: 0; }
+    .hm-go a:hover, .hm-go a:focus-visible { background: var(--soft); }
+    .hm-num { color: var(--muted); font-size: .8rem; font-weight: 700; transition: color .15s ease; }
+    .hm-go a:hover .hm-num { color: var(--mark); }
+    .hm-go h3 { font-size: 1.05rem; font-weight: 650; letter-spacing: -.01em; line-height: 1.3; }
+    .hm-go p { color: var(--muted); font-size: .88rem; line-height: 1.65; }
+    .hm-arrow { display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 50%; font-size: .9rem; transition: background .15s ease, color .15s ease, border-color .15s ease; }
+    .hm-go a:hover .hm-arrow, .hm-go a:focus-visible .hm-arrow { border-color: var(--ink); background: var(--ink); color: var(--card); }
+
+    /* Official channels */
+    .hm-channels { padding: 1.2rem; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+    .hm-tabs { display: inline-flex; flex-wrap: wrap; gap: 3px; max-width: 100%; margin-bottom: 1.1rem; padding: 3px; border: 1px solid var(--line); border-radius: 8px; background: var(--soft); }
+    .hm-tab { display: inline-flex; align-items: center; gap: .45rem; padding: .45rem .8rem; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font: inherit; font-size: .8rem; font-weight: 600; cursor: pointer; transition: background .18s ease, color .18s ease, box-shadow .18s ease; }
+    .hm-tab svg, .hm-ico svg { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+    .hm-tab svg { width: 16px; height: 16px; }
+    .hm-tab:hover { color: var(--ink); background: var(--card); }
+    .hm-tab[aria-selected="true"] { background: var(--card); color: var(--ink); box-shadow: 0 0 0 1px var(--line); }
+
+    .hm-links { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: .6rem; }
+    .hm-links:not([hidden]) { display: grid; }
+    .hm-link { display: flex; align-items: center; gap: .8rem; min-width: 0; padding: .75rem .85rem; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--ink); transition: background .15s ease, color .15s ease, border-color .15s ease; }
+    .hm-link:hover, .hm-link:focus-visible { border-color: var(--ink); background: var(--ink); color: var(--card); }
+    .hm-ico { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 6px; font-size: .7rem; font-weight: 700; letter-spacing: .02em; transition: border-color .15s ease; }
+    .hm-ico svg { width: 18px; height: 18px; }
+    .hm-link:hover .hm-ico, .hm-link:focus-visible .hm-ico { border-color: currentColor; }
+    .hm-name { flex: 1; min-width: 0; font-size: .86rem; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+    .hm-out { flex: none; color: var(--muted); font-size: .8rem; transition: color .15s ease; }
+    .hm-link:hover .hm-out, .hm-link:focus-visible .hm-out { color: inherit; }
+
+    .hm-foot { margin-top: clamp(2.2rem, 5vw, 3.2rem); padding: 1.4rem 0 .4rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .8rem; text-align: center; }
+
+    .faith-page a:focus-visible, .faith-page button:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; }
+    @media (prefers-reduced-motion: reduce) { .faith-page *, .faith-page *::before { transition: none !important; animation: none !important; } }
+
+    @media (max-width: 860px) {
+        .hm-feature { grid-template-columns: 1fr; }
+        .hm-feature-media { min-height: 240px; border-right: 0; border-bottom: 1px solid var(--line); }
+        .hm-go a { grid-template-columns: 2rem minmax(0, 1fr) auto; gap: .35rem 1rem; padding: 1.2rem 1.1rem; }
+        .hm-go p { grid-column: 2; grid-row: 2; }
+        .hm-arrow { grid-column: 3; grid-row: 1 / span 2; }
+    }
+    @media (max-width: 560px) {
+        .hm-channels { padding: .9rem; }
+        .hm-tabs { display: flex; }
+        .hm-tab { flex: 1 1 auto; justify-content: center; }
+        .hm-links { grid-template-columns: 1fr; }
+        .hm-actions .hm-btn { flex: 1 1 100%; justify-content: center; }
+    }
+</style>
+@endpush
+
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const page = document.querySelector('.faith-page');
-    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     // [Tagalog (Ang Dating Biblia), English (King James Version), reference key]
     const VERSES = [
@@ -347,12 +367,12 @@ document.addEventListener('DOMContentLoaded', () => {
         ["Kayo'y magpakalakas at magpakatapang, huwag kayong matakot; hindi ka niya iiwan, ni pababayaan ka man.", 'Be strong and of a good courage, fear not, nor be afraid of them: for the LORD thy God, he it is that doth go with thee; he will not fail thee, nor forsake thee.', ['Deuteronomio 31:6', 'Deuteronomy 31:6']],
     ];
     const VERSIONS = { tl: 'Ang Dating Biblia', en: 'King James Version' };
+    const LANGS = ['tl', 'en'];
     const box = document.getElementById('verse');
     const quote = document.getElementById('verse-quote');
     const vText = document.getElementById('verse-text');
     const vRef = document.getElementById('verse-ref');
-    const langButtons = [...page.querySelectorAll('.lang-toggle button')];
-    const LANGS = ['tl', 'en'];
+    const langButtons = [...page.querySelectorAll('.hm-seg button')];
 
     let lang = 'tl';
     try { const saved = localStorage.getItem('faith-verse-lang'); if (LANGS.includes(saved)) lang = saved; } catch (e) {}
@@ -366,43 +386,63 @@ document.addEventListener('DOMContentLoaded', () => {
         box.classList.toggle('long', text.length > 110);
         langButtons.forEach(b => b.setAttribute('aria-pressed', b.dataset.lang === lang ? 'true' : 'false'));
     };
-    const other = from => {
-        let n;
-        do { n = Math.floor(Math.random() * VERSES.length); } while (n === from && VERSES.length > 1);
-        return n;
-    };
-    let current = -1;
-    try { current = Number(localStorage.getItem('faith-verse')); } catch (e) {}
-    current = other(current);
+
+    // A new verse is chosen only when the page loads (never the same one twice in a row).
+    let last = -1;
+    try { const stored = localStorage.getItem('faith-verse'); last = stored === null ? -1 : Number(stored); } catch (e) {}
+    let current;
+    do { current = Math.floor(Math.random() * VERSES.length); } while (current === last && VERSES.length > 1);
     try { localStorage.setItem('faith-verse', String(current)); } catch (e) {}
     paint(current);
+    box.dataset.ready = '';   // reveal the verse; the skeleton hides (prevents a flash of the default verse)
 
-    document.getElementById('verse-next').addEventListener('click', () => {
-        current = other(current);
-        try { localStorage.setItem('faith-verse', String(current)); } catch (e) {}
-        if (still) { paint(current); return; }
-        box.classList.add('out');
-        setTimeout(() => { paint(current); box.classList.remove('out'); }, 400);
-    });
-
-    // Same verse, switch language in place
+    // Same verse, switch language in place; announce the change to screen readers only after a user action
     langButtons.forEach(b => b.addEventListener('click', () => {
         if (b.dataset.lang === lang) return;
         lang = b.dataset.lang;
         try { localStorage.setItem('faith-verse-lang', lang); } catch (e) {}
+        quote.setAttribute('aria-live', 'polite');
         paint(current);
     }));
 
-    // Platform tabs
-    const tabs = [...page.querySelectorAll('.tab')];
-    const panels = [...page.querySelectorAll('.panel')];
-    tabs.forEach(t => t.addEventListener('click', () => {
-        tabs.forEach(x => {
-            x.classList.toggle('on', x === t);
-            x.setAttribute('aria-selected', x === t ? 'true' : 'false');
+    // Featured image: skeleton while loading, an error state with retry if it fails
+    const media = document.getElementById('feature-media');
+    const img = media.querySelector('img');
+    if (!img.complete) media.classList.add('is-loading');
+    else if (img.naturalWidth === 0) media.classList.add('is-error');
+    img.addEventListener('load', () => media.classList.remove('is-loading', 'is-error'));
+    img.addEventListener('error', () => { media.classList.remove('is-loading'); media.classList.add('is-error'); });
+    document.getElementById('img-retry').addEventListener('click', () => {
+        media.classList.remove('is-error');
+        media.classList.add('is-loading');
+        const url = new URL(img.src, window.location.href);
+        url.searchParams.set('retry', String(Date.now()));
+        img.src = url.toString();
+    });
+
+    // Platform tabs: arrow keys / Home / End, roving tabindex, remembers the last platform
+    const tabs = [...page.querySelectorAll('.hm-tab')];
+    const panels = [...page.querySelectorAll('.hm-links')];
+    const selectTab = (tab, focus) => {
+        tabs.forEach(x => { const on = x === tab; x.setAttribute('aria-selected', String(on)); x.tabIndex = on ? 0 : -1; });
+        panels.forEach(p => { p.hidden = p.id !== tab.dataset.panel; });
+        if (focus) tab.focus();
+        try { localStorage.setItem('faith-platform', tab.dataset.panel); } catch (e) {}
+    };
+    tabs.forEach((t, i) => {
+        t.addEventListener('click', () => selectTab(t, false));
+        t.addEventListener('keydown', e => {
+            const keys = { ArrowRight: (i + 1) % tabs.length, ArrowLeft: (i - 1 + tabs.length) % tabs.length, Home: 0, End: tabs.length - 1 };
+            if (!(e.key in keys)) return;
+            e.preventDefault();
+            selectTab(tabs[keys[e.key]], true);
         });
-        panels.forEach(p => p.classList.toggle('on', p.id === t.dataset.panel));
-    }));
+    });
+    try {
+        const savedPanel = localStorage.getItem('faith-platform');
+        const savedTab = tabs.find(t => t.dataset.panel === savedPanel);
+        if (savedTab) selectTab(savedTab, false);
+    } catch (e) {}
 });
 </script>
 @endpush
