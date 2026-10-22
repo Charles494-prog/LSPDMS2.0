@@ -142,7 +142,7 @@
                 color: var(--ink);
                 opacity: 0;
                 transform: translate3d(0, 10px, 0);
-                transition: opacity .6s ease, transform .6s ease;
+                transition: opacity .9s ease, transform .9s ease;
             }
             .welcome.show { opacity: 1; transform: translate3d(0, 0, 0); }
             .welcome.hide { opacity: 0; transform: translate3d(0, -10px, 0); }
@@ -151,7 +151,7 @@
                 display: flex;
                 justify-content: center;
                 gap: .5rem;
-                transition: opacity .45s ease;
+                transition: opacity .9s ease;
             }
             .letters.stacked {
                 display: grid;
@@ -179,7 +179,7 @@
                 font-weight: 800;
                 opacity: 0;
                 transform: translate3d(0, 16px, 0) scale(.9);
-                transition: opacity .4s ease, transform .4s var(--ease), border-color .3s ease;
+                transition: opacity .6s ease, transform .6s var(--ease), border-color .5s ease, box-shadow .5s ease;
             }
             .letter.show { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
 
@@ -193,7 +193,7 @@
                 letter-spacing: .08em;
                 text-transform: uppercase;
                 color: var(--ink);
-                transition: opacity .35s ease;
+                transition: opacity .5s ease;
             }
             .letters.stacked .word { display: block; }
 
@@ -201,6 +201,9 @@
             .letters.focusing .row:not(.focus) .letter { opacity: .3; }
             .letters.focusing .row:not(.focus) .word { opacity: .35; }
             .letters.focusing .row.focus .letter { border-color: var(--ink); }
+
+            /* Pull-out moment: the letters light up one after another, spelling L-S-P-D-M-S on the full screen. */
+            .row.flash .letter { border-color: var(--ink); box-shadow: 0 0 26px rgba(255, 255, 255, .16); }
 
             /* Typewriter: the remaining text keeps its space but stays invisible, so nothing jumps while typing. */
             .rest { visibility: hidden; }
@@ -216,19 +219,48 @@
             }
             @keyframes blink { 50% { opacity: 0; } }
 
-            .line {
-                margin: 0;
-                max-width: 100%;
-                font-size: clamp(1rem, 3.4vw, 1.9rem);
+            /* ---------- Horizontal sentence: the words fly out of the column and line up, then the initials spell LSPDMS ---------- */
+            .sentence {
+                position: absolute;
+                left: 50%;
+                top: 50%;
+                width: min(96vw, 1200px);
+                transform: translate(-50%, -50%);
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: .45em 1.1em;
+                font-size: clamp(.8rem, 2.3vw, 1.9rem);
                 font-weight: 700;
                 letter-spacing: .08em;
                 line-height: 1.4;
                 text-transform: uppercase;
                 color: var(--ink);
-                opacity: 0;
-                transition: opacity .35s ease;
+                visibility: hidden;
+                opacity: 1;
+                transition: opacity .9s ease;
+                pointer-events: none;
             }
-            .line.on { opacity: 1; }
+            .sentence.out { opacity: 0; }
+            /* The six initials close up into the single word LSPDMS. */
+            .sentence.merged {
+                flex-wrap: nowrap;
+                gap: 0;
+                font-size: clamp(2rem, 8vw, 4.6rem);
+                letter-spacing: .14em;
+            }
+            .sentence.merged .tail { display: none; }
+            .sentence.merged .init.lit { transform: none; text-shadow: 0 0 26px rgba(255, 255, 255, .5); }
+            .sentence .w { display: inline-block; white-space: nowrap; transition: color .6s ease; will-change: transform; }
+            .sentence .init { display: inline-block; transition: transform .6s var(--ease), color .6s ease, text-shadow .6s ease; }
+            .sentence .tail { display: inline-block; transition: opacity .9s ease; }
+            .sentence.dim .tail { opacity: 0; }
+            .sentence.spell .w { color: #6f6f6f; }
+            .sentence.spell .init.lit {
+                color: var(--ink);
+                transform: translateY(-4px) scale(1.2);
+                text-shadow: 0 0 20px rgba(255, 255, 255, .6);
+            }
 
             .tagline {
                 margin: 0;
@@ -239,7 +271,7 @@
                 text-transform: uppercase;
                 color: var(--ink);
                 opacity: 0;
-                transition: opacity .35s ease;
+                transition: opacity .8s ease;
                 pointer-events: none;
             }
             .tagline.on { opacity: 1; }
@@ -266,13 +298,13 @@
             .intro.reduced { grid-auto-flow: row; gap: 2rem; }
             .intro.reduced > * { grid-area: auto; }
             .intro.reduced .welcome,
-            .intro.reduced .line { display: none; }
+            .intro.reduced .sentence { display: none; }
             .intro.reduced .tagline { opacity: 1; }
 
             @media (prefers-reduced-motion: reduce) {
                 .grid, .beam, .shape, .typing .typed::after { animation: none; }
                 .shape { opacity: .9; }
-                .welcome, .letters, .letter, .word, .line, .tagline, .skip-intro { transition: none; }
+                .welcome, .letters, .letter, .word, .sentence, .sentence .w, .sentence .init, .tagline, .skip-intro { transition: none; }
             }
         </style>
     </head>
@@ -294,7 +326,7 @@
                     <div class="row"><span class="letter">M</span><span class="word" data-text="MANAGEMENT"></span></div>
                     <div class="row"><span class="letter">S</span><span class="word" data-text="SYSTEM"></span></div>
                 </div>
-                <p id="line" class="line"></p>
+                <div id="sentence" class="sentence" aria-hidden="true"></div>
                 <p id="tagline" class="tagline">Record Keeping made easier!</p>
             </main>
         </div>
@@ -309,7 +341,7 @@
                 const intro = document.getElementById('intro');
                 const welcome = document.getElementById('welcome');
                 const letters = document.getElementById('letters');
-                const line = document.getElementById('line');
+                const sentence = document.getElementById('sentence');
                 const tagline = document.getElementById('tagline');
                 const skip = document.getElementById('skipIntro');
                 const letterEls = [...letters.querySelectorAll('.letter')];
@@ -363,8 +395,24 @@
                 }
 
                 words.forEach(word => prep(word, word.dataset.text));
-                prep(line, words.map(word => word.dataset.text).join(' '));
                 prep(tagline, tagline.textContent.trim());
+
+                /* The horizontal sentence: one span per word, the first letter wrapped so it can light up later. */
+                const sentenceWords = words.map(word => {
+                    const text = word.dataset.text;
+                    const span = document.createElement('span');
+                    span.className = 'w';
+                    const initial = document.createElement('b');
+                    initial.className = 'init';
+                    initial.style.fontWeight = 'inherit';
+                    initial.textContent = text[0];
+                    const tail = document.createElement('span');
+                    tail.className = 'tail';
+                    tail.textContent = text.slice(1);
+                    span.append(initial, tail);
+                    sentence.appendChild(span);
+                    return span;
+                });
 
                 /* ---------- Sequence control: one run, one cleanup, one navigation ---------- */
                 const timers = [];
@@ -437,25 +485,25 @@
                     letterEls.forEach(el => el.classList.add('show'));
                     words.forEach(fill);
                     fill(tagline);
-                    sleep(3500).then(go);
+                    sleep(5000).then(go);
                     return;
                 }
 
-                /* ---------- Animated sequence ---------- */
+                /* ---------- Animated sequence (paced slowly so each moment can be read) ---------- */
                 async function run() {
                     // 1. Welcome
-                    await sleep(100);
+                    await sleep(300);
                     welcome.classList.add('show');
-                    await sleep(600);
+                    await sleep(1500);
                     welcome.classList.add('hide');
-                    await sleep(100);
+                    await sleep(600);
 
                     // 2. L S P D M S appear in a row
                     for (const el of letterEls) {
                         el.classList.add('show');
-                        await sleep(70);
+                        await sleep(140);
                     }
-                    await sleep(300);
+                    await sleep(700);
 
                     // 3. Row -> column (transform only)
                     const first = letterEls.map(el => el.getBoundingClientRect());
@@ -464,10 +512,10 @@
                         const last = el.getBoundingClientRect();
                         animations.push(el.animate(
                             [{ transform: `translate(${first[i].left - last.left}px, ${first[i].top - last.top}px)` }, { transform: 'translate(0, 0)' }],
-                            { duration: 600, easing: 'cubic-bezier(.22, .9, .32, 1)' }
+                            { duration: 900, easing: 'cubic-bezier(.22, .9, .32, 1)' }
                         ));
                     });
-                    await sleep(650);
+                    await sleep(1000);
 
                     // Measure once, with the camera at rest.
                     const vw = window.innerWidth;
@@ -483,39 +531,92 @@
                     const zoom = Math.max(1.2, Math.min(2.2, (vw * .82) / widest));
 
                     // 4. Camera frames the column L S P D M S
-                    lookAt(columnBox, fit(columnBox), 700);
-                    await sleep(900);
+                    lookAt(columnBox, fit(columnBox), 1000);
+                    await sleep(1500);
 
                     // 5. Camera closes in on each letter, then follows down the column while its word types
                     letters.classList.add('focusing');
                     for (let i = 0; i < rows.length; i++) {
                         rows.forEach((row, j) => row.classList.toggle('focus', j === i));
-                        lookAt(rowBoxes[i], zoom, i === 0 ? 650 : 420);
-                        await sleep(i === 0 ? 700 : 450);
+                        lookAt(rowBoxes[i], zoom, i === 0 ? 900 : 500);
+                        await sleep(i === 0 ? 950 : 550);
                         await type(words[i], 28);
-                        await sleep(100);
+                        await sleep(150);
                     }
 
-                    // 6. Camera pulls back to show the full list
+                    // 6. Hover out: the camera pulls back slowly so the whole list is on screen again,
+                    //    then the six letters light up one after another and the full list is held.
                     letters.classList.remove('focusing');
                     rows.forEach(row => row.classList.remove('focus'));
-                    lookAt(listBox, fit(listBox), 650);
-                    await sleep(1350);
+                    lookAt(listBox, fit(listBox), 1500);
+                    await sleep(1700);
+                    for (const row of rows) {
+                        row.classList.add('flash');
+                        await sleep(280);
+                    }
+                    await sleep(1800);
 
-                    // 7. List goes away, then types back on one line
+                    // 7. Retype horizontally: the camera settles, then every word peels off its row and flies
+                    //    into one line (the letter boxes dissolve behind them).
+                    setCamera(0, 0, 1, 1000);
+                    await sleep(1050);
+
+                    const from = words.map(word => word.getBoundingClientRect());
+                    const to = sentenceWords.map(span => span.getBoundingClientRect());
+                    sentenceWords.forEach((span, i) => {
+                        const dx = from[i].left + from[i].width / 2 - (to[i].left + to[i].width / 2);
+                        const dy = from[i].top + from[i].height / 2 - (to[i].top + to[i].height / 2);
+                        const scale = to[i].width ? from[i].width / to[i].width : 1;
+                        animations.push(span.animate(
+                            [{ transform: `translate(${dx}px, ${dy}px) scale(${scale})` }, { transform: 'translate(0, 0) scale(1)' }],
+                            { duration: 1400, delay: i * 120, easing: 'cubic-bezier(.22, .9, .32, 1)', fill: 'backwards' }
+                        ));
+                    });
+                    sentence.style.visibility = 'visible';
                     letters.classList.add('fade');
-                    await sleep(450);
-                    setCamera(0, 0, 1, 500);
-                    line.classList.add('on');
-                    await type(line, 22);
-                    await sleep(500);
-                    line.classList.remove('on');
-                    await sleep(350);
+                    await sleep(1400 + 120 * (sentenceWords.length - 1) + 300);
 
-                    // 8. Tagline
-                    tagline.classList.add('on');
-                    await type(tagline, 35);
+                    // 8. The initials light up one by one and spell L S P D M S inside the sentence
+                    sentence.classList.add('spell');
+                    for (const span of sentenceWords) {
+                        span.querySelector('.init').classList.add('lit');
+                        await sleep(300);
+                    }
                     await sleep(900);
+
+                    // 8b. The other letters dim out; only L S P D M S remain, then they close up into one word
+                    sentence.classList.add('dim');
+                    await sleep(1100);
+                    const initCenters = sentenceWords.map(span => {
+                        const r = span.querySelector('.init').getBoundingClientRect();
+                        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+                    });
+                    const sizeBefore = parseFloat(getComputedStyle(sentence).fontSize);
+                    sentence.classList.add('merged');
+                    const sizeAfter = parseFloat(getComputedStyle(sentence).fontSize);
+                    sentenceWords.forEach((span, i) => {
+                        const r = span.getBoundingClientRect();
+                        const dx = initCenters[i].x - (r.left + r.width / 2);
+                        const dy = initCenters[i].y - (r.top + r.height / 2);
+                        animations.push(span.animate(
+                            [{ transform: `translate(${dx}px, ${dy}px) scale(${sizeBefore / sizeAfter})` }, { transform: 'translate(0, 0) scale(1)' }],
+                            { duration: 1200, delay: i * 60, easing: 'cubic-bezier(.22, .9, .32, 1)', fill: 'backwards' }
+                        ));
+                    });
+                    await sleep(1200 + 60 * (sentenceWords.length - 1) + 200);
+                    await sleep(2200);
+
+                    // 9. Sentence fades out
+                    sentence.classList.add('out');
+                    await sleep(1100);
+
+                    // 10. Tagline: typed slowly, held, then the whole screen fades before the login page opens
+                    tagline.classList.add('on');
+                    await type(tagline, 75);
+                    await sleep(3000);
+                    world.style.transition = 'opacity 1100ms ease';
+                    world.style.opacity = '0';
+                    await sleep(1300);
 
                     go();
                 }

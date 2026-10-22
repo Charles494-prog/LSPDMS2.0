@@ -13,26 +13,28 @@
        Color is used ONLY for success / danger states.
        ===================================================================== */
     :root {
-        --sa-fg: var(--text, #000000);
-        --sa-on-fg: var(--bg, #ffffff);
-        --sa-accent: var(--sa-fg);                 /* primary = foreground (black on light, white on dark) */
+        /* Fallbacks only apply if the app layout does not define its own theme variables */
+        --sa-fb-fg: #0a0a0a; --sa-fb-bg: #fafafa; --sa-fb-surface: #ffffff; --sa-fb-border: #eaeaea; --sa-fb-muted: #666666;
+        --sa-fg: var(--text, var(--sa-fb-fg));
+        --sa-on-fg: var(--bg, var(--sa-fb-surface));
+        --sa-accent: var(--sa-fg);
         --sa-accent-hover: color-mix(in srgb, var(--sa-fg) 80%, var(--sa-on-fg));
         --sa-navy: var(--sa-fg);
-        --sa-ink-soft: var(--text-muted, #666666);
-        --sa-surface: var(--surface, #ffffff);
-        --sa-border: var(--border, #eaeaea);
-        --sa-bg: var(--bg, #fafafa);
+        --sa-ink-soft: var(--text-muted, var(--sa-fb-muted));
+        --sa-surface: var(--surface, var(--sa-fb-surface));
+        --sa-border: var(--border, var(--sa-fb-border));
+        --sa-bg: var(--bg, var(--sa-fb-bg));
         --sa-hover: color-mix(in srgb, var(--sa-fg) 5%, transparent);
-        --sa-danger: #e5484d;
+        --sa-danger: #d92d20;
         --sa-danger-bg: color-mix(in srgb, var(--sa-danger) 10%, var(--sa-surface));
-        --sa-success: #18a058;
+        --sa-success: #12803f;
         --sa-success-bg: color-mix(in srgb, var(--sa-success) 10%, var(--sa-surface));
-        /* Rounded corners: set --sa-radius to 0 for fully square UI */
-                --sa-radius: 6px;
-        --sa-radius-lg: 10px;                       /* cards, modals, panels */                  /* cards, modals, panels */
+        --sa-radius: 6px;
+        --sa-radius-lg: 0px;
         --sa-mono: ui-monospace, SFMono-Regular, 'Geist Mono', Consolas, monospace;
     }
     html[data-theme="dark"] {
+        --sa-fb-fg: #ededed; --sa-fb-bg: #000000; --sa-fb-surface: #0a0a0a; --sa-fb-border: #262626; --sa-fb-muted: #a1a1a1;
         --sa-danger: #ff6369;
         --sa-success: #3ecf8e;
     }
@@ -552,26 +554,209 @@
     .database-import-confirm-fields input:focus { outline: none; border-color: var(--sa-navy); box-shadow: 0 0 0 1px var(--sa-navy); background: var(--sa-surface); }
     .database-import-error { margin: .8rem 0 0; color: var(--sa-danger); font-size: .85rem; font-weight: 500; }
     @media (max-width: 620px) { .database-import-summary, .database-import-confirm-fields { grid-template-columns: 1fr; } }
-  /* ===== Global Variables groups ===== */
-    .gv-group { margin-bottom: 1.5rem; }
-    .gv-group-head { margin-bottom: 1.2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--sa-border); }
-    .gv-group-head h2 { margin: 0; font-size: 1.05rem; font-weight: 600; letter-spacing: -0.02em; color: var(--sa-navy); }
-    .gv-group-head p { margin: .25rem 0 0; font-size: .85rem; color: var(--sa-ink-soft); }
-    .gv-group-tag { display: inline-block; margin-left: .5rem; padding: .1rem .45rem; border: 1px solid var(--sa-border); border-radius: var(--sa-radius); font-family: var(--sa-mono); font-size: .7rem; font-weight: 500; color: var(--sa-ink-soft); vertical-align: middle; }
-    .gv-effect { margin-top: .9rem; padding: .7rem .9rem; border: 1px solid var(--sa-border); border-left: 2px solid var(--sa-navy); border-radius: var(--sa-radius); background: var(--sa-bg); color: var(--sa-ink-soft); font-size: .82rem; line-height: 1.5; }
-    .gv-effect strong { color: var(--sa-navy); font-weight: 600; }
-    .gv-grid .gv-span { grid-column: 1 / -1; }
-    .gv-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.1rem; border: 1px solid var(--sa-border); border-radius: var(--sa-radius); }
-    .gv-toggle-row .text label { display: block; font-weight: 600; font-size: .88rem; color: var(--sa-navy); }
-    .gv-toggle-row .text span { font-size: .78rem; color: var(--sa-ink-soft); }
-    .gv-conditional { margin-top: 1rem; }
+
+    /* =====================================================================
+       Layout shell: grouped sidebar navigation + content column
+       ===================================================================== */
+    .sa-shell { display: grid; grid-template-columns: 232px minmax(0, 1fr); gap: 2rem; align-items: start; }
+    .sa-content { min-width: 0; }
+    .sa-tabs {
+        flex-direction: column; gap: 2px; margin: 0; overflow: visible;
+        position: sticky; top: 1rem; padding: 0 1.25rem 0 0;
+        border-bottom: 0; border-right: 1px solid var(--sa-border);
+    }
+    .sa-nav-group { margin: 1rem 0 .3rem; padding: 0 .65rem; color: var(--sa-ink-soft); font-size: .72rem; font-weight: 500; letter-spacing: .02em; }
+    .sa-nav-group:first-child { margin-top: 0; }
+    .sa-tab-btn {
+        width: 100%; margin: 0; border: 0; border-radius: var(--sa-radius);
+        padding: .5rem .65rem; font-size: .85rem; font-weight: 500; text-align: left;
+    }
+    .sa-tab-btn:hover { background: var(--sa-hover); }
+    .sa-tab-btn.active { background: color-mix(in srgb, var(--sa-fg) 9%, transparent); color: var(--sa-navy); border: 0; }
+    .sa-tab-btn:focus-visible { outline: 2px solid var(--sa-navy); outline-offset: -2px; }
+    .sa-tab-btn svg { flex: none; }
+    .sa-panel-head { margin-bottom: 1.25rem; padding-bottom: 1rem; border-bottom: 1px solid var(--sa-border); }
+    .sa-panel-head h2 { margin: 0; font-size: 1.2rem; font-weight: 600; letter-spacing: -.02em; color: var(--sa-navy); }
+    .sa-panel-head p { margin: .3rem 0 0; font-size: .87rem; color: var(--sa-ink-soft); }
+    #tab-security > .sa-card > .sa-card-head,
+    #tab-signatories > .sa-card > .sa-card-head,
+    #tab-r402-hakbangs > .sa-card > .sa-card-head,
+    #tab-maintenance > .sa-card > .sa-card-head { display: none; }
+    #tab-maintenance.sa-tab-panel.active { display: block; min-height: 0; }
+    #tab-maintenance > .sa-card { width: 100%; margin: 0 0 1.5rem; }
+    @media (max-width: 900px) {
+        .sa-shell { grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
+        .sa-tabs { position: static; flex-direction: row; overflow-x: auto; padding: 0 0 .5rem; border-right: 0; border-bottom: 1px solid var(--sa-border); }
+        .sa-nav-group { display: none; }
+        .sa-tab-btn { width: auto; flex: none; }
+    }
+
+    /* ===== Controls: custom select arrow, loading, inline errors ===== */
+    .sa-select, select.signatory-input, .gv-field select {
+        appearance: none; -webkit-appearance: none; padding-right: 2rem;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4.5l3 3 3-3'/%3E%3C/svg%3E");
+        background-repeat: no-repeat; background-position: right .65rem center;
+    }
+    .sa-btn.is-loading { cursor: progress; }
+    .sa-btn.is-loading:disabled { opacity: .8; }
+    .sa-btn.is-loading::before {
+        content: ""; width: 12px; height: 12px; flex: none; border: 2px solid currentColor;
+        border-right-color: transparent; border-radius: 50%; animation: sa-spin .7s linear infinite;
+    }
+    @keyframes sa-spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) {
+        .sa-btn.is-loading::before { animation-duration: 2s; }
+        .sa-toast, .sa-toast.sa-toast-leaving { animation: none; }
+    }
+    .sa-inline-error {
+        margin: 1rem 0 0; padding: .65rem .85rem; border: 1px solid var(--sa-danger);
+        border-radius: var(--sa-radius); background: var(--sa-danger-bg); color: var(--sa-danger); font-size: .85rem;
+    }
+    .sa-inline-error[hidden] { display: none; }
+    .sa-table-meta { display: block; margin: 0 0 .6rem; color: var(--sa-ink-soft); font-size: .78rem; }
+    .sa-empty { border: 1px dashed var(--sa-border); margin-top: .75rem; }
+    table.sa-table td.sa-empty { border: 0; }
+    .sa-audit-pagination { display: flex; justify-content: flex-end; margin-top: 1rem; font-size: .82rem; color: var(--sa-ink-soft); }
+    .sa-audit-pagination svg { width: 16px; height: 16px; }
+    .sa-audit-pagination a { color: var(--sa-navy); }
+    .sa-confirm { max-width: 460px; }
+    #confirmDialog { align-items: center; }
+
+    /* ===== Settings groups, R4-01 effect, eligibility ===== */
+    .sa-card-head h2 + p { max-width: 70ch; }
+    .sa-effects { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; margin-top: .9rem; }
+    .sa-effect { padding: .75rem .9rem; border: 1px solid var(--sa-border); border-radius: var(--sa-radius); color: var(--sa-ink-soft); font-size: .8rem; line-height: 1.5; transition: border-color .12s ease, color .12s ease; }
+    .sa-effect strong { display: block; margin-bottom: .15rem; color: var(--sa-navy); font-size: .8rem; font-weight: 600; }
+    .sa-effect.is-active { border-color: var(--sa-navy); color: var(--sa-navy); }
+    .sa-effect.is-active strong::after { content: " · active"; color: var(--sa-ink-soft); font-weight: 400; }
+    @media (max-width: 640px) { .sa-effects { grid-template-columns: 1fr; } }
+    .sa-subfield { margin: 0; padding: 1rem 1.1rem; border-top: 1px solid var(--sa-border); }
+    .sa-subfield .gv-field { max-width: 280px; }
+    .sa-list-card { padding: 0; }
+    .sa-list-card > .sa-card-head { margin: 0; padding: 1.1rem 1.4rem; }
+    .sa-list-card .settings-list { border: 0; border-radius: 0; }
+
+    /* ===== R4-02 Hakbang cards ===== */
+    .hakbang-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; }
+    .hakbang-card { display: flex; flex-direction: column; gap: .85rem; padding: 1rem; border: 1px solid var(--sa-border); border-radius: var(--sa-radius-lg); background: var(--sa-surface); }
+    .hakbang-card[hidden] { display: none; }
+    .hakbang-card:focus-within { border-color: var(--sa-navy); }
+    .hakbang-card-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding-bottom: .75rem; border-bottom: 1px solid var(--sa-border); }
+    .hakbang-badge { padding: .15rem .5rem; border: 1px solid var(--sa-border); border-radius: var(--sa-radius); color: var(--sa-ink-soft); font-family: var(--sa-mono); font-size: .72rem; }
+    .hakbang-label { display: block; margin-bottom: .3rem; color: var(--sa-ink-soft); font-size: .76rem; font-weight: 500; }
+    .hakbang-code-input { font-family: var(--sa-mono); }
+
+    /* ===== Add Filter popover (Secretary activity) ===== */
+    .sa-filterbar { margin-bottom: 1.1rem; }
+    .sa-filter-row { display: flex; align-items: center; flex-wrap: wrap; gap: .6rem; }
+    .sa-filter-menu { position: relative; }
+    .sa-filter-pop {
+        position: absolute; z-index: 50; top: calc(100% + .4rem); left: 0; width: min(340px, calc(100vw - 2rem));
+        border: 1px solid var(--sa-border); border-radius: 10px; background: var(--sa-surface);
+        box-shadow: 0 12px 32px rgba(0, 0, 0, .35); overflow: hidden;
+    }
+    .sa-filter-pop[hidden] { display: none; }
+    .sa-filter-search {
+        display: block; box-sizing: border-box; width: 100%; padding: .85rem 1rem; border: 0;
+        border-bottom: 1px solid var(--sa-border); background: transparent; color: var(--sa-navy); font: inherit; font-size: .92rem;
+    }
+    .sa-filter-search:focus { outline: none; }
+    .sa-filter-list { list-style: none; margin: 0; padding: .35rem; }
+    .sa-filter-item {
+        display: flex; width: 100%; align-items: center; justify-content: space-between; gap: .75rem;
+        padding: .6rem .65rem; border: 0; border-radius: var(--sa-radius); background: transparent;
+        color: var(--sa-navy); font: inherit; font-size: .9rem; text-align: left; cursor: pointer;
+    }
+    .sa-filter-item:hover, .sa-filter-item:focus-visible { background: var(--sa-hover); outline: none; }
+    .sa-filter-item-value { display: inline-flex; align-items: center; gap: .35rem; max-width: 55%; color: var(--sa-ink-soft); font-size: .82rem; }
+    .sa-filter-item-value span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sa-filter-empty { padding: .85rem 1rem; color: var(--sa-ink-soft); font-size: .85rem; }
+    .sa-filter-editor-head { display: flex; align-items: center; gap: .5rem; padding: .6rem .75rem; border-bottom: 1px solid var(--sa-border); font-size: .9rem; font-weight: 500; }
+    .sa-filter-back { display: grid; place-items: center; width: 26px; height: 26px; border: 0; border-radius: var(--sa-radius); background: transparent; color: var(--sa-ink-soft); cursor: pointer; }
+    .sa-filter-back:hover { background: var(--sa-hover); color: var(--sa-navy); }
+    .sa-filter-editor-body { display: grid; gap: .75rem; padding: .9rem 1rem; }
+    .sa-filter-editor-body label { display: block; margin-bottom: .3rem; color: var(--sa-ink-soft); font-size: .78rem; font-weight: 500; }
+    .sa-filter-editor-body input {
+        box-sizing: border-box; width: 100%; padding: .5rem .7rem; border: 1px solid var(--sa-border);
+        border-radius: var(--sa-radius); background: var(--sa-bg); color: var(--sa-navy); font: inherit; font-size: .88rem;
+    }
+    .sa-filter-editor-body input:focus { outline: none; border-color: var(--sa-navy); box-shadow: 0 0 0 1px var(--sa-navy); }
+    .sa-filter-editor-actions { display: flex; justify-content: flex-end; gap: .5rem; padding: 0 1rem 1rem; }
+    .sa-filter-chips { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+    .sa-chip { display: inline-flex; align-items: stretch; border: 1px solid var(--sa-border); border-radius: 999px; background: var(--sa-surface); font-size: .82rem; overflow: hidden; }
+    .sa-chip button { border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+    .sa-chip-label { padding: .4rem .5rem .4rem .8rem; color: var(--sa-ink-soft); }
+    .sa-chip-label strong { margin-left: .25rem; color: var(--sa-navy); font-weight: 500; }
+    .sa-chip-label:hover strong { text-decoration: underline; text-underline-offset: 2px; }
+    .sa-chip-remove { display: grid; place-items: center; padding: 0 .6rem 0 .3rem; color: var(--sa-ink-soft); font-size: 1rem; line-height: 1; }
+    .sa-chip-remove:hover { color: var(--sa-danger); }
+    .sa-chip button:focus-visible { outline: 2px solid var(--sa-navy); outline-offset: -2px; }
+    .sa-chip-clear { border: 0; background: transparent; color: var(--sa-ink-soft); font: inherit; font-size: .82rem; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+    .sa-chip-clear:hover { color: var(--sa-navy); }
+
+    /* ===== SQL dropzone: selected-file indicator ===== */
+    .sql-dropzone.has-file { border-style: solid; border-color: var(--sa-navy); background: var(--sa-hover); }
+    .sql-dropzone.has-file .sql-dropzone-icon { background: var(--sa-accent); border-color: var(--sa-accent); color: var(--sa-on-fg); }
+    .sql-file-selected {
+        display: flex; align-items: center; gap: 1rem; margin-top: .9rem; padding: 1rem 1.1rem;
+        border: 1px solid var(--sa-navy); border-radius: var(--sa-radius); background: var(--sa-surface);
+    }
+    .sql-file-selected[hidden] { display: none; }
+    .sql-file-check { display: grid; place-items: center; width: 44px; height: 44px; flex: none; border-radius: 50%; background: var(--sa-accent); color: var(--sa-on-fg); }
+    .sql-file-check svg { width: 22px; height: 22px; }
+    .sql-file-meta { min-width: 0; flex: 1; }
+    .sql-file-meta small { display: block; margin-bottom: .15rem; color: var(--sa-ink-soft); font-size: .75rem; font-weight: 500; }
+    .sql-file-meta strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--sa-navy); font-size: 1.05rem; font-weight: 600; }
+    .sql-file-meta span { color: var(--sa-ink-soft); font-size: .85rem; }
+
+    /* ===== Import review modal (redesign) ===== */
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    .sa-link-btn { padding: 0; border: 0; background: none; color: var(--sa-navy); font: inherit; font-weight: 500; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+    .sa-link-btn:hover { color: var(--sa-ink-soft); }
+    .database-import-modal { max-width: 720px; }
+    .dim-title { display: flex; align-items: flex-start; gap: .85rem; }
+    .dim-icon { display: grid; place-items: center; width: 40px; height: 40px; flex: none; border: 1px solid var(--sa-border); border-radius: var(--sa-radius); color: var(--sa-navy); }
+    .dim-icon svg { width: 20px; height: 20px; }
+    .dim-notice { display: flex; flex-wrap: wrap; gap: .25rem .6rem; margin: 0 0 .9rem; padding: .8rem 1rem; border: 1px solid var(--sa-border); border-left: 3px solid var(--sa-danger); border-radius: var(--sa-radius); background: var(--sa-bg); color: var(--sa-navy); font-size: .88rem; }
+    .dim-notice span { color: var(--sa-ink-soft); }
+    .dim-backup { display: flex; align-items: flex-start; gap: .75rem; margin: 0 0 1.1rem; padding: .8rem 1rem; border: 1px solid var(--sa-border); border-radius: var(--sa-radius); font-size: .85rem; color: var(--sa-ink-soft); line-height: 1.5; }
+    .dim-backup p { margin: 0; }
+    .dim-backup strong { color: var(--sa-navy); font-weight: 600; }
+    .dim-backup-icon { display: grid; place-items: center; flex: none; color: var(--sa-navy); }
+    .dim-backup-icon svg { width: 18px; height: 18px; margin-top: 2px; }
+    .database-import-summary { margin: 0 0 1.1rem; }
+    .database-import-summary section { display: flex; flex-direction: column; padding: .9rem 1rem; background: var(--sa-surface); }
+    .database-import-summary h3 { display: flex; align-items: center; justify-content: space-between; margin: 0 0 .65rem; padding-bottom: .6rem; border-bottom: 1px solid var(--sa-border); font-size: .85rem; font-weight: 600; }
+    .dim-count { min-width: 1.6rem; padding: .1rem .5rem; border-radius: 999px; background: var(--sa-accent); color: var(--sa-on-fg); font-size: .75rem; font-weight: 600; text-align: center; }
+    .database-import-summary section:last-child .dim-count { background: transparent; border: 1px solid var(--sa-border); color: var(--sa-ink-soft); }
+    .database-import-summary ul { display: flex; flex-wrap: wrap; align-content: flex-start; gap: .35rem; max-height: 150px; margin: 0; padding: 0 .25rem 0 0; list-style: none; overflow: auto; }
+    .database-import-summary li { padding: .15rem .5rem; border: 1px solid var(--sa-border); border-radius: var(--sa-radius); color: var(--sa-navy); font-family: var(--sa-mono); font-size: .74rem; }
+    .dim-confirm { padding-top: 1rem; border-top: 1px solid var(--sa-border); }
+    .dim-confirm h3 { margin: 0 0 .75rem; font-size: .85rem; font-weight: 600; color: var(--sa-navy); }
+    .database-import-confirm-fields { grid-template-columns: 1fr; margin-top: 0; }
+    .dim-phrase { padding: .1rem .4rem; border: 1px solid var(--sa-border); border-radius: var(--sa-radius); background: var(--sa-bg); font-family: var(--sa-mono); font-size: .78rem; font-weight: 600; user-select: all; }
+    .dim-match { min-height: 1rem; color: var(--sa-success); font-size: .75rem; font-weight: 500; }
+
+    /* ===== Import result banner + backups list ===== */
+    .sa-result { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.25rem; padding: 1rem 1.1rem; border: 1px solid var(--sa-navy); border-radius: var(--sa-radius); background: var(--sa-surface); }
+    .sa-result[hidden] { display: none; }
+    .sa-result-check { display: grid; place-items: center; width: 36px; height: 36px; flex: none; border-radius: 50%; background: var(--sa-accent); color: var(--sa-on-fg); }
+    .sa-result-check svg { width: 18px; height: 18px; }
+    .sa-result-body { flex: 1; min-width: 0; display: grid; gap: .15rem; font-size: .85rem; color: var(--sa-ink-soft); }
+    .sa-result-body strong { color: var(--sa-navy); font-size: .92rem; font-weight: 600; }
+    .sa-result-body code { font-family: var(--sa-mono); color: var(--sa-navy); overflow-wrap: anywhere; }
+    .sa-badge { margin-left: .5rem; padding: .1rem .45rem; border: 1px solid var(--sa-border); border-radius: var(--sa-radius); color: var(--sa-ink-soft); font-size: .68rem; font-weight: 500; }
+    .sa-mono { font-family: var(--sa-mono); font-size: .82rem; overflow-wrap: anywhere; }
+    .sa-skeleton { display: block; height: .8rem; border-radius: 4px; background: linear-gradient(90deg, var(--sa-border), color-mix(in srgb, var(--sa-border) 40%, transparent), var(--sa-border)); background-size: 200% 100%; animation: sa-shimmer 1.2s linear infinite; }
+    @keyframes sa-shimmer { to { background-position: -200% 0; } }
+    @media (prefers-reduced-motion: reduce) { .sa-skeleton { animation: none; } }
 </style>
 
 <div class="sa-page">
 
     <div class="sa-header">
         <h1>Superadmin Dashboard</h1>
-        <p>Manage user access, congregation signatories, and system-wide settings.</p>
+        <p>Manage secretary access, document settings, and system configuration.</p>
     </div>
 
     @unless ($smtpConfigured)
@@ -593,32 +778,29 @@
         </aside>
     @endunless
 
-    <div class="sa-tabs">
-        <button type="button" class="sa-tab-btn active" data-tab="users">
-            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="6.5" r="3"/><path d="M1.5 17c.8-3 3-5 5.5-5s4.7 2 5.5 5"/><circle cx="15" cy="7" r="2.3"/><path d="M13 11.3c2 .2 3.6 1.9 4.2 4.2"/></svg>
-            Secretaries Management
-        </button>
-        <button type="button" class="sa-tab-btn" data-tab="signatories">
-            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 3h9l3 3v11H4z"/><path d="M13 3v3h3"/><path d="M7 10h6M7 13h6"/></svg>
-            Signatories
-        </button>
-        <button type="button" class="sa-tab-btn" data-tab="security">
-            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2l7 3v5c0 4.5-3 7.5-7 8-4-.5-7-3.5-7-8V5l7-3z"/><path d="M7.2 10l1.9 1.9L13 8"/></svg>
-            Security Settings
-        </button>
-        <button type="button" class="sa-tab-btn" data-tab="globals">
-            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.3"/><path d="M2.7 10h14.6M10 2.7c2 2.2 3 5 3 7.3s-1 5.1-3 7.3c-2-2.2-3-5-3-7.3s1-5.1 3-7.3z"/></svg>
-            Global Variables
-        </button>
-        <button type="button" class="sa-tab-btn" data-tab="r402-hakbangs">Mga R4-02 Hakbang</button>
-        <button type="button" class="sa-tab-btn" data-tab="maintenance">BNH FORM RESET</button>
-        <button type="button" class="sa-tab-btn" data-tab="record-audit">Secretary Activity Portal</button>
-        <button type="button" class="sa-tab-btn" data-tab="smtp-settings">SMTP Settings</button>
-        <button type="button" class="sa-tab-btn" data-tab="database">Database Configuration</button>
-    </div>
+    <div class="sa-shell">
+    <nav class="sa-tabs" aria-label="Superadmin sections">
+        <div class="sa-nav-group">Access</div>
+        <button type="button" class="sa-tab-btn active" data-tab="users"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7" cy="6.5" r="3"/><path d="M1.5 17c.8-3 3-5 5.5-5s4.7 2 5.5 5"/><circle cx="15" cy="7" r="2.3"/><path d="M13 11.3c2 .2 3.6 1.9 4.2 4.2"/></svg> Secretaries management</button>
+        <button type="button" class="sa-tab-btn" data-tab="record-audit"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.3"/><path d="M10 6v4l2.5 1.5"/></svg> Secretary activity</button>
+        <div class="sa-nav-group">Documents</div>
+        <button type="button" class="sa-tab-btn" data-tab="globals"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h9M15 6h2M3 14h2M8 14h9"/><circle cx="13.5" cy="6" r="1.8"/><circle cx="6.5" cy="14" r="1.8"/></svg> Document settings</button>
+        <button type="button" class="sa-tab-btn" data-tab="signatories"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3.5l3 3L7 16H4v-3z"/><path d="M12 5l3 3"/></svg> Purok signatories</button>
+        <button type="button" class="sa-tab-btn" data-tab="r402-hakbangs"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 5h10M7 10h10M7 15h10M3 5h.01M3 10h.01M3 15h.01"/></svg> R4-02 Hakbang</button>
+        <div class="sa-nav-group">Eligibility</div>
+        <button type="button" class="sa-tab-btn" data-tab="eligibility"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="6.5" r="3"/><path d="M2 17c.8-3 3-5 6-5s4 1 5 3"/><path d="M13 12l2 2 3-3.5"/></svg> R2-10 eligibility</button>
+        <div class="sa-nav-group">System</div>
+        <button type="button" class="sa-tab-btn" data-tab="security"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2l7 3v5c0 4.5-3 7.5-7 8-4-.5-7-3.5-7-8V5l7-3z"/><path d="M7.2 10l1.9 1.9L13 8"/></svg> Security</button>
+        <button type="button" class="sa-tab-btn" data-tab="smtp-settings"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="14" height="10" rx="1"/><path d="M3 6l7 5 7-5"/></svg> Email delivery</button>
+        <button type="button" class="sa-tab-btn" data-tab="database"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="10" cy="5" rx="6" ry="2.5"/><path d="M4 5v10c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5V5M4 10c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5"/></svg> Database configuration</button>
+        <button type="button" class="sa-tab-btn" data-tab="backups"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="14" height="4"/><path d="M4 8v8h12V8M8 12h4"/></svg> Database backups</button>
+        <button type="button" class="sa-tab-btn" data-tab="maintenance"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 10a6 6 0 1 1-2-4.5M16 3v3.5h-3.5"/></svg> BNH form reset</button>
+    </nav>
+    <div class="sa-content">
 
-    <!-- ============ USER MANAGEMENT ============ -->
+    <!-- ============ SECRETARIES MANAGEMENT ============ -->
     <div class="sa-tab-panel active" id="tab-users">
+        <header class="sa-panel-head"><h2>Secretaries management</h2><p>Assign Tungkulin, control access, and transfer the Head Secretary role.</p></header>
         <div class="sa-page-actions">
             <button type="button" class="sa-btn sa-btn-ghost" id="editPermissionsBtn">
                 <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2l7 3v5c0 4.5-3 7.5-7 8-4-.5-7-3.5-7-8V5l7-3z"/><path d="M7.2 10l1.9 1.9L13 8"/></svg>
@@ -658,17 +840,25 @@
                     <h2>Secretaries</h2>
                     <p>Assign roles and grant or revoke system access.</p>
                 </div>
-                <input type="text" class="sa-search" id="userSearch" placeholder="Search by name or email...">
+                <div class="sa-card-head-actions">
+                    <select id="userStatusFilter" class="sa-select" aria-label="Filter by status">
+                        <option value="">All statuses</option>
+                        <option value="1">Verified</option>
+                        <option value="0">Not verified</option>
+                    </select>
+                    <input type="search" class="sa-search" id="userSearch" aria-label="Search secretaries" placeholder="Search by name or email...">
+                </div>
             </div>
 
+            <span class="sa-table-meta" id="usersCount" aria-live="polite"></span>
             <div class="sa-table-wrap">
                 <table class="sa-table" id="usersTable">
                     <thead>
                         <tr>
-                            <th>User</th>
-                            <th>Tungkulin</th>
-                            <th>Access</th>
-                            <th>Status</th>
+                            <th scope="col">Secretary</th>
+                            <th scope="col">Tungkulin</th>
+                            <th scope="col">Access</th>
+                            <th scope="col">Status</th>
                         </tr>
                     </thead>
                     <tbody id="usersTableBody">
@@ -680,7 +870,7 @@
                                     $roleOptions[] = $user->tungkulin;
                                 }
                             @endphp
-                            <tr data-user-id="{{ $user->id }}" data-name="{{ strtolower($userName) }}" data-email="{{ strtolower($user->gmail) }}">
+                            <tr data-user-id="{{ $user->id }}" data-name="{{ strtolower($userName) }}" data-email="{{ strtolower($user->gmail) }}" data-verified="{{ $user->is_verified ? 1 : 0 }}">
                                 <td>
                                     <div class="sa-user-cell">
                                         <span class="sa-user-avatar" aria-hidden="true">{{ strtoupper(substr($userName, 0, 1)) }}</span>
@@ -714,11 +904,11 @@
                                 </td>
                             </tr>
                         @empty
-                            <tr><td colspan="4" class="sa-empty">No registered users found.</td></tr>
+                            <tr><td colspan="4" class="sa-empty">No secretaries found.</td></tr>
                         @endforelse
                     </tbody>
                 </table>
-                <div class="sa-empty" id="usersEmptyState" style="display:none;">No users match your search.</div>
+                <div class="sa-empty" id="usersEmptyState" style="display:none;">No secretaries match your filters.</div>
             </div>
         </div>
     </div>
@@ -727,34 +917,34 @@
         <div class="sa-card">
             <div class="sa-card-head">
                 <div>
-                    <h2>Record Activity Log</h2>
+                    <h2>Secretary activity</h2>
                     <p>Record changes with the acting account, date and changed values. Newest actions appear first.</p>
                 </div>
                 <a class="sa-btn sa-btn-primary" href="{{ route('superadmin.record-activity.download', array_filter($auditFilters, fn ($value) => $value !== null && $value !== '')) }}">
                     Download Word
                 </a>
             </div>
-            <form method="GET" action="{{ route('superadmin-dashboard') }}#record-audit" class="sa-audit-filters" id="recordAuditFilters">
+            <form method="GET" action="{{ route('superadmin-dashboard') }}#record-audit" class="sa-filterbar" id="recordAuditFilters">
                 <input type="hidden" name="tab" value="record-audit">
-                <label class="gv-field">
-                    <span>From date</span>
-                    <input type="date" name="date_from" value="{{ $auditFilters['date_from'] ?? '' }}">
-                </label>
-                <label class="gv-field">
-                    <span>To date</span>
-                    <input type="date" name="date_to" value="{{ $auditFilters['date_to'] ?? '' }}">
-                </label>
-                <label class="gv-field">
-                    <span>Record name</span>
-                    <input type="search" name="record_name" value="{{ $auditFilters['record_name'] ?? '' }}" maxlength="150" placeholder="Search member name">
-                </label>
-                <label class="gv-field">
-                    <span>Secretary email</span>
-                    <input type="search" name="actor_email" value="{{ $auditFilters['actor_email'] ?? '' }}" maxlength="255" placeholder="Search account email">
-                </label>
-                <div class="sa-card-head-actions">
-                    <button type="submit" class="sa-btn sa-btn-primary">Apply filters</button>
-                    <a class="sa-btn sa-btn-ghost" href="{{ route('superadmin-dashboard') }}#record-audit">Clear</a>
+                <input type="hidden" name="date_from" value="{{ $auditFilters['date_from'] ?? '' }}">
+                <input type="hidden" name="date_to" value="{{ $auditFilters['date_to'] ?? '' }}">
+                <input type="hidden" name="record_name" value="{{ $auditFilters['record_name'] ?? '' }}">
+                <input type="hidden" name="actor_email" value="{{ $auditFilters['actor_email'] ?? '' }}">
+                <div class="sa-filter-row">
+                    <div class="sa-filter-menu">
+                        <button type="button" class="sa-btn sa-btn-ghost" id="addFilterBtn" aria-haspopup="true" aria-expanded="false" aria-controls="filterPopover">
+                            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M3 5h14M6 10h8M8.5 15h3"/></svg>
+                            Add Filter
+                        </button>
+                        <div class="sa-filter-pop" id="filterPopover" role="dialog" aria-label="Add filter" hidden>
+                            <div id="filterListView">
+                                <input type="search" id="filterSearch" class="sa-filter-search" placeholder="Filter by…" aria-label="Filter by" autocomplete="off">
+                                <ul class="sa-filter-list" id="filterList"></ul>
+                            </div>
+                            <div id="filterEditor" hidden></div>
+                        </div>
+                    </div>
+                    <div class="sa-filter-chips" id="filterChips" aria-live="polite"></div>
                 </div>
                 @if ($errors->any())
                     <p class="sa-audit-filter-error" role="alert">{{ $errors->first() }}</p>
@@ -849,6 +1039,16 @@
     </div>
 
     <div class="sa-tab-panel" id="tab-database">
+        <header class="sa-panel-head"><h2>Database configuration</h2><p>Export, import, and back up LSPDMS data.</p></header>
+        <div class="sa-result" id="databaseImportResult" role="status" hidden>
+            <span class="sa-result-check" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+            <div class="sa-result-body">
+                <strong id="databaseImportResultMessage">Database import complete.</strong>
+                <span>Safety backup saved as <code id="databaseImportResultFile"></code></span>
+            </div>
+            <button type="button" class="sa-btn sa-btn-ghost sa-btn-sm" data-open-backups>View backups</button>
+            <button type="button" class="sa-modal-close" id="dismissImportResult" aria-label="Dismiss">&times;</button>
+        </div>
         <div class="sa-card">
             <div class="sa-card-head">
                 <div>
@@ -893,8 +1093,17 @@
                     <input class="sql-file-input" id="databaseSqlFile" name="sql_file" type="file" accept=".sql,application/sql" required>
                     <span class="sql-file-status" id="databaseSqlFileStatus" aria-live="polite">No file selected.</span>
                 </label>
+                <div class="sql-file-selected" id="databaseSqlSelected" role="status" hidden>
+                    <span class="sql-file-check" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+                    <div class="sql-file-meta">
+                        <small>File selected</small>
+                        <strong id="databaseSqlSelectedName"></strong>
+                        <span id="databaseSqlSelectedSize"></span>
+                    </div>
+                    <button type="button" class="sa-btn sa-btn-ghost sa-btn-sm" id="databaseSqlClear">Remove</button>
+                </div>
                 <p class="sql-file-error" id="databaseSqlFileError" role="alert" hidden></p>
-                <p class="gv-hint">Before applying an import, LSPDMS creates a private safety backup. Data in tables included in the file is replaced. Tables omitted from the file are retained.</p>
+                <p class="gv-hint">Before applying an import, LSPDMS creates a private safety backup. Data in tables included in the file is replaced. Tables omitted from the file are retained. <button type="button" class="sa-link-btn" data-open-backups>View backups</button></p>
                 <div class="sa-save-bar">
                     <button type="submit" class="sa-btn sa-btn-danger" id="importDatabaseBtn" disabled>Review and Import SQL</button>
                 </div>
@@ -925,8 +1134,38 @@
         </div>
     </div>
 
+    <!-- ============ DATABASE BACKUPS ============ -->
+    <div class="sa-tab-panel" id="tab-backups">
+        <header class="sa-panel-head"><h2>Database backups</h2><p>Safety copies saved automatically before each database import.</p></header>
+        <div class="sa-card">
+            <div class="sa-card-head">
+                <div>
+                    <h2>Saved backups</h2>
+                    <p>Stored privately on the server and not publicly accessible. Download a copy to keep it somewhere safe.</p>
+                </div>
+                <button type="button" class="sa-btn sa-btn-ghost" id="refreshBackupsBtn">Refresh</button>
+            </div>
+            <span class="sa-table-meta" id="backupsCount" aria-live="polite"></span>
+            <div class="sa-table-wrap">
+                <table class="sa-table" id="backupsTable">
+                    <thead>
+                        <tr>
+                            <th scope="col">File</th>
+                            <th scope="col">Created</th>
+                            <th scope="col">Size</th>
+                            <th scope="col"><span class="sr-only">Actions</span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="backupsBody"></tbody>
+                </table>
+                <div class="sa-empty" id="backupsState" role="status" hidden></div>
+            </div>
+        </div>
+    </div>
+
     <!-- ============ SIGNATORIES ============ -->
     <div class="sa-tab-panel" id="tab-signatories">
+        <header class="sa-panel-head"><h2>Purok signatories</h2><p>Assign each Purok header number, Secretary, Manggagawa, and Sakop na Grupo range.</p></header>
         <div class="sa-card">
             <div class="sa-card-head">
                 <div>
@@ -1021,6 +1260,7 @@
 
     <!-- ============ SECURITY SETTINGS ============ -->
     <div class="sa-tab-panel" id="tab-security">
+        <header class="sa-panel-head"><h2>Security</h2><p>Sign-in and password recovery behavior.</p></header>
         <div class="sa-card">
             <div class="sa-card-head">
                 <div>
@@ -1066,16 +1306,16 @@
         </div>
     </div>
 
-    <!-- ============ GLOBAL VARIABLES ============ -->
+    <!-- ============ DOCUMENT SETTINGS (global variables) ============ -->
     <div class="sa-tab-panel" id="tab-globals">
+        <header class="sa-panel-head"><h2>Document settings</h2><p>Values used on generated forms and documents.</p></header>
         <div class="sa-card">
             <div class="sa-card-head">
                 <div>
-                    <h2>Global Variables</h2>
-                    <p>These values are used across generated forms and documents.</p>
+                    <h2>Congregation identity</h2>
+                    <p>Locale and district codes printed in form headers.</p>
                 </div>
             </div>
-
             <div class="gv-grid">
                 <div class="gv-field">
                     <label for="gvLocale">Locale</label>
@@ -1097,6 +1337,17 @@
                     <label for="gvSNumber">S Number</label>
                     <input type="text" id="gvSNumber" placeholder="e.g. S-123" value="{{ $globalVariables?->s_number }}">
                 </div>
+            </div>
+        </div>
+
+        <div class="sa-card">
+            <div class="sa-card-head">
+                <div>
+                    <h2>Officers</h2>
+                    <p>Names of the local officers used in generated forms.</p>
+                </div>
+            </div>
+            <div class="gv-grid">
                 <div class="gv-field">
                     <label for="gvPastor">Pastor / Destinado</label>
                     <input type="text" id="gvPastor" placeholder="Full name" value="{{ $globalVariables?->pastor_destinado }}">
@@ -1110,6 +1361,17 @@
                     <label for="gvHeadLsp">Head LSP</label>
                     <input type="text" id="gvHeadLsp" placeholder="Full name" value="{{ $globalVariables?->head_lsp }}">
                 </div>
+            </div>
+        </div>
+
+        <div class="sa-card">
+            <div class="sa-card-head">
+                <div>
+                    <h2>R4-01 signatories</h2>
+                    <p>Choose who signs each R4-01 page: the global Kalihim names below, or the Secretary assigned to each Purok.</p>
+                </div>
+            </div>
+            <div class="gv-grid">
                 <div class="gv-field">
                     <label for="gvKalihimMs">Kalihim ng MS</label>
                     <input type="text" id="gvKalihimMs" placeholder="Full name" value="{{ $globalVariables?->kalihim_ms }}">
@@ -1118,57 +1380,84 @@
                     <label for="gvKalihimUwp">Kalihim ng UWP</label>
                     <input type="text" id="gvKalihimUwp" placeholder="Full name" value="{{ $globalVariables?->kalihim_uwp }}">
                 </div>
-                <div class="gv-field">
-                    <label class="delist-check-row" for="gvR401PurokSecretary">
+            </div>
+            <div class="settings-list" style="margin-top:1.1rem;">
+                <div class="settings-row">
+                    <div class="settings-row-text">
+                        <label for="gvR401PurokSecretary">Use each Purok's assigned Secretary</label>
+                        <span>Affects R4-01 documents only. Assign Secretaries on the Purok signatories page.</span>
+                    </div>
+                    <label class="sa-toggle">
                         <input type="checkbox" id="gvR401PurokSecretary" @checked($globalVariables?->r401_use_purok_secretary)>
-                        <span class="delist-check-text">
-                            <strong>Use each Purok's assigned Secretary</strong>
-                            <span>When off, R4-01 uses the Kalihim ng MS/UWP global settings. When on, each page uses the Secretary assigned to that Purok.</span>
-                        </span>
+                        <span class="sa-toggle-track"></span>
                     </label>
                 </div>
+            </div>
+            <div class="sa-effects" aria-live="polite">
+                <div class="sa-effect" data-r401-effect="off"><strong>Off</strong>R4-01 uses the Kalihim ng MS and Kalihim ng UWP names set above.</div>
+                <div class="sa-effect" data-r401-effect="on"><strong>On</strong>Each R4-01 page uses the Secretary assigned to that Purok.</div>
+            </div>
+        </div>
 
-                <div class="gv-field {{ $globalVariables?->dateofbaptism_requirement_boolean ? '' : 'disabled' }}" id="gvBaptismField">
-                    <label for="gvBaptismDate">Baptism cutoff date</label>
-                    <input type="date" id="gvBaptismDate" value="{{ $globalVariables?->baptism_requirement?->format('Y-m-d') }}" @disabled(!$globalVariables?->dateofbaptism_requirement_boolean)>
-                    <div class="gv-hint">When enabled, members must have a baptism date on or before this cutoff.</div>
-                </div>
+        <p class="sa-inline-error" role="alert" data-error-scope="globals" hidden></p>
+        <div class="sa-save-bar">
+            <button type="button" class="sa-btn sa-btn-ghost" data-discard-globals>Discard</button>
+            <button type="button" class="sa-btn sa-btn-primary" data-save-globals>Save document settings</button>
+        </div>
+    </div>
 
-                <div class="gv-field" id="gvEntryYearsField">
-                    <label for="gvEntryYears">Minimum years since date of entry</label>
-                    <select id="gvEntryYears" required>
-                        <option value="1" @selected(($globalVariables?->entry_years_requirement ?? 1) === 1)>1 year</option>
-                        <option value="2" @selected($globalVariables?->entry_years_requirement === 2)>2 years</option>
-                        <option value="3" @selected($globalVariables?->entry_years_requirement === 3)>3 years</option>
-                    </select>
-                    <div class="gv-hint">MS and UWP records must have been in the system for this long. MK is always eligible.</div>
+    <!-- ============ R2-10 ELIGIBILITY ============ -->
+    <div class="sa-tab-panel" id="tab-eligibility">
+        <header class="sa-panel-head"><h2>R2-10 eligibility</h2><p>Rules that decide which members qualify for de-listment.</p></header>
+        <div class="sa-card sa-list-card">
+            <div class="sa-card-head">
+                <div>
+                    <h2>De-listment requirements</h2>
+                    <p>These settings apply to R2-10 eligibility only. They do not affect document signatories.</p>
                 </div>
             </div>
-
-            <!-- Requirements for De-Listment (controls the two fields above) -->
-            <div class="gv-subsection">
-                <p class="gv-subsection-title">Requirements for De-Listment</p>
-                <p class="gv-subsection-sub">Configure whether baptism cutoff applies to R2-10 eligibility.</p>
-
-                <div class="delist-checks">
-                    <div class="delist-check-row">
+            <div class="settings-list">
+                <div class="settings-row">
+                    <div class="settings-row-text">
+                        <label for="delistBaptismCheck">Require a date of baptism</label>
+                        <span>When on, members must have a baptism date on or before the cutoff below.</span>
+                    </div>
+                    <label class="sa-toggle">
                         <input type="checkbox" id="delistBaptismCheck" data-controls="gvBaptismField" @checked($globalVariables?->dateofbaptism_requirement_boolean)>
-                        <div class="delist-check-text">
-                            <label for="delistBaptismCheck">Date of Baptism Requirement</label>
-                            <span>Require a recorded date of baptism before de-listment.</span>
-                        </div>
+                        <span class="sa-toggle-track"></span>
+                    </label>
+                </div>
+                <div class="sa-subfield">
+                    <div class="gv-field {{ $globalVariables?->dateofbaptism_requirement_boolean ? '' : 'disabled' }}" id="gvBaptismField">
+                        <label for="gvBaptismDate">Baptism cutoff date</label>
+                        <input type="date" id="gvBaptismDate" value="{{ $globalVariables?->baptism_requirement?->format('Y-m-d') }}" @disabled(!$globalVariables?->dateofbaptism_requirement_boolean)>
+                        <div class="gv-hint">Enabled only while the baptism requirement is on.</div>
+                    </div>
+                </div>
+                <div class="settings-row">
+                    <div class="settings-row-text">
+                        <label for="gvEntryYears">Minimum years since date of entry</label>
+                        <span>MS and UWP records must have been in the system for this long. MK is always eligible. This is a separate rule from the baptism requirement.</span>
+                    </div>
+                    <div class="gv-field" id="gvEntryYearsField" style="margin:0;">
+                        <select id="gvEntryYears" required style="min-width:120px;">
+                            <option value="1" @selected(($globalVariables?->entry_years_requirement ?? 1) === 1)>1 year</option>
+                            <option value="2" @selected($globalVariables?->entry_years_requirement === 2)>2 years</option>
+                            <option value="3" @selected($globalVariables?->entry_years_requirement === 3)>3 years</option>
+                        </select>
                     </div>
                 </div>
             </div>
-
-            <div class="sa-save-bar">
-                <button type="button" class="sa-btn sa-btn-ghost" id="discardGlobalVariablesBtn">Discard</button>
-                <button type="button" class="sa-btn sa-btn-primary" id="saveGlobalVariablesBtn">Save Global Variables</button>
-            </div>
+        </div>
+        <p class="sa-inline-error" role="alert" data-error-scope="globals" hidden></p>
+        <div class="sa-save-bar">
+            <button type="button" class="sa-btn sa-btn-ghost" data-discard-globals>Discard</button>
+            <button type="button" class="sa-btn sa-btn-primary" data-save-globals>Save eligibility settings</button>
         </div>
     </div>
 
     <div class="sa-tab-panel" id="tab-r402-hakbangs">
+        <header class="sa-panel-head"><h2>R4-02 Hakbang</h2><p>Manage hakbang codes and descriptions separately for MS and UWP.</p></header>
         <div class="sa-card">
             <div class="sa-card-head">
                 <div>
@@ -1192,29 +1481,34 @@
                 <button type="submit" class="sa-btn sa-btn-primary" id="addHakbangBtn">Add Hakbang</button>
             </form>
             <div class="sa-table-wrap">
-                <table class="sa-table">
-                    <thead><tr><th>Code</th><th>Description</th><th>Actions</th></tr></thead>
-                    <tbody id="hakbangRows">
+                <div class="hakbang-grid" id="hakbangRows">
                         @foreach ($r402Hakbangs as $hakbang)
-                            <tr data-hakbang-id="{{ $hakbang->id }}" data-status="{{ $hakbang->status }}">
-                                <td><input class="hakbang-row-input hakbang-code-input" type="text" value="{{ $hakbang->code }}" pattern="[0-9]+-[0-9]+" maxlength="30" aria-label="Hakbang code"></td>
-                                <td><input class="hakbang-row-input hakbang-description-input" type="text" value="{{ $hakbang->description }}" maxlength="2000" aria-label="Hakbang description"></td>
-                                <td>
+                            <article class="hakbang-card" data-hakbang-id="{{ $hakbang->id }}" data-status="{{ $hakbang->status }}">
+                                <div class="hakbang-card-head">
+                                    <span class="hakbang-badge">{{ $hakbang->status }}</span>
                                     <div class="hakbang-actions">
                                         <button type="button" class="sa-btn sa-btn-primary sa-btn-sm hakbang-save-btn" disabled>Save</button>
                                         <button type="button" class="sa-btn sa-btn-danger sa-btn-sm hakbang-delete-btn">Delete</button>
                                     </div>
-                                </td>
-                            </tr>
+                                </div>
+                                <div>
+                                    <span class="hakbang-label">Code</span>
+                                    <input class="hakbang-row-input hakbang-code-input" type="text" value="{{ $hakbang->code }}" pattern="[0-9]+-[0-9]+" maxlength="30" aria-label="Hakbang code">
+                                </div>
+                                <div>
+                                    <span class="hakbang-label">Description</span>
+                                    <input class="hakbang-row-input hakbang-description-input" type="text" value="{{ $hakbang->description }}" maxlength="2000" aria-label="Hakbang description">
+                                </div>
+                            </article>
                         @endforeach
-                    </tbody>
-                </table>
+                    </div>
                 <div class="sa-empty" id="hakbangEmptyState" @if ($r402Hakbangs->isNotEmpty()) style="display:none;" @endif>No hakbang codes configured for this status.</div>
             </div>
         </div>
     </div>
 
     <div class="sa-tab-panel" id="tab-maintenance">
+        <header class="sa-panel-head"><h2>BNH form reset</h2><p>Reset the BNH Form Helper checks with a one-time code.</p></header>
         <div class="sa-card">
             <div class="sa-card-head">
                 <div>
@@ -1234,6 +1528,9 @@
                             <h3 class="bnh-reset-state-title">No BNH code has been detected</h3>
                             <p>If a code becomes available, it will appear here instead.</p>
                         </div>
+                    </div>
+                    <div class="bnh-reset-state" id="bnhResetLoadingState" role="status" aria-live="polite" hidden>
+                        <div class="bnh-reset-state-copy"><h3 class="bnh-reset-state-title">Generating code…</h3><p>Requesting a one-time code from the server.</p></div>
                     </div>
                     <div class="bnh-reset-code-panel" id="bnhResetCodePanel" hidden>
                         <h3 class="bnh-reset-code-title">Enter the code below to reset the BNH Form Helper</h3>
@@ -1257,44 +1554,79 @@
         </div>
     </div>
 
+    </div>
+    </div>
 </div>
 
 <div class="sa-toast-container" id="saToastContainer" aria-live="polite" aria-atomic="false"></div>
 
-<div class="sa-modal-overlay" id="databaseImportModal" aria-hidden="true">
-    <div class="sa-modal database-import-modal" role="dialog" aria-modal="true" aria-labelledby="databaseImportModalTitle">
+<div class="sa-modal-overlay" id="confirmDialog" aria-hidden="true">
+    <div class="sa-modal sa-confirm" role="alertdialog" aria-modal="true" aria-labelledby="confirmDialogTitle" aria-describedby="confirmDialogMessage">
         <div class="sa-modal-header">
             <div>
-                <h2 id="databaseImportModalTitle">Review database import</h2>
-                <p>Verify the impact and confirm your identity before any data is replaced.</p>
+                <h2 id="confirmDialogTitle">Confirm</h2>
+                <p id="confirmDialogMessage"></p>
+            </div>
+        </div>
+        <div class="sa-modal-save-bar">
+            <button type="button" class="sa-btn sa-btn-ghost" id="confirmDialogCancel">Cancel</button>
+            <button type="button" class="sa-btn sa-btn-primary" id="confirmDialogOk">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<div class="sa-modal-overlay" id="databaseImportModal" aria-hidden="true">
+    <div class="sa-modal database-import-modal" role="dialog" aria-modal="true" aria-labelledby="databaseImportModalTitle" aria-describedby="databaseImportWarning">
+        <div class="sa-modal-header">
+            <div class="dim-title">
+                <span class="dim-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 2.5 20h19L12 3.5Z"/><path d="M12 10v4.5M12 17.5h.01"/></svg></span>
+                <div>
+                    <h2 id="databaseImportModalTitle">Review database import</h2>
+                    <p>Check what will change, then confirm it's you.</p>
+                </div>
             </div>
             <button type="button" class="sa-modal-close" id="closeDatabaseImportModal" aria-label="Cancel import review">&times;</button>
         </div>
-        <p class="database-import-warning">This import replaces data in every listed table. A private safety backup will be created first. This action cannot be undone from this screen.</p>
+
+        <div class="dim-notice" id="databaseImportWarning" role="note">
+            <strong>Data in every table on the left is replaced.</strong>
+            <span>This can't be undone from this screen.</span>
+        </div>
+
+        <div class="dim-backup">
+            <span class="dim-backup-icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="14" height="4"/><path d="M4 8v8h12V8M8 12h4"/></svg></span>
+            <p><strong>A safety backup is created first.</strong> Its file name is shown when the import finishes and it is listed under <button type="button" class="sa-link-btn" data-open-backups>Database backups</button>.</p>
+        </div>
+
         <div class="database-import-summary">
-            <section>
-                <h3>Tables that will be replaced (<span id="databaseImportTableCount">0</span>)</h3>
+            <section aria-labelledby="dimReplacedTitle">
+                <h3 id="dimReplacedTitle">Replaced <span class="dim-count" id="databaseImportTableCount">0</span></h3>
                 <ul id="databaseImportTables"></ul>
             </section>
-            <section>
-                <h3>Tables that will be retained (<span id="databaseImportOmittedCount">0</span>)</h3>
+            <section aria-labelledby="dimRetainedTitle">
+                <h3 id="dimRetainedTitle">Retained <span class="dim-count" id="databaseImportOmittedCount">0</span></h3>
                 <ul id="databaseImportOmittedTables"></ul>
             </section>
         </div>
-        <div class="database-import-confirm-fields">
-            <label for="databaseImportPassword">
-                Head Secretary current password
-                <input id="databaseImportPassword" type="password" autocomplete="current-password">
-            </label>
-            <label for="databaseImportConfirmationText">
-                Type <strong>IMPORT DATABASE</strong> to confirm
-                <input id="databaseImportConfirmationText" type="text" autocomplete="off" spellcheck="false">
-            </label>
+
+        <div class="dim-confirm">
+            <h3>Confirm it's you</h3>
+            <div class="database-import-confirm-fields">
+                <label for="databaseImportPassword">
+                    Head Secretary current password
+                    <input id="databaseImportPassword" type="password" autocomplete="current-password">
+                </label>
+                <label for="databaseImportConfirmationText">
+                    <span>Type <code class="dim-phrase">IMPORT DATABASE</code> to confirm</span>
+                    <input id="databaseImportConfirmationText" type="text" autocomplete="off" spellcheck="false" placeholder="IMPORT DATABASE">
+                    <small class="dim-match" id="databaseImportMatch" aria-live="polite"></small>
+                </label>
+            </div>
         </div>
         <p class="database-import-error" id="databaseImportConfirmError" role="alert" hidden></p>
         <div class="sa-modal-save-bar">
             <button type="button" class="sa-btn sa-btn-ghost" id="cancelDatabaseImport">Cancel</button>
-            <button type="button" class="sa-btn sa-btn-danger" id="confirmDatabaseImport">Import database</button>
+            <button type="button" class="sa-btn sa-btn-danger" id="confirmDatabaseImport" disabled>Import database</button>
         </div>
     </div>
 </div>
@@ -1390,7 +1722,10 @@
             const button = Array.from(tabBtns).find(tab => tab.dataset.tab === tabName);
             const panel = document.getElementById(`tab-${tabName}`);
             if (!button || !panel) return;
-            tabBtns.forEach(tab => tab.classList.toggle('active', tab === button));
+            tabBtns.forEach(tab => {
+                tab.classList.toggle('active', tab === button);
+                if (tab === button) tab.setAttribute('aria-current', 'page'); else tab.removeAttribute('aria-current');
+            });
             tabPanels.forEach(tabPanel => tabPanel.classList.toggle('active', tabPanel === panel));
         }
 
@@ -1403,6 +1738,7 @@
                 activateTab(btn.dataset.tab);
                 window.history.replaceState(null, '', `#${btn.dataset.tab}`);
                 if (btn.dataset.tab === 'maintenance') ensureBnhResetCode?.();
+                if (btn.dataset.tab === 'backups') window.saLoadBackups?.();
             });
         });
         document.querySelectorAll('[data-open-smtp]').forEach(button => {
@@ -1457,7 +1793,27 @@
             });
         }
 
-        wireSearch('userSearch', 'usersTableBody', 'usersEmptyState');
+        const userSearchInput = document.getElementById('userSearch');
+        const userStatusFilter = document.getElementById('userStatusFilter');
+        const usersCount = document.getElementById('usersCount');
+        function applyUserFilters() {
+            const term = (userSearchInput?.value || '').trim().toLowerCase();
+            const status = userStatusFilter?.value ?? '';
+            const rows = document.querySelectorAll('#usersTableBody tr[data-user-id]');
+            let visible = 0;
+            rows.forEach(row => {
+                const matches = ((row.dataset.name || '').includes(term) || (row.dataset.email || '').includes(term))
+                    && (status === '' || row.dataset.verified === status);
+                row.style.display = matches ? '' : 'none';
+                if (matches) visible++;
+            });
+            const empty = document.getElementById('usersEmptyState');
+            if (empty) empty.style.display = rows.length && visible === 0 ? 'block' : 'none';
+            if (usersCount) usersCount.textContent = `${visible} of ${rows.length} secretar${rows.length === 1 ? 'y' : 'ies'}`;
+        }
+        userSearchInput?.addEventListener('input', applyUserFilters);
+        userStatusFilter?.addEventListener('change', applyUserFilters);
+        applyUserFilters();
         wireSearch('permSearch', 'permissionsTableBody', 'permEmptyState');
 
         const csrfToken = @json(csrf_token());
@@ -1474,6 +1830,8 @@
             generateBnhResetCode: @json(route('superadmin.reset-bnh-helper-checks.code')),
             resetBnhChecks: @json(route('superadmin.reset-bnh-helper-checks')),
             r402Hakbangs: @json(url('/superadmin/r4-02/hakbangs')),
+            databaseBackups: @json(\Illuminate\Support\Facades\Route::has('superadmin.database.backups') ? route('superadmin.database.backups') : null),
+            databaseBackupDownload: @json(\Illuminate\Support\Facades\Route::has('superadmin.database.backups.download') ? route('superadmin.database.backups.download', ['file' => '__FILE__']) : null),
         };
         const toastContainer = document.getElementById('saToastContainer');
         if (toastContainer && toastContainer.parentElement !== document.body) {
@@ -1517,6 +1875,66 @@
             const timer = window.setTimeout(dismiss, type === 'error' ? 7000 : 4500);
         }
 
+        function setBusy(button, busy) {
+            if (!button) return;
+            button.classList.toggle('is-loading', busy);
+            button.setAttribute('aria-busy', String(busy));
+            button.disabled = busy;
+        }
+
+        function setInlineError(scope, message) {
+            document.querySelectorAll(`[data-error-scope="${scope}"]`).forEach(element => {
+                element.textContent = message || '';
+                element.hidden = !message;
+            });
+        }
+
+        const confirmDialog = document.getElementById('confirmDialog');
+        if (confirmDialog && confirmDialog.parentElement !== document.body) {
+            document.body.appendChild(confirmDialog);
+        }
+        function confirmAction({ title, message, confirmLabel = 'Confirm', danger = false }) {
+            return new Promise(resolve => {
+                const ok = document.getElementById('confirmDialogOk');
+                const cancel = document.getElementById('confirmDialogCancel');
+                const previous = document.activeElement;
+                document.getElementById('confirmDialogTitle').textContent = title;
+                document.getElementById('confirmDialogMessage').textContent = message;
+                ok.textContent = confirmLabel;
+                ok.className = `sa-btn ${danger ? 'sa-btn-danger' : 'sa-btn-primary'}`;
+
+                const close = result => {
+                    confirmDialog.classList.remove('active');
+                    confirmDialog.setAttribute('aria-hidden', 'true');
+                    ok.removeEventListener('click', onOk);
+                    cancel.removeEventListener('click', onCancel);
+                    confirmDialog.removeEventListener('click', onBackdrop);
+                    document.removeEventListener('keydown', onKey, true);
+                    previous?.focus?.();
+                    resolve(result);
+                };
+                const onOk = () => close(true);
+                const onCancel = () => close(false);
+                const onBackdrop = event => { if (event.target === confirmDialog) close(false); };
+                const onKey = event => {
+                    if (event.key === 'Escape') { event.stopPropagation(); close(false); }
+                    if (event.key === 'Tab') {
+                        const focusable = [cancel, ok];
+                        const index = focusable.indexOf(document.activeElement);
+                        event.preventDefault();
+                        focusable[(index + (event.shiftKey ? -1 : 1) + focusable.length) % focusable.length].focus();
+                    }
+                };
+                ok.addEventListener('click', onOk);
+                cancel.addEventListener('click', onCancel);
+                confirmDialog.addEventListener('click', onBackdrop);
+                document.addEventListener('keydown', onKey, true);
+                confirmDialog.classList.add('active');
+                confirmDialog.setAttribute('aria-hidden', 'false');
+                cancel.focus();
+            });
+        }
+
         async function sendFormData(url, formData, method = 'POST') {
             const response = await fetch(url, {
                 method,
@@ -1549,8 +1967,14 @@
                 showToast('Enter your current password to confirm the transfer.', 'error');
                 return;
             }
-            if (!window.confirm('Transfer Head Secretary access to this account? Your account will become a Secretary and lose Head Secretary access.')) return;
-            button.disabled = true;
+            const confirmed = await confirmAction({
+                title: 'Transfer Head Secretary role?',
+                message: 'Your account will become a Secretary and lose Head Secretary access. The selected account becomes Head Secretary.',
+                confirmLabel: 'Transfer role',
+                danger: true,
+            });
+            if (!confirmed) return;
+            setBusy(button, true);
             try {
                 const result = await sendUpdate(superadminUrls.transferHeadSecretary, {
                     target_user_id: Number(targetId),
@@ -1563,7 +1987,7 @@
             } catch (error) {
                 passwordInput.value = '';
                 showToast(error.message, 'error');
-                button.disabled = false;
+                setBusy(button, false);
             }
         });
 
@@ -1571,7 +1995,7 @@
         smtpSettingsForm?.addEventListener('submit', async event => {
             event.preventDefault();
             const button = document.getElementById('saveSmtpSettingsBtn');
-            button.disabled = true;
+            setBusy(button, true);
             try {
                 const result = await sendFormData(
                     superadminUrls.smtpSettings,
@@ -1590,7 +2014,7 @@
             } catch (error) {
                 showToast(error.message, 'error');
             } finally {
-                button.disabled = false;
+                setBusy(button, false);
             }
         });
 
@@ -1606,6 +2030,11 @@
         const databaseImportConfirmError = document.getElementById('databaseImportConfirmError');
         const confirmDatabaseImportButton = document.getElementById('confirmDatabaseImport');
         let pendingDatabaseImport = null;
+        const updateImportConfirmState = () => {
+            const matches = databaseImportConfirmationText.value.trim() === 'IMPORT DATABASE';
+            document.getElementById('databaseImportMatch').textContent = matches ? 'Matches' : '';
+            confirmDatabaseImportButton.disabled = !(databaseImportPassword.value && matches);
+        };
         let validSqlFileSelected = false;
 
         if (databaseImportModal && databaseImportModal.parentElement !== document.body) {
@@ -1618,6 +2047,7 @@
             databaseImportPassword.value = '';
             databaseImportConfirmationText.value = '';
             databaseImportConfirmError.hidden = true;
+            updateImportConfirmState();
             pendingDatabaseImport = null;
             databaseImportButton.disabled = !validSqlFileSelected;
         }
@@ -1637,7 +2067,23 @@
             });
         }
 
+        function renderSqlSelection(file) {
+            const box = document.getElementById('databaseSqlSelected');
+            databaseSqlDropzone.classList.toggle('has-file', Boolean(file));
+            box.hidden = !file;
+            document.querySelector('.sql-dropzone-title').textContent = file ? 'File ready — drop another to replace it' : 'Drop your SQL backup here';
+            if (file) {
+                document.getElementById('databaseSqlSelectedName').textContent = file.name;
+                document.getElementById('databaseSqlSelectedSize').textContent = `${(file.size / 1024 / 1024).toFixed(1)} MB · ready for review`;
+            }
+        }
+        document.getElementById('databaseSqlClear')?.addEventListener('click', () => {
+            databaseSqlInput.value = '';
+            validateSqlFile(null);
+        });
+
         function validateSqlFile(file) {
+            renderSqlSelection(null);
             databaseSqlError.hidden = true;
             databaseSqlError.textContent = '';
             if (!file) {
@@ -1655,6 +2101,7 @@
                 databaseSqlError.textContent = 'The SQL backup must be 100 MB or smaller.';
             } else {
                 validSqlFileSelected = true;
+                renderSqlSelection(file);
                 databaseSqlStatus.textContent = `${file.name} · ${(file.size / 1024 / 1024).toFixed(1)} MB`;
                 databaseImportButton.disabled = false;
                 return true;
@@ -1712,6 +2159,7 @@
                 populateTableList(document.getElementById('databaseImportOmittedTables'), preview.omitted_tables);
                 pendingDatabaseImport = formData;
                 databaseImportConfirmError.hidden = true;
+                updateImportConfirmState();
                 databaseImportModal.classList.add('active');
                 databaseImportModal.setAttribute('aria-hidden', 'false');
                 databaseImportPassword.focus();
@@ -1722,6 +2170,8 @@
             }
         });
 
+        databaseImportPassword.addEventListener('input', updateImportConfirmState);
+        databaseImportConfirmationText.addEventListener('input', updateImportConfirmState);
         confirmDatabaseImportButton?.addEventListener('click', async () => {
             if (!pendingDatabaseImport) return;
             const password = databaseImportPassword.value;
@@ -1735,7 +2185,7 @@
                 return;
             }
 
-            confirmDatabaseImportButton.disabled = true;
+            setBusy(confirmDatabaseImportButton, true);
             document.getElementById('cancelDatabaseImport').disabled = true;
             document.getElementById('closeDatabaseImportModal').disabled = true;
             databaseImportConfirmError.hidden = true;
@@ -1745,6 +2195,7 @@
             try {
                 const result = await sendFormData(superadminUrls.databaseImport, formData);
                 closeDatabaseImportReview();
+                try { window.sessionStorage.setItem('saImportResult', JSON.stringify({ message: result.message, backup: result.backup_file })); } catch (error) { /* ignore */ }
                 showToast(`${result.message} Backup: ${result.backup_file}`);
                 databaseImportForm.reset();
                 validSqlFileSelected = false;
@@ -1759,7 +2210,8 @@
                 databaseImportConfirmationText.value = '';
                 databaseImportPassword.focus();
             } finally {
-                confirmDatabaseImportButton.disabled = false;
+                setBusy(confirmDatabaseImportButton, false);
+                updateImportConfirmState();
                 document.getElementById('cancelDatabaseImport').disabled = false;
                 document.getElementById('closeDatabaseImportModal').disabled = false;
             }
@@ -1786,6 +2238,8 @@
 
         const bnhCodePanel = document.getElementById('bnhResetCodePanel');
         const bnhEmptyState = document.getElementById('bnhResetEmptyState');
+        const bnhLoadingState = document.getElementById('bnhResetLoadingState');
+        const handleBnhError = error => { bnhLoadingState.hidden = true; showToast(error.message, 'error'); };
         const bnhCodeDisplay = document.getElementById('bnhResetGeneratedCode');
         const bnhCodeInput = document.getElementById('bnhResetCodeInput');
         const bnhCountdownBar = document.getElementById('bnhResetCountdownBar');
@@ -1804,6 +2258,7 @@
             expectedBnhCode = '';
             bnhCodePanel.hidden = true;
             bnhEmptyState.hidden = true;
+            bnhLoadingState.hidden = false;
             bnhCodeInput.disabled = true;
             bnhCodeInput.value = '';
             const requestStartedAt = Date.now();
@@ -1812,6 +2267,7 @@
                 headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken, 'X-Requested-With': 'XMLHttpRequest' },
             });
             const body = await response.json();
+            bnhLoadingState.hidden = true;
             if (!response.ok) {
                 bnhCodePanel.hidden = true;
                 if (body.empty) {
@@ -1836,7 +2292,7 @@
                 bnhCountdownText.textContent = `${seconds} second${seconds === 1 ? '' : 's'} remaining`;
                 if (remaining === 0) {
                     window.clearInterval(bnhCodeTimer);
-                    generateBnhResetCode().catch(error => showToast(error.message, 'error'));
+                    generateBnhResetCode().catch(handleBnhError);
                 }
             };
 
@@ -1846,7 +2302,7 @@
 
         ensureBnhResetCode = () => {
             if (bnhCodeCycleActive || submittingBnhCode) return;
-            generateBnhResetCode().catch(error => showToast(error.message, 'error'));
+            generateBnhResetCode().catch(handleBnhError);
         };
 
         bnhCodeDisplay.addEventListener('copy', event => event.preventDefault());
@@ -1905,7 +2361,7 @@
             return body;
         }
 
-        // ===== R4-02 Hakbang management =====
+        // ===== R4-02 Hakbang management (card layout) =====
         const hakbangRows = document.getElementById('hakbangRows');
         const hakbangEmptyState = document.getElementById('hakbangEmptyState');
         const hakbangStatusButtons = document.querySelectorAll('[data-hakbang-status]');
@@ -1921,45 +2377,31 @@
 
         function refreshHakbangRows() {
             if (!hakbangRows) return;
-            const visibleRows = [...hakbangRows.querySelectorAll('tr[data-hakbang-id]')]
-                .filter(row => row.dataset.status === selectedHakbangStatus);
-            hakbangRows.querySelectorAll('tr[data-hakbang-id]').forEach(row => {
-                row.hidden = row.dataset.status !== selectedHakbangStatus;
-            });
-            if (hakbangEmptyState) hakbangEmptyState.style.display = visibleRows.length ? 'none' : 'block';
+            const cards = [...hakbangRows.querySelectorAll('.hakbang-card')];
+            cards.forEach(card => { card.hidden = card.dataset.status !== selectedHakbangStatus; });
+            const visible = cards.filter(card => !card.hidden).length;
+            if (hakbangEmptyState) hakbangEmptyState.style.display = visible ? 'none' : 'block';
         }
 
-        function setHakbangRowBaseline(row) {
-            row.querySelector('.hakbang-code-input').dataset.originalValue = row.querySelector('.hakbang-code-input').value;
-            row.querySelector('.hakbang-description-input').dataset.originalValue = row.querySelector('.hakbang-description-input').value;
-            row.querySelector('.hakbang-save-btn').disabled = true;
+        function setHakbangRowBaseline(card) {
+            card.querySelector('.hakbang-code-input').dataset.originalValue = card.querySelector('.hakbang-code-input').value;
+            card.querySelector('.hakbang-description-input').dataset.originalValue = card.querySelector('.hakbang-description-input').value;
+            const save = card.querySelector('.hakbang-save-btn');
+            setBusy(save, false);
+            save.disabled = true;
         }
 
         function createHakbangRow(item) {
-            const row = document.createElement('tr');
-            row.dataset.hakbangId = item.id;
-            row.dataset.status = item.status;
+            const card = document.createElement('article');
+            card.className = 'hakbang-card';
+            card.dataset.hakbangId = item.id;
+            card.dataset.status = item.status;
 
-            const codeCell = document.createElement('td');
-            const codeInput = document.createElement('input');
-            codeInput.className = 'hakbang-row-input hakbang-code-input';
-            codeInput.type = 'text';
-            codeInput.maxLength = 30;
-            codeInput.pattern = '[0-9]+-[0-9]+';
-            codeInput.setAttribute('aria-label', 'Hakbang code');
-            codeInput.value = item.code;
-            codeCell.appendChild(codeInput);
-
-            const descriptionCell = document.createElement('td');
-            const descriptionInput = document.createElement('input');
-            descriptionInput.className = 'hakbang-row-input hakbang-description-input';
-            descriptionInput.type = 'text';
-            descriptionInput.maxLength = 2000;
-            descriptionInput.setAttribute('aria-label', 'Hakbang description');
-            descriptionInput.value = item.description;
-            descriptionCell.appendChild(descriptionInput);
-
-            const actionsCell = document.createElement('td');
+            const head = document.createElement('div');
+            head.className = 'hakbang-card-head';
+            const badge = document.createElement('span');
+            badge.className = 'hakbang-badge';
+            badge.textContent = item.status;
             const actions = document.createElement('div');
             actions.className = 'hakbang-actions';
             const saveButton = document.createElement('button');
@@ -1972,10 +2414,33 @@
             deleteButton.className = 'sa-btn sa-btn-danger sa-btn-sm hakbang-delete-btn';
             deleteButton.textContent = 'Delete';
             actions.append(saveButton, deleteButton);
-            actionsCell.appendChild(actions);
-            row.append(codeCell, descriptionCell, actionsCell);
-            setHakbangRowBaseline(row);
-            return row;
+            head.append(badge, actions);
+
+            const makeField = (labelText, input) => {
+                const wrap = document.createElement('div');
+                const label = document.createElement('span');
+                label.className = 'hakbang-label';
+                label.textContent = labelText;
+                wrap.append(label, input);
+                return wrap;
+            };
+            const codeInput = document.createElement('input');
+            codeInput.className = 'hakbang-row-input hakbang-code-input';
+            codeInput.type = 'text';
+            codeInput.maxLength = 30;
+            codeInput.pattern = '[0-9]+-[0-9]+';
+            codeInput.setAttribute('aria-label', 'Hakbang code');
+            codeInput.value = item.code;
+            const descriptionInput = document.createElement('input');
+            descriptionInput.className = 'hakbang-row-input hakbang-description-input';
+            descriptionInput.type = 'text';
+            descriptionInput.maxLength = 2000;
+            descriptionInput.setAttribute('aria-label', 'Hakbang description');
+            descriptionInput.value = item.description;
+
+            card.append(head, makeField('Code', codeInput), makeField('Description', descriptionInput));
+            setHakbangRowBaseline(card);
+            return card;
         }
 
         async function sendHakbangRequest(method, url, payload) {
@@ -1997,7 +2462,7 @@
             return body;
         }
 
-        hakbangRows?.querySelectorAll('tr[data-hakbang-id]').forEach(setHakbangRowBaseline);
+        hakbangRows?.querySelectorAll('.hakbang-card').forEach(setHakbangRowBaseline);
         hakbangStatusButtons.forEach(button => {
             button.addEventListener('click', () => {
                 selectedHakbangStatus = button.dataset.hakbangStatus;
@@ -2012,11 +2477,11 @@
         refreshHakbangRows();
 
         hakbangRows?.addEventListener('input', event => {
-            const row = event.target.closest('tr[data-hakbang-id]');
-            if (!row) return;
-            const code = row.querySelector('.hakbang-code-input');
-            const description = row.querySelector('.hakbang-description-input');
-            row.querySelector('.hakbang-save-btn').disabled =
+            const card = event.target.closest('.hakbang-card');
+            if (!card) return;
+            const code = card.querySelector('.hakbang-code-input');
+            const description = card.querySelector('.hakbang-description-input');
+            card.querySelector('.hakbang-save-btn').disabled =
                 code.value === code.dataset.originalValue &&
                 description.value === description.dataset.originalValue;
         });
@@ -2026,7 +2491,7 @@
             const submitButton = document.getElementById('addHakbangBtn');
             const code = document.getElementById('newHakbangCode');
             const description = document.getElementById('newHakbangDescription');
-            submitButton.disabled = true;
+            setBusy(submitButton, true);
             try {
                 const { data, message } = await sendHakbangRequest('POST', superadminUrls.r402Hakbangs, {
                     status: selectedHakbangStatus,
@@ -2040,42 +2505,42 @@
             } catch (error) {
                 showToast(error.message, 'error');
             } finally {
-                submitButton.disabled = false;
+                setBusy(submitButton, false);
             }
         });
 
         hakbangRows?.addEventListener('click', async event => {
-            const row = event.target.closest('tr[data-hakbang-id]');
-            if (!row) return;
+            const card = event.target.closest('.hakbang-card');
+            if (!card) return;
 
             if (event.target.closest('.hakbang-save-btn')) {
                 const button = event.target.closest('.hakbang-save-btn');
-                const code = row.querySelector('.hakbang-code-input').value.trim();
-                const description = row.querySelector('.hakbang-description-input').value.trim();
-                button.disabled = true;
+                const code = card.querySelector('.hakbang-code-input').value.trim();
+                const description = card.querySelector('.hakbang-description-input').value.trim();
+                setBusy(button, true);
                 try {
                     const { data, message } = await sendHakbangRequest(
                         'PUT',
-                        `${superadminUrls.r402Hakbangs}/${row.dataset.hakbangId}`,
-                        { status: row.dataset.status, code, description }
+                        `${superadminUrls.r402Hakbangs}/${card.dataset.hakbangId}`,
+                        { status: card.dataset.status, code, description }
                     );
-                    row.querySelector('.hakbang-code-input').value = data.code;
-                    row.querySelector('.hakbang-description-input').value = data.description;
-                    setHakbangRowBaseline(row);
+                    card.querySelector('.hakbang-code-input').value = data.code;
+                    card.querySelector('.hakbang-description-input').value = data.description;
+                    setHakbangRowBaseline(card);
                     showToast(message || 'Hakbang updated.');
                 } catch (error) {
-                    button.disabled = false;
+                    setBusy(button, false);
                     showToast(error.message, 'error');
                 }
                 return;
             }
 
             if (event.target.closest('.hakbang-delete-btn')) {
-                const code = row.querySelector('.hakbang-code-input').value;
-                deleteHakbangMessage.textContent = `Delete ${row.dataset.status} hakbang ${code}? This cannot be undone.`;
+                const code = card.querySelector('.hakbang-code-input').value;
+                deleteHakbangMessage.textContent = `Delete ${card.dataset.status} hakbang ${code}? This cannot be undone.`;
                 deleteHakbangModal.classList.add('active');
                 deleteHakbangModal.setAttribute('aria-hidden', 'false');
-                pendingHakbangDelete = row;
+                pendingHakbangDelete = card;
             }
         });
 
@@ -2089,24 +2554,27 @@
         deleteHakbangModal?.addEventListener('click', event => {
             if (event.target === deleteHakbangModal) closeHakbangDeleteModal();
         });
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && deleteHakbangModal?.classList.contains('active')) closeHakbangDeleteModal();
+        });
         document.getElementById('confirmDeleteHakbang')?.addEventListener('click', async event => {
             if (!pendingHakbangDelete) return;
-            const row = pendingHakbangDelete;
+            const card = pendingHakbangDelete;
             const button = event.currentTarget;
-            button.disabled = true;
+            setBusy(button, true);
             try {
                 const { message } = await sendHakbangRequest(
                     'DELETE',
-                    `${superadminUrls.r402Hakbangs}/${row.dataset.hakbangId}`
+                    `${superadminUrls.r402Hakbangs}/${card.dataset.hakbangId}`
                 );
-                row.remove();
+                card.remove();
                 closeHakbangDeleteModal();
                 refreshHakbangRows();
                 showToast(message || 'Hakbang deleted.');
             } catch (error) {
                 showToast(error.message, 'error');
             } finally {
-                button.disabled = false;
+                setBusy(button, false);
             }
         });
 
@@ -2136,6 +2604,8 @@
                         pill.classList.toggle('on', data.is_verified);
                         pill.classList.toggle('off', !data.is_verified);
                         pill.lastChild.textContent = data.is_verified ? 'Verified' : 'Not Verified';
+                        row.dataset.verified = data.is_verified ? '1' : '0';
+                        applyUserFilters();
                         if (data.revoked_current_session) {
                             window.location.assign('/login?access=revoked');
                             return;
@@ -2212,7 +2682,7 @@
                 return values;
             });
 
-            button.disabled = true;
+            setBusy(button, true);
             try {
                 await sendUpdate(superadminUrls.permissions, { permissions });
                 closePermissionsModalFn();
@@ -2220,7 +2690,7 @@
             } catch (error) {
                 showToast(error.message, 'error');
             } finally {
-                button.disabled = false;
+                setBusy(button, false);
             }
         });
         permModalOverlay?.addEventListener('click', (e) => {
@@ -2421,7 +2891,7 @@
                 return;
             }
 
-            button.disabled = true;
+            setBusy(button, true);
             try {
                 await sendUpdate(superadminUrls.signatories, { puroks });
                 savedSignatoriesSnapshot = JSON.stringify(puroks);
@@ -2429,6 +2899,7 @@
             } catch (error) {
                 showToast(error.message, 'error');
             } finally {
+                setBusy(button, false);
                 updateSignatoriesSaveState();
             }
         });
@@ -2563,31 +3034,44 @@
             baptism_requirement: 'gvBaptismDate',
             entry_years_requirement: 'gvEntryYears',
         };
-        document.getElementById('saveGlobalVariablesBtn')?.addEventListener('click', async (e) => {
-            const button = e.currentTarget;
+        // Both "Document settings" and "R2-10 eligibility" pages save through the same existing endpoint,
+        // so the payload is identical to before and the backend is unchanged.
+        document.querySelectorAll('[data-save-globals]').forEach(saveButton => saveButton.addEventListener('click', async () => {
             const values = Object.fromEntries(Object.entries(globalVariableFields).map(([column, id]) => {
                 const value = document.getElementById(id).value;
                 return [column, value === '' ? null : value];
             }));
             values.dateofbaptism_requirement_boolean = document.getElementById('delistBaptismCheck').checked ? 1 : 0;
             values.r401_use_purok_secretary = document.getElementById('gvR401PurokSecretary').checked ? 1 : 0;
-            button.disabled = true;
+            setInlineError('globals', '');
+            document.querySelectorAll('[data-save-globals]').forEach(item => setBusy(item, true));
+            saveButton.classList.add('is-loading');
             try {
                 await sendUpdate(superadminUrls.globalVariables, values);
-                showToast('Global variables saved.');
+                showToast('Settings saved.');
             } catch (error) {
+                setInlineError('globals', error.message);
                 showToast(error.message, 'error');
             } finally {
-                button.disabled = false;
+                document.querySelectorAll('[data-save-globals]').forEach(item => setBusy(item, false));
             }
-        });
-        document.getElementById('discardGlobalVariablesBtn')?.addEventListener('click', () => window.location.reload());
+        }));
+        document.querySelectorAll('[data-discard-globals]').forEach(button => button.addEventListener('click', () => window.location.reload()));
+
+        const r401Toggle = document.getElementById('gvR401PurokSecretary');
+        const syncR401Effect = () => {
+            document.querySelectorAll('[data-r401-effect]').forEach(element => {
+                element.classList.toggle('is-active', (element.dataset.r401Effect === 'on') === Boolean(r401Toggle?.checked));
+            });
+        };
+        r401Toggle?.addEventListener('change', syncR401Effect);
+        syncR401Effect();
 
         const securityInputs = ['requireOtpSetting', 'allowForgotPasswordSetting'];
         const securityDefaults = Object.fromEntries(securityInputs.map(id => [id, document.getElementById(id).checked]));
         document.getElementById('saveSecuritySettingsBtn')?.addEventListener('click', async event => {
             const button = event.currentTarget;
-            button.disabled = true;
+            setBusy(button, true);
             try {
                 await sendUpdate(superadminUrls.securitySettings, {
                     require_otp: document.getElementById('requireOtpSetting').checked ? 1 : 0,
@@ -2597,12 +3081,280 @@
             } catch (error) {
                 showToast(error.message, 'error');
             } finally {
-                button.disabled = false;
+                setBusy(button, false);
             }
         });
         document.getElementById('discardSecuritySettingsBtn')?.addEventListener('click', () => {
             securityInputs.forEach(id => { document.getElementById(id).checked = securityDefaults[id]; });
         });
+        // ===== Secretary activity: "Add Filter" popover (submits the same GET filters as before) =====
+        (function initAuditFilters() {
+            const form = document.getElementById('recordAuditFilters');
+            if (!form) return;
+            const defs = [
+                { key: 'date', label: 'Date range', fields: [
+                    { name: 'date_from', label: 'From date', type: 'date' },
+                    { name: 'date_to', label: 'To date', type: 'date' } ] },
+                { key: 'record_name', label: 'Record name', fields: [
+                    { name: 'record_name', label: 'Record name', type: 'search', placeholder: 'Search member name', maxLength: 150 } ] },
+                { key: 'actor_email', label: 'Secretary email', fields: [
+                    { name: 'actor_email', label: 'Secretary email', type: 'search', placeholder: 'Search account email', maxLength: 255 } ] },
+            ];
+            const addBtn = document.getElementById('addFilterBtn');
+            const pop = document.getElementById('filterPopover');
+            const listView = document.getElementById('filterListView');
+            const search = document.getElementById('filterSearch');
+            const list = document.getElementById('filterList');
+            const editor = document.getElementById('filterEditor');
+            const chips = document.getElementById('filterChips');
+            const hidden = name => form.querySelector(`input[type="hidden"][name="${name}"]`);
+            const chevron = '<svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 4.5L13 10l-5.5 5.5"/></svg>';
+            const isActive = def => def.fields.some(field => hidden(field.name).value !== '');
+            const summary = def => {
+                if (!isActive(def)) return 'All';
+                if (def.key === 'date') return `${hidden('date_from').value || '…'} → ${hidden('date_to').value || '…'}`;
+                return hidden(def.fields[0].name).value;
+            };
+            const el = (tag, className, text) => {
+                const node = document.createElement(tag);
+                if (className) node.className = className;
+                if (text !== undefined) node.textContent = text;
+                return node;
+            };
+
+            function renderChips() {
+                chips.replaceChildren();
+                const active = defs.filter(isActive);
+                active.forEach(def => {
+                    const chip = el('span', 'sa-chip');
+                    const label = el('button', 'sa-chip-label');
+                    label.type = 'button';
+                    label.append(`${def.label}:`, el('strong', '', summary(def)));
+                    label.setAttribute('aria-label', `Edit ${def.label} filter`);
+                    label.addEventListener('click', () => { openPopover(); showEditor(def); });
+                    const remove = el('button', 'sa-chip-remove', '×');
+                    remove.type = 'button';
+                    remove.setAttribute('aria-label', `Remove ${def.label} filter`);
+                    remove.addEventListener('click', () => { def.fields.forEach(f => { hidden(f.name).value = ''; }); form.submit(); });
+                    chip.append(label, remove);
+                    chips.appendChild(chip);
+                });
+                if (active.length > 1) {
+                    const clear = el('button', 'sa-chip-clear', 'Clear all');
+                    clear.type = 'button';
+                    clear.addEventListener('click', () => { defs.forEach(d => d.fields.forEach(f => { hidden(f.name).value = ''; })); form.submit(); });
+                    chips.appendChild(clear);
+                }
+            }
+
+            function renderList(term) {
+                list.replaceChildren();
+                const matches = defs.filter(def => def.label.toLowerCase().includes(term.trim().toLowerCase()));
+                if (!matches.length) { list.appendChild(el('li', 'sa-filter-empty', 'No matching filters.')); return; }
+                matches.forEach(def => {
+                    const item = el('li');
+                    const button = el('button', 'sa-filter-item');
+                    button.type = 'button';
+                    button.append(el('span', '', def.label));
+                    const value = el('span', 'sa-filter-item-value');
+                    value.append(el('span', '', summary(def)));
+                    value.insertAdjacentHTML('beforeend', chevron);
+                    button.appendChild(value);
+                    button.addEventListener('click', () => showEditor(def));
+                    item.appendChild(button);
+                    list.appendChild(item);
+                });
+            }
+
+            function showList() {
+                editor.hidden = true; listView.hidden = false;
+                search.value = ''; renderList(''); search.focus();
+            }
+
+            function showEditor(def) {
+                listView.hidden = true; editor.hidden = false; editor.replaceChildren();
+                const head = el('div', 'sa-filter-editor-head');
+                const back = el('button', 'sa-filter-back');
+                back.type = 'button'; back.setAttribute('aria-label', 'Back to filters');
+                back.insertAdjacentHTML('beforeend', '<svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.5 4.5L7 10l5.5 5.5"/></svg>');
+                back.addEventListener('click', showList);
+                head.append(back, el('span', '', def.label));
+                const body = el('div', 'sa-filter-editor-body');
+                const inputs = def.fields.map((field, index) => {
+                    const wrap = el('div');
+                    const label = el('label', '', field.label);
+                    const input = document.createElement('input');
+                    input.type = field.type; input.id = `filterField_${field.name}`;
+                    label.htmlFor = input.id;
+                    input.value = hidden(field.name).value;
+                    if (field.placeholder) input.placeholder = field.placeholder;
+                    if (field.maxLength) input.maxLength = field.maxLength;
+                    wrap.append(label, input); body.appendChild(wrap);
+                    return { field, input };
+                });
+                const actions = el('div', 'sa-filter-editor-actions');
+                if (isActive(def)) {
+                    const clear = el('button', 'sa-btn sa-btn-ghost sa-btn-sm', 'Remove');
+                    clear.type = 'button';
+                    clear.addEventListener('click', () => { def.fields.forEach(f => { hidden(f.name).value = ''; }); form.submit(); });
+                    actions.appendChild(clear);
+                }
+                const apply = el('button', 'sa-btn sa-btn-primary sa-btn-sm', 'Apply');
+                apply.type = 'button';
+                const submit = () => {
+                    inputs.forEach(({ field, input }) => { hidden(field.name).value = input.value.trim(); });
+                    form.submit();
+                };
+                apply.addEventListener('click', submit);
+                actions.appendChild(apply);
+                inputs.forEach(({ input }) => input.addEventListener('keydown', event => {
+                    if (event.key === 'Enter') { event.preventDefault(); submit(); }
+                }));
+                editor.append(head, body, actions);
+                inputs[0].input.focus();
+            }
+
+            function openPopover() {
+                pop.hidden = false; addBtn.setAttribute('aria-expanded', 'true'); showList();
+            }
+            function closePopover(restoreFocus = false) {
+                pop.hidden = true; addBtn.setAttribute('aria-expanded', 'false');
+                if (restoreFocus) addBtn.focus();
+            }
+            addBtn.addEventListener('click', () => (pop.hidden ? openPopover() : closePopover()));
+            search.addEventListener('input', () => renderList(search.value));
+            search.addEventListener('keydown', event => { if (event.key === 'Enter') event.preventDefault(); });
+            document.addEventListener('click', event => {
+                if (!pop.hidden && !event.target.closest('.sa-filter-menu') && !event.target.closest('.sa-chip')) closePopover();
+            });
+            document.addEventListener('keydown', event => {
+                if (event.key === 'Escape' && !pop.hidden) { event.stopPropagation(); closePopover(true); }
+            });
+            renderChips();
+        })();
+        // ===== Database backups list =====
+        (function initBackups() {
+            const body = document.getElementById('backupsBody');
+            const state = document.getElementById('backupsState');
+            const count = document.getElementById('backupsCount');
+            const refresh = document.getElementById('refreshBackupsBtn');
+            if (!body) return;
+            const formatDate = iso => {
+                const date = new Date(iso);
+                return Number.isNaN(date.getTime()) ? String(iso) : new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium', timeStyle: 'medium', timeZone: 'Asia/Manila' }).format(date);
+            };
+            const formatSize = bytes => {
+                const value = Number(bytes);
+                if (!Number.isFinite(value)) return '—';
+                if (value < 1024) return `${value} B`;
+                if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+                return `${(value / 1024 / 1024).toFixed(1)} MB`;
+            };
+            const showState = message => { state.textContent = message; state.hidden = !message; };
+            const cell = (child, className) => {
+                const td = document.createElement('td');
+                if (className) td.className = className;
+                td.append(child);
+                return td;
+            };
+
+            function renderSkeleton() {
+                body.replaceChildren();
+                for (let i = 0; i < 4; i++) {
+                    const row = document.createElement('tr');
+                    ['60%', '45%', '30%', '40%'].forEach(width => {
+                        const bar = document.createElement('span');
+                        bar.className = 'sa-skeleton';
+                        bar.style.width = width;
+                        row.appendChild(cell(bar));
+                    });
+                    body.appendChild(row);
+                }
+            }
+
+            async function load() {
+                showState('');
+                count.textContent = '';
+                if (!superadminUrls.databaseBackups) {
+                    body.replaceChildren();
+                    showState('Backup listing is not enabled on the server yet. Add the backup routes to enable it.');
+                    return;
+                }
+                setBusy(refresh, true);
+                renderSkeleton();
+                try {
+                    const response = await fetch(superadminUrls.databaseBackups, { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } });
+                    const result = await response.json();
+                    if (!response.ok) throw new Error(result.message || 'The backups could not be loaded.');
+                    const items = Array.isArray(result.data) ? result.data : [];
+                    body.replaceChildren();
+                    if (!items.length) {
+                        showState('No backups yet. One is created automatically before each database import.');
+                        return;
+                    }
+                    count.textContent = `${items.length} backup${items.length === 1 ? '' : 's'}`;
+                    items.forEach((item, index) => {
+                        const row = document.createElement('tr');
+                        const nameWrap = document.createElement('div');
+                        const name = document.createElement('span');
+                        name.className = 'sa-mono';
+                        name.textContent = item.name;
+                        nameWrap.appendChild(name);
+                        if (index === 0) {
+                            const badge = document.createElement('span');
+                            badge.className = 'sa-badge';
+                            badge.textContent = 'Latest';
+                            nameWrap.appendChild(badge);
+                        }
+                        const action = document.createElement('div');
+                        action.style.textAlign = 'right';
+                        if (superadminUrls.databaseBackupDownload) {
+                            const link = document.createElement('a');
+                            link.className = 'sa-btn sa-btn-ghost sa-btn-sm';
+                            link.href = superadminUrls.databaseBackupDownload.replace('__FILE__', encodeURIComponent(item.name));
+                            link.textContent = 'Download';
+                            link.setAttribute('aria-label', `Download ${item.name}`);
+                            action.appendChild(link);
+                        }
+                        row.append(cell(nameWrap), cell(formatDate(item.created_at)), cell(formatSize(item.size)), cell(action));
+                        body.appendChild(row);
+                    });
+                } catch (error) {
+                    body.replaceChildren();
+                    showState(error.message);
+                    showToast(error.message, 'error');
+                } finally {
+                    setBusy(refresh, false);
+                }
+            }
+            window.saLoadBackups = load;
+            refresh?.addEventListener('click', load);
+            if (document.getElementById('tab-backups')?.classList.contains('active')) load();
+        })();
+
+        document.querySelectorAll('[data-open-backups]').forEach(button => button.addEventListener('click', () => {
+            if (databaseImportModal?.classList.contains('active')) closeDatabaseImportReview();
+            activateTab('backups');
+            window.history.replaceState(null, '', '#backups');
+            window.saLoadBackups?.();
+        }));
+
+        // Show the result of an import that just completed (real values from the server response, kept across the reload)
+        try {
+            const stored = window.sessionStorage.getItem('saImportResult');
+            if (stored) {
+                window.sessionStorage.removeItem('saImportResult');
+                const result = JSON.parse(stored);
+                const banner = document.getElementById('databaseImportResult');
+                if (banner && result.backup) {
+                    document.getElementById('databaseImportResultMessage').textContent = result.message || 'Database import complete.';
+                    document.getElementById('databaseImportResultFile').textContent = result.backup;
+                    banner.hidden = false;
+                    activateTab('database');
+                }
+            }
+        } catch (error) { /* sessionStorage unavailable: the toast already reported the result */ }
+        document.getElementById('dismissImportResult')?.addEventListener('click', () => { document.getElementById('databaseImportResult').hidden = true; });
     })();
 </script>
-@endsection
+@endsection 

@@ -22,6 +22,7 @@ use App\Http\Controllers\SystemSmtpSettingsController;
 use App\Http\Controllers\TarhetaStatusController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\DatabaseBackupController;
 
 Route::get('/', function () {
     return redirect('/intro');
@@ -173,6 +174,11 @@ Route::middleware('login.session')->group(function () {
             ->name('superadmin.database.import');
         Route::post('/superadmin/database/export.xlsx', [AdminDatabaseController::class, 'exportXlsx'])
             ->name('superadmin.database.export-xlsx');
+                Route::get('/superadmin/database/backups', [DatabaseBackupController::class, 'index'])
+            ->name('superadmin.database.backups');
+        Route::get('/superadmin/database/backups/{file}', [DatabaseBackupController::class, 'download'])
+            ->where('file', '[A-Za-z0-9._-]+')
+            ->name('superadmin.database.backups.download');
         Route::put('/superadmin/smtp-settings', [SystemSmtpSettingsController::class, 'update'])
             ->name('superadmin.smtp-settings.update');
         Route::get('/superadmin/record-activity/download', [SuperadminController::class, 'downloadRecordAuditLogs'])
