@@ -4,74 +4,88 @@
 
 @section('content')
 <style>
-    .r401-snapshots { max-width:1200px; margin:0 auto; }
-    .r401-snapshot-panel { padding:1.25rem; border:1px solid var(--border); border-radius:14px; background:var(--surface); }
-    .r401-snapshot-heading { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:1rem; margin-bottom:1rem; }
+    .r401-snapshots { --hover:color-mix(in srgb,var(--text) 6%,var(--bg)); max-width:1200px; margin:0 auto; }
+    .r401-snapshots button,.r401-snapshots select,.r401-snapshots input { font-family:inherit; }
+    .r401-snapshot-heading { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:flex-end; gap:1rem; padding-bottom:1rem; border-bottom:1px solid var(--border); }
+    .r401-snapshot-heading h1 { margin:0; color:var(--text); font-size:1.25rem; font-weight:600; letter-spacing:-.01em; line-height:1.3; }
+    .r401-snapshot-heading p { margin:.3rem 0 0; color:var(--text-muted); font-size:.85rem; }
     .r401-snapshot-heading-links { display:flex; flex-wrap:wrap; gap:.5rem; }
-    .r401-snapshot-heading h1 { margin:0; color:var(--text); font-size:1.35rem; }
-    .r401-snapshot-heading p { margin:.35rem 0 0; color:var(--text-muted); }
-    .r401-snapshot-filters { display:flex; flex-wrap:wrap; align-items:end; gap:.65rem; margin:1rem 0; }
-    .r401-snapshot-filters label { display:grid; gap:.35rem; color:var(--text-muted); font-size:.8rem; font-weight:700; }
-    .r401-snapshot-filters input,.r401-snapshot-filters select { min-height:38px; padding:.45rem .6rem; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--text); font:inherit; }
-    .r401-snapshot-download { display:inline-flex; min-height:38px; align-items:center; justify-content:center; padding:.5rem .8rem; border:0; border-radius:8px; background:var(--accent); color:#fff; font-weight:700; text-decoration:none; cursor:pointer; }
+
+    .r401-snapshot-download { display:inline-flex; align-items:center; justify-content:center; min-height:34px; padding:0 .9rem; border:1px solid var(--border); border-radius:999px; background:transparent; color:var(--text); font-size:.8rem; font-weight:600; text-decoration:none; white-space:nowrap; cursor:pointer; transition:background-color .12s,border-color .12s,color .12s,opacity .12s; }
+    .r401-snapshot-download:hover { background:var(--hover); border-color:color-mix(in srgb,var(--text) 45%,var(--border)); }
+    .r401-snapshot-download.primary { border-color:var(--text); background:var(--text); color:var(--bg); }
+    .r401-snapshot-download.primary:hover { opacity:.85; }
+    .r401-snapshot-download.delete { color:#e5484d; border-color:color-mix(in srgb,#e5484d 45%,var(--border)); }
+    .r401-snapshot-download.delete:hover { background:color-mix(in srgb,#e5484d 10%,var(--bg)); border-color:#e5484d; }
+    .r401-snapshots button:focus-visible,.r401-snapshots a:focus-visible,.r401-snapshots select:focus-visible,.r401-snapshots input:focus-visible,
+    .r401-snapshot-viewer button:focus-visible,.r401-snapshot-summary button:focus-visible,.r401-snapshot-delete-dialog button:focus-visible,.r401-snapshot-delete-dialog input:focus-visible { outline:2px solid color-mix(in srgb,var(--text) 55%,transparent); outline-offset:2px; }
+
+    .r401-snapshot-filters { display:flex; flex-wrap:wrap; align-items:flex-end; gap:.65rem 1rem; padding:1rem 0; border-bottom:1px solid var(--border); }
+    .r401-snapshot-filters label { display:grid; gap:.3rem; color:var(--text-muted); font-size:.75rem; font-weight:600; }
+    .r401-snapshot-filters input,.r401-snapshot-filters select { min-height:36px; padding:.4rem .65rem; border:1px solid var(--border); border-radius:8px; background:transparent; color:var(--text); font-size:.82rem; font-weight:500; color-scheme:light dark; }
+
     .r401-snapshot-actions { display:flex; flex-wrap:wrap; gap:.4rem; }
     .r401-snapshot-actions form { margin:0; }
-    .r401-snapshot-actions .delete { background:#a52b2b; }
-    .r401-snapshot-actions .summary { background:#344d73; }
     .r401-snapshot-table-wrap { overflow-x:auto; }
     .r401-snapshot-table { width:100%; border-collapse:collapse; }
-    .r401-snapshot-table th,.r401-snapshot-table td { padding:.9rem .7rem; border-bottom:1px solid var(--border); text-align:left; white-space:nowrap; }
-    .r401-snapshot-table th { color:var(--text-muted); font-size:.76rem; text-transform:uppercase; }
-    .r401-snapshot-table td:first-child { white-space:normal; font-weight:700; }
-    .r401-snapshot-empty { padding:2.5rem 1rem; color:var(--text-muted); text-align:center; }
+    .r401-snapshot-table th,.r401-snapshot-table td { padding:.8rem .7rem; border-bottom:1px solid var(--border); text-align:left; white-space:nowrap; font-size:.85rem; }
+    .r401-snapshot-table th { color:var(--text-muted); font-size:.72rem; font-weight:600; letter-spacing:.04em; text-transform:uppercase; }
+    .r401-snapshot-table td { font-variant-numeric:tabular-nums; }
+    .r401-snapshot-table td:first-child { white-space:normal; font-weight:600; }
+    .r401-snapshot-table tbody tr:hover { background:var(--hover); }
+    .r401-snapshot-empty { padding:2.5rem 1rem; border-bottom:1px solid var(--border); color:var(--text-muted); font-size:.85rem; text-align:center; }
     .r401-snapshot-pagination { margin-top:1rem; }
-    .r401-snapshot-viewer { width:min(1200px,calc(100% - 2rem)); height:min(92vh,900px); max-width:none; max-height:none; padding:0; overflow:hidden; border:1px solid var(--border); border-radius:14px; background:var(--surface); color:var(--text); box-shadow:0 24px 70px rgba(15,23,42,.35); }
-    .r401-snapshot-viewer::backdrop,.r401-snapshot-delete-dialog::backdrop { background:rgba(15,23,42,.72); backdrop-filter:blur(3px); }
-    .r401-snapshot-viewer header { display:flex; align-items:center; justify-content:space-between; gap:1rem; min-height:54px; padding:.65rem 1rem; border-bottom:1px solid var(--border); }
-    .r401-snapshot-viewer h2 { margin:0; overflow:hidden; font-size:1rem; text-overflow:ellipsis; white-space:nowrap; }
-    .r401-snapshot-viewer header button { min-height:36px; padding:.45rem .75rem; border:0; border-radius:8px; background:var(--bg); color:var(--text); font:inherit; font-weight:700; cursor:pointer; }
-    .r401-snapshot-viewer iframe { display:block; width:100%; height:calc(100% - 55px); border:0; background:#eef2f6; }
-    .r401-snapshot-summary { width:min(760px,calc(100% - 2rem)); max-height:min(82vh,760px); padding:0; overflow:hidden; border:1px solid var(--border); border-radius:14px; background:var(--surface); color:var(--text); box-shadow:0 24px 70px rgba(15,23,42,.35); }
-    .r401-snapshot-summary::backdrop { background:rgba(15,23,42,.72); backdrop-filter:blur(3px); }
-    .r401-snapshot-summary header { display:flex; align-items:center; justify-content:space-between; gap:1rem; min-height:58px; padding:.7rem 1rem; border-bottom:1px solid var(--border); }
-    .r401-snapshot-summary h2 { margin:0; overflow:hidden; font-size:1rem; text-overflow:ellipsis; white-space:nowrap; }
-    .r401-snapshot-summary header button { min-height:36px; padding:.45rem .75rem; border:0; border-radius:8px; background:var(--bg); color:var(--text); font:inherit; font-weight:700; cursor:pointer; }
-    .r401-summary-tablist { display:flex; gap:.4rem; padding:.65rem 1rem 0; border-bottom:1px solid var(--border); }
-    .r401-summary-tab { padding:.6rem .9rem; border:1px solid transparent; border-bottom:0; border-radius:8px 8px 0 0; background:transparent; color:var(--text-muted); font:inherit; font-weight:750; }
-    .r401-summary-tab[aria-selected="true"] { border-color:var(--border); background:var(--surface); color:var(--accent); }
+
+    .r401-snapshot-viewer { width:min(1200px,calc(100% - 2rem)); height:min(92vh,900px); max-width:none; max-height:none; padding:0; overflow:hidden; border:1px solid var(--border); border-radius:12px; background:var(--surface); color:var(--text); }
+    .r401-snapshot-viewer::backdrop,.r401-snapshot-summary::backdrop,.r401-snapshot-delete-dialog::backdrop { background:rgba(0,0,0,.72); }
+    .r401-snapshot-viewer header,.r401-snapshot-summary header { display:flex; align-items:center; justify-content:space-between; gap:1rem; min-height:54px; padding:.65rem 1rem; border-bottom:1px solid var(--border); }
+    .r401-snapshot-viewer h2,.r401-snapshot-summary h2 { margin:0; overflow:hidden; font-size:.95rem; font-weight:600; text-overflow:ellipsis; white-space:nowrap; }
+    .r401-dialog-close { min-height:32px; padding:0 .8rem; border:1px solid var(--border); border-radius:999px; background:transparent; color:var(--text); font-size:.8rem; font-weight:600; cursor:pointer; }
+    .r401-dialog-close:hover { background:var(--hover); }
+    .r401-snapshot-viewer iframe { display:block; width:100%; height:calc(100% - 55px); border:0; background:#fff; }
+
+    .r401-snapshot-summary { width:min(760px,calc(100% - 2rem)); max-height:min(82vh,760px); padding:0; overflow:hidden; border:1px solid var(--border); border-radius:12px; background:var(--surface); color:var(--text); }
+    .r401-summary-tablist { display:flex; gap:1.25rem; padding:0 1rem; border-bottom:1px solid var(--border); }
+    .r401-summary-tab { margin-bottom:-1px; padding:.65rem 0; border:0; border-bottom:2px solid transparent; background:transparent; color:var(--text-muted); font-size:.82rem; font-weight:600; cursor:pointer; }
+    .r401-summary-tab[aria-selected="true"] { border-bottom-color:var(--text); color:var(--text); }
     .r401-summary-panel { max-height:calc(min(82vh,760px) - 112px); overflow:auto; padding:1rem; }
-    .r401-summary-period { margin:0 0 .85rem; color:var(--text-muted); font-size:.86rem; }
-    .r401-summary-list { display:grid; gap:.55rem; margin:0; padding:0; list-style:none; }
-    .r401-summary-list li { padding:.75rem .85rem; border:1px solid var(--border); border-radius:9px; background:var(--bg); line-height:1.5; }
+    .r401-summary-period { margin:0 0 .75rem; color:var(--text-muted); font-size:.82rem; }
+    .r401-summary-list { margin:0; padding:0; border-top:1px solid var(--border); list-style:none; }
+    .r401-summary-list li { padding:.7rem 0; border-bottom:1px solid var(--border); font-size:.85rem; line-height:1.5; }
     .r401-summary-list strong { color:var(--text); }
-    .r401-summary-empty,.r401-summary-error { padding:1.2rem; color:var(--text-muted); text-align:center; }
-    .r401-summary-error { color:#a52b2b; }
-    .r401-snapshot-delete-dialog { width:min(520px,calc(100% - 2rem)); padding:0; border:1px solid var(--border); border-radius:16px; background:var(--surface); color:var(--text); box-shadow:0 24px 70px rgba(15,23,42,.35); }
+    .r401-summary-empty,.r401-summary-error { padding:1.2rem; color:var(--text-muted); font-size:.85rem; text-align:center; }
+    .r401-summary-error { color:#e5484d; }
+
+    .r401-snapshot-delete-dialog { width:min(520px,calc(100% - 2rem)); padding:0; border:1px solid var(--border); border-radius:12px; background:var(--surface); color:var(--text); }
     .r401-snapshot-delete-content { padding:1.25rem; }
-    .r401-snapshot-delete-content h2 { margin:0 0 .6rem; font-size:1.15rem; }
-    .r401-snapshot-delete-content p { color:var(--text-muted); line-height:1.5; }
-    .r401-snapshot-delete-content strong { overflow-wrap:anywhere; }
-    .r401-snapshot-delete-content label { display:grid; gap:.4rem; margin-top:1rem; font-weight:700; }
-    .r401-snapshot-delete-content input[type="text"] { min-height:42px; padding:.6rem .7rem; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--text); font:inherit; }
+    .r401-snapshot-delete-content h2 { margin:0 0 .6rem; font-size:1.05rem; font-weight:600; }
+    .r401-snapshot-delete-content p { margin:.5rem 0; color:var(--text-muted); font-size:.85rem; line-height:1.5; }
+    .r401-snapshot-delete-content strong { color:var(--text); overflow-wrap:anywhere; }
+    .r401-snapshot-delete-content label { display:grid; gap:.4rem; margin-top:1rem; font-size:.82rem; font-weight:600; }
+    .r401-snapshot-delete-content input[type="text"] { min-height:38px; padding:.5rem .65rem; border:1px solid var(--border); border-radius:8px; background:transparent; color:var(--text); font-size:.85rem; font-weight:500; }
     .r401-snapshot-delete-acknowledgement { display:flex!important; align-items:flex-start; gap:.5rem; }
-    .r401-snapshot-delete-acknowledgement input { width:18px; min-height:18px!important; margin-top:.15rem; }
-    .r401-snapshot-delete-acknowledgement span { font-size:.9rem; font-weight:600; }
-    .r401-snapshot-delete-error { color:#a52b2b!important; font-size:.85rem; font-weight:700; }
-    .r401-snapshot-delete-actions { display:flex; justify-content:flex-end; gap:.5rem; margin-top:1.1rem; }
-    .r401-snapshot-delete-actions button { min-height:38px; padding:.5rem .75rem; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--text); font:inherit; font-weight:700; cursor:pointer; }
-    .r401-snapshot-delete-actions .danger { border-color:#a52b2b; background:#a52b2b; color:#fff; }
-    .r401-snapshot-delete-actions button:disabled { cursor:not-allowed; opacity:.5; }
+    .r401-snapshot-delete-acknowledgement input { width:16px; min-height:16px!important; margin:.15rem 0 0; accent-color:var(--text); }
+    .r401-snapshot-delete-acknowledgement span { font-size:.85rem; font-weight:500; }
+    .r401-snapshots .r401-snapshot-delete-error,.r401-snapshot-delete-content .r401-snapshot-delete-error { color:#e5484d; font-size:.8rem; font-weight:600; }
+    .r401-snapshot-delete-actions { display:flex; justify-content:flex-end; gap:.5rem; margin-top:1.1rem; padding-top:1rem; border-top:1px solid var(--border); }
+    .r401-snapshot-delete-actions button { min-height:34px; padding:0 .9rem; border:1px solid var(--border); border-radius:999px; background:transparent; color:var(--text); font-size:.8rem; font-weight:600; cursor:pointer; }
+    .r401-snapshot-delete-actions button:hover { background:var(--hover); }
+    .r401-snapshot-delete-actions .danger { border-color:#e5484d; background:#e5484d; color:#fff; }
+    .r401-snapshot-delete-actions .danger:hover { background:#e5484d; opacity:.88; }
+    .r401-snapshot-delete-actions button:disabled { cursor:not-allowed; opacity:.45; }
+
+    @media (prefers-reduced-motion:reduce) { .r401-snapshot-download { transition:none; } }
 </style>
 
 <main class="r401-snapshots">
-    <section class="r401-snapshot-panel">
+    <section>
         <header class="r401-snapshot-heading">
             <div>
                 <h1>Resumen &amp; R4-01 Snapshots</h1>
                 <p>Combined monthly reports saved when the monthly session is finalized.</p>
             </div>
             <div class="r401-snapshot-heading-links">
-                <a class="r401-snapshot-download" href="{{ route('form-generator', ['panel' => 'monthly', 'monthly_section' => 'monthly-forms']) }}">Open Resumen &amp; R4-01 Generators</a>
+                <a class="r401-snapshot-download primary" href="{{ route('form-generator', ['panel' => 'monthly', 'monthly_section' => 'monthly-forms']) }}">Open Resumen &amp; R4-01 Generators</a>
             </div>
         </header>
         <form class="r401-snapshot-filters" method="GET" action="{{ route('forms.monthly.r4-01.snapshots') }}">
@@ -101,7 +115,7 @@
                                 <td>{{ $snapshot->created_at->timezone('Asia/Manila')->format('d M Y, h:i A') }}</td>
                                 <td>
                                     <div class="r401-snapshot-actions">
-                                        <button type="button" class="r401-snapshot-download summary" data-snapshot-summary="{{ route('forms.monthly.r4-01.snapshots.summary', $snapshot) }}" data-snapshot-name="{{ $snapshot->file_name }}">Summary</button>
+                                        <button type="button" class="r401-snapshot-download" data-snapshot-summary="{{ route('forms.monthly.r4-01.snapshots.summary', $snapshot) }}" data-snapshot-name="{{ $snapshot->file_name }}">Summary</button>
                                         <button type="button" class="r401-snapshot-download" data-snapshot-view="{{ route('forms.monthly.r4-01.snapshots.view', $snapshot) }}" data-snapshot-name="{{ $snapshot->file_name }}">View</button>
                                         <a class="r401-snapshot-download" href="{{ route('forms.monthly.r4-01.snapshots.download', $snapshot) }}">Download</a>
                                         @if ($canDeleteSnapshots)
@@ -127,14 +141,14 @@
 <dialog class="r401-snapshot-viewer" id="r401SnapshotViewer" aria-labelledby="r401SnapshotViewerTitle">
     <header>
         <h2 id="r401SnapshotViewerTitle"></h2>
-        <button type="button" id="r401SnapshotViewerClose">Close</button>
+        <button type="button" class="r401-dialog-close" id="r401SnapshotViewerClose">Close</button>
     </header>
     <iframe id="r401SnapshotViewerFrame" title="Monthly report preview"></iframe>
 </dialog>
 <dialog class="r401-snapshot-summary" id="r401SnapshotSummary" aria-labelledby="r401SnapshotSummaryTitle">
     <header>
         <h2 id="r401SnapshotSummaryTitle">Monthly session summary</h2>
-        <button type="button" id="r401SnapshotSummaryClose">Close</button>
+        <button type="button" class="r401-dialog-close" id="r401SnapshotSummaryClose">Close</button>
     </header>
     <div class="r401-summary-tablist" role="tablist" aria-label="Snapshot details">
         <button type="button" class="r401-summary-tab" id="r401SummaryTab" role="tab" aria-selected="true" aria-controls="r401SummaryPanel">Summary</button>

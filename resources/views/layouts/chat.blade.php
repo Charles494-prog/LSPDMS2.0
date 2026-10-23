@@ -49,7 +49,9 @@
         }
         .chat-frame-content { display: flex; width: 100%; min-width: 0; min-height: 0; padding: 0; }
 
-        :focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+       :focus-visible { outline: 2px solid var(--border-strong); outline-offset: 2px; }
+textarea:focus-visible,
+input:focus-visible { outline: none; border-color: var(--text-muted); }
         ::selection { background: var(--text); color: var(--bg); }
 
         /* Thin, neutral scrollbars */

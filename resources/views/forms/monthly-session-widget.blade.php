@@ -1,65 +1,105 @@
 <style>
-    .monthly-session-widget { position:fixed; z-index:1200; top:5.25rem; right:1rem; display:flex; align-items:center; gap:.55rem; max-width:calc(100vw - 2rem); padding:.55rem .65rem; border:1px solid var(--border); border-radius:14px; background:var(--surface); box-shadow:0 8px 30px rgba(15,23,42,.2); font-size:.84rem; }
-    .monthly-session-widget button,.monthly-session-dialog button { min-height:38px; padding:.5rem .75rem; border:0; border-radius:9px; background:var(--accent); color:#fff; font:inherit; font-weight:750; cursor:pointer; }
-    .monthly-session-widget button:disabled,.monthly-session-dialog button:disabled { opacity:.6; cursor:wait; }
+    /* ---------- Local tokens (theme-aware, work in light and dark) ---------- */
+    .monthly-session-widget,.monthly-session-dialog,.monthly-session-prompt,.monthly-session-blocker {
+        --r-md:8px; --r-lg:10px; --r-btn:0;
+        --ok:var(--success,#16a34a);
+        --hover:color-mix(in srgb,var(--text) 6%,var(--bg));
+        --ring:color-mix(in srgb,var(--text) 55%,transparent);
+        --flip-bg:var(--text); --flip-fg:var(--bg);
+    }
+
+    /* ---------- Floating widget (draggable) ---------- */
+    .monthly-session-widget { position:fixed; z-index:1200; top:5.25rem; right:1rem; display:flex; align-items:center; gap:.6rem; max-width:calc(100vw - 2rem); padding:.4rem .5rem .4rem .3rem; border:1px solid var(--border); border-radius:var(--r-lg); background:var(--surface); box-shadow:0 8px 24px rgba(0,0,0,.18); color:var(--text); font-size:.8125rem; touch-action:none; cursor:grab; user-select:none; }
+    .monthly-session-widget[data-dragging="true"] { cursor:grabbing; box-shadow:0 12px 32px rgba(0,0,0,.28); }
     .monthly-session-widget [hidden] { display:none; }
-    .monthly-session-widget-minimize { width:34px; min-height:34px!important; padding:.25rem!important; background:var(--bg)!important; color:var(--text)!important; font-size:1.05rem!important; }
-    .monthly-session-widget[data-minimized="true"] { gap:.4rem; padding:.35rem .45rem; }
+    .monthly-session-grip { display:inline-grid; place-items:center; align-self:stretch; width:18px; border-radius:var(--r-md); color:var(--text-muted); font-size:1rem; line-height:1; cursor:grab; }
+    .monthly-session-grip:hover { color:var(--text); }
+    .monthly-session-grip:focus-visible { outline:2px solid var(--ring); outline-offset:1px; }
+    .monthly-session-dot { flex-shrink:0; width:8px; height:8px; border-radius:50%; background:var(--text-muted); }
+    .monthly-session-widget[data-active="true"] .monthly-session-dot { background:var(--ok); }
+    #monthlySessionStatus { font-weight:500; }
+    .monthly-session-minimized-label { display:none; color:var(--text); font-size:.8125rem; font-weight:500; }
+    .monthly-session-widget[data-minimized="true"] { gap:.5rem; }
     .monthly-session-widget[data-minimized="true"] #monthlySessionStatus,.monthly-session-widget[data-minimized="true"] #monthlySessionStart,.monthly-session-widget[data-minimized="true"] #monthlySessionOpen { display:none; }
-    .monthly-session-minimized-label { display:none; color:var(--text); font-size:.78rem; font-weight:750; }
     .monthly-session-widget[data-minimized="true"] .monthly-session-minimized-label { display:inline; }
-    .monthly-session-dialog { width:min(900px,calc(100% - 1.5rem)); max-height:85vh; padding:0; overflow:auto; border:1px solid var(--border); border-radius:18px; background:var(--surface); color:var(--text); box-shadow:0 24px 70px rgba(15,23,42,.3); }
-    .monthly-session-dialog::backdrop { background:rgba(15,23,42,.55); backdrop-filter:blur(2px); }
-    .monthly-session-dialog header { position:sticky; top:0; display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; padding:1rem 1.2rem; border-bottom:1px solid var(--border); background:var(--surface); }
-    .monthly-session-dialog h2 { margin:0; font-size:1.15rem; }
-    .monthly-session-dialog p { margin:.3rem 0 0; color:var(--text-muted); font-size:.84rem; }
-    .monthly-session-dialog header button { min-height:34px; padding:.35rem .6rem; background:var(--bg); color:var(--text); }
-    .monthly-session-dialog-content { padding:.75rem 1rem 1rem; }
-    .monthly-session-list { display:grid; gap:.6rem; max-height:55vh; overflow:auto; }
-    .monthly-session-movement { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:.8rem; padding:.8rem; border:1px solid var(--border); border-radius:11px; background:var(--bg); }
+
+    /* ---------- Buttons: square outline, flip on hover ---------- */
+    .monthly-session-widget button,.monthly-session-dialog button,.monthly-session-prompt button { min-height:34px; padding:.4rem .8rem; border:1px solid var(--text); border-radius:var(--r-btn); background:transparent; color:var(--text); font:inherit; font-size:.8125rem; font-weight:500; cursor:pointer; transition:background-color .12s,border-color .12s,color .12s; }
+    .monthly-session-widget button:hover:not(:disabled),.monthly-session-dialog button:hover:not(:disabled),.monthly-session-prompt button:hover:not(:disabled) { background:var(--flip-bg); border-color:var(--flip-bg); color:var(--flip-fg); }
+    .monthly-session-widget button:focus-visible,.monthly-session-dialog button:focus-visible,.monthly-session-prompt button:focus-visible { outline:2px solid var(--ring); outline-offset:2px; }
+    .monthly-session-widget button:disabled,.monthly-session-dialog button:disabled,.monthly-session-prompt button:disabled { border-color:var(--border); background:transparent; color:var(--text-muted); cursor:not-allowed; }
+    .monthly-session-widget .monthly-session-widget-minimize,.monthly-session-dialog header button,.monthly-session-footer .secondary,.monthly-session-prompt-actions button#monthlySessionPromptCancel { border-color:var(--border); }
+    .monthly-session-widget .monthly-session-widget-minimize { width:34px; padding:.25rem; font-size:1rem; }
+    .monthly-session-dialog button.monthly-undo,.monthly-session-prompt button.danger { border-color:var(--danger); color:var(--danger); }
+    .monthly-session-dialog button.monthly-undo:hover:not(:disabled),.monthly-session-prompt button.danger:hover:not(:disabled) { background:var(--danger); border-color:var(--danger); color:#fff; }
+
+    /* ---------- Activity dialog ---------- */
+    .monthly-session-dialog { width:min(900px,calc(100% - 1.5rem)); max-height:85vh; padding:0; overflow:auto; border:1px solid var(--border); border-radius:var(--r-lg); background:var(--surface); color:var(--text); box-shadow:0 16px 48px rgba(0,0,0,.3); }
+    .monthly-session-dialog::backdrop { background:rgba(0,0,0,.6); }
+    .monthly-session-dialog header { position:sticky; top:0; display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; padding:1rem 1.25rem; border-bottom:1px solid var(--border); background:var(--surface); }
+    .monthly-session-dialog h2 { margin:0; font-size:1.0625rem; font-weight:600; letter-spacing:-.01em; }
+    .monthly-session-dialog p { margin:.3rem 0 0; color:var(--text-muted); font-size:.84rem; line-height:1.5; }
+    .monthly-session-dialog-content { padding:.5rem 1.25rem 1rem; }
+    .monthly-session-list { display:grid; max-height:55vh; overflow:auto; border-top:1px solid var(--border); }
+    .monthly-session-movement { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:.8rem; padding:.75rem .25rem; border:0; border-bottom:1px solid var(--border); border-radius:0; background:transparent; }
     .monthly-session-movement small { display:block; margin-top:.2rem; color:var(--text-muted); line-height:1.4; }
-    .monthly-session-entries { display:grid; gap:.35rem; }
-    .monthly-session-entry { display:grid; gap:.08rem; padding:.35rem .5rem; border-left:3px solid var(--accent); border-radius:4px; background:var(--surface); }
-    .monthly-session-entry strong { color:var(--text); font-size:.9rem; }
-    .monthly-session-entry small { margin:0; font-weight:700; }
-    .monthly-session-personal { margin-top:.4rem!important; }
-    .monthly-session-dialog .monthly-undo { background:#b42318; }
+    .monthly-session-entries { display:grid; gap:.3rem; }
+    .monthly-session-entry { display:grid; gap:.08rem; padding:.2rem 0 .2rem .6rem; border:0; border-left:2px solid var(--text-muted); border-radius:0; background:transparent; }
+    .monthly-session-entry strong { color:var(--text); font-size:.875rem; font-weight:500; }
+    .monthly-session-entry small { margin:0; font-weight:500; font-variant-numeric:tabular-nums; }
+    .monthly-session-personal { margin-top:.4rem !important; }
     .monthly-session-empty { padding:1.5rem; color:var(--text-muted); text-align:center; }
-    .monthly-session-footer { display:flex; justify-content:flex-end; gap:.55rem; margin-top:.8rem; padding-top:.8rem; border-top:1px solid var(--border); }
-    .monthly-session-finish-notice { align-self:center; margin:0!important; color:var(--text-muted); font-size:.78rem!important; }
-    .monthly-session-footer .secondary { background:var(--bg); color:var(--text); }
-    .monthly-session-prompt { width:min(520px,calc(100% - 2rem)); padding:0; overflow:hidden; border:1px solid var(--border); border-radius:16px; background:var(--surface); color:var(--text); box-shadow:0 24px 70px rgba(15,23,42,.3); }
-    .monthly-session-prompt::backdrop { background:rgba(15,23,42,.58); backdrop-filter:blur(3px); }
-    .monthly-session-prompt-content { padding:1.35rem; }
-    .monthly-session-prompt h2 { margin:0 0 .65rem; font-size:1.2rem; }
-    .monthly-session-prompt p { margin:0; color:var(--text-muted); line-height:1.55; white-space:pre-line; }
-    .monthly-session-prompt input { width:100%; min-height:44px; margin-top:1rem; padding:.65rem .75rem; border:1px solid var(--border); border-radius:9px; background:var(--bg); color:var(--text); font:inherit; }
-    .monthly-session-prompt-hint { margin-top:.55rem!important; color:var(--text-muted)!important; font-size:.82rem; }
-    .monthly-session-prompt-error { margin-top:.35rem!important; color:#b42318!important; font-size:.82rem; font-weight:700; }
+    .monthly-session-footer { display:flex; justify-content:flex-end; gap:.5rem; margin-top:.8rem; padding-top:.8rem; border-top:1px solid var(--border); }
+    .monthly-session-finish-notice { align-self:center; margin:0 !important; color:var(--text-muted); font-size:.78rem !important; }
+
+    /* ---------- Prompt dialog ---------- */
+    .monthly-session-prompt { width:min(520px,calc(100% - 2rem)); padding:0; overflow:hidden; border:1px solid var(--border); border-radius:var(--r-lg); background:var(--surface); color:var(--text); box-shadow:0 16px 48px rgba(0,0,0,.3); }
+    .monthly-session-prompt::backdrop { background:rgba(0,0,0,.6); }
+    .monthly-session-prompt-content { padding:1.25rem; }
+    .monthly-session-prompt h2 { margin:0 0 .5rem; font-size:1.0625rem; font-weight:600; letter-spacing:-.01em; }
+    .monthly-session-prompt p { margin:0; color:var(--text-muted); font-size:.875rem; line-height:1.55; white-space:pre-line; }
+    .monthly-session-prompt input { width:100%; min-height:38px; margin-top:1rem; padding:.5rem .65rem; border:1px solid var(--border); border-radius:var(--r-md); background:var(--bg); color:var(--text); font:inherit; font-size:.875rem; }
+    .monthly-session-prompt input:focus-visible { outline:2px solid var(--ring); outline-offset:1px; border-color:var(--text); }
+    .monthly-session-prompt-hint { margin-top:.55rem !important; font-size:.8125rem !important; }
+    .monthly-session-prompt-error { margin-top:.35rem !important; color:var(--danger) !important; font-size:.8125rem !important; font-weight:500; }
     .monthly-session-prompt [hidden] { display:none; }
-    .monthly-session-prompt-actions { display:flex; justify-content:flex-end; gap:.55rem; margin-top:1.25rem; }
-    .monthly-session-prompt-actions button { min-height:40px; padding:.55rem .9rem; border:1px solid var(--border); border-radius:9px; background:var(--bg); color:var(--text); font:inherit; font-weight:700; cursor:pointer; }
-    .monthly-session-prompt-actions button.primary { border-color:var(--accent); background:var(--accent); color:#fff; }
-    .monthly-session-prompt-actions button.danger { border-color:#b42318; background:#b42318; color:#fff; }
-    .monthly-session-blocker { position:fixed; z-index:100000; inset:0; display:grid; place-items:center; padding:1rem; background:rgba(15,23,42,.76); color:#fff; text-align:center; }
+    .monthly-session-prompt-actions { display:flex; justify-content:flex-end; gap:.5rem; margin-top:1.25rem; }
+
+    /* ---------- Finish blocker ---------- */
+    .monthly-session-blocker { position:fixed; z-index:100000; inset:0; display:grid; place-items:center; padding:1rem; background:rgba(0,0,0,.72); color:var(--text); text-align:center; }
     .monthly-session-blocker[hidden] { display:none; }
-    .monthly-session-blocker-card { width:min(400px,100%); padding:2rem; border:1px solid rgba(255,255,255,.2); border-radius:20px; background:#172033; box-shadow:0 25px 80px rgba(0,0,0,.38); }
-    .monthly-session-success-button { min-height:42px; margin-top:1.25rem; padding:.65rem 1rem; border:0; border-radius:10px; background:#74df9b; color:#10251a; font:inherit; font-weight:800; cursor:pointer; }
-    .monthly-session-success-button[hidden] { display:none; }
-    .monthly-session-spinner { width:52px; height:52px; margin:0 auto 1.25rem; border:5px solid rgba(255,255,255,.25); border-top-color:#fff; border-radius:50%; animation:monthly-session-spin .8s linear infinite; }
-    .monthly-session-success-check { display:grid; width:68px; height:68px; margin:0 auto 1.1rem; place-items:center; border:3px solid #74df9b; border-radius:50%; color:#74df9b; font-size:2.8rem; font-weight:800; line-height:1; animation:monthly-session-check .45s ease-out both; }
-    .monthly-session-blocker h2 { margin:0; font-size:1.55rem; }
-    .monthly-session-blocker p { margin:.55rem 0 0; color:#d6deeb; }
+    .monthly-session-blocker-card { width:min(400px,100%); padding:2rem; border:1px solid var(--border); border-radius:var(--r-lg); background:var(--surface); box-shadow:0 16px 48px rgba(0,0,0,.3); }
+    .monthly-session-spinner { width:44px; height:44px; margin:0 auto 1.25rem; border:3px solid var(--border); border-top-color:var(--text); border-radius:50%; animation:monthly-session-spin .8s linear infinite; }
+    .monthly-session-success-check { display:grid; width:60px; height:60px; margin:0 auto 1.1rem; place-items:center; border:2px solid var(--ok); border-radius:50%; color:var(--ok); font-size:2rem; font-weight:600; line-height:1; animation:monthly-session-check .35s ease-out both; }
+    .monthly-session-blocker h2 { margin:0; font-size:1.25rem; font-weight:600; letter-spacing:-.01em; }
+    .monthly-session-blocker p { margin:.5rem 0 0; color:var(--text-muted); font-size:.875rem; line-height:1.5; }
     .monthly-session-blocker[data-state="success"] .monthly-session-spinner { display:none; }
     .monthly-session-blocker[data-state="loading"] .monthly-session-success-check { display:none; }
+    .monthly-session-success-button { min-height:38px; margin-top:1.25rem; padding:.5rem 1rem; border:1px solid var(--text); border-radius:var(--r-btn); background:transparent; color:var(--text); font:inherit; font-size:.875rem; font-weight:500; cursor:pointer; transition:background-color .12s,border-color .12s,color .12s; }
+    .monthly-session-success-button:hover { background:var(--flip-bg); border-color:var(--flip-bg); color:var(--flip-fg); }
+    .monthly-session-success-button:focus-visible { outline:2px solid var(--ring); outline-offset:2px; }
+    .monthly-session-success-button[hidden] { display:none; }
     @keyframes monthly-session-spin { to { transform:rotate(360deg); } }
-    @keyframes monthly-session-check { from { transform:scale(.3); opacity:0; } to { transform:scale(1); opacity:1; } }
-    @media(max-width:520px) { .monthly-session-widget { top:4.5rem; right:.5rem; max-width:calc(100vw - 1rem); } .monthly-session-widget button { padding:.4rem .55rem; font-size:.78rem; } .monthly-session-movement { grid-template-columns:1fr; } .monthly-session-movement button { justify-self:end; } }
+    @keyframes monthly-session-check { from { transform:scale(.4); opacity:0; } to { transform:scale(1); opacity:1; } }
+
+    @media(max-width:520px) {
+        .monthly-session-widget { top:4.5rem; right:.5rem; max-width:calc(100vw - 1rem); }
+        .monthly-session-widget button { padding:.35rem .55rem; font-size:.78rem; }
+        .monthly-session-movement { grid-template-columns:1fr; }
+        .monthly-session-movement button { justify-self:end; }
+    }
+    @media (prefers-reduced-motion:reduce) {
+        .monthly-session-widget *,.monthly-session-dialog *,.monthly-session-prompt *,.monthly-session-success-button { transition:none !important; }
+        .monthly-session-spinner { animation-duration:2.4s; }
+        .monthly-session-success-check { animation:none; }
+    }
 </style>
 @php($currentMonthlySession = $monthlySession ?? null)
 @php($monthlySessionRole = mb_strtolower(trim((string) request()->session()->get('login_user.tungkulin', ''))))
 @php($canFinishMonthlySession = in_array($monthlySessionRole, ['head secretary', 'secretary head'], true))
-<aside class="monthly-session-widget" id="monthlySessionWidget" aria-live="polite" data-minimized="false">
+<aside class="monthly-session-widget" id="monthlySessionWidget" aria-live="polite" data-minimized="false" data-active="{{ $currentMonthlySession ? 'true' : 'false' }}">
+    <span class="monthly-session-grip" id="monthlySessionGrip" role="button" tabindex="0" aria-label="Move the monthly session control. Drag it, or use the arrow keys." title="Drag to move">⠿</span>
+    <span class="monthly-session-dot" aria-hidden="true"></span>
     <strong id="monthlySessionStatus">{{ $currentMonthlySession ? 'Session active · '.$currentMonthlySession->period_month?->format('F Y') : 'Monthly session' }}</strong>
     <span class="monthly-session-minimized-label">Monthly Session</span>
     <button type="button" id="monthlySessionStart" @if ($currentMonthlySession) hidden @endif>Start session</button>
@@ -129,6 +169,7 @@
     const finish = document.getElementById('monthlySessionFinish');
     const canFinish = @json($canFinishMonthlySession);
     const widget = document.getElementById('monthlySessionWidget');
+    const grip = document.getElementById('monthlySessionGrip');
     const minimize = document.getElementById('monthlySessionMinimize');
     const promptDialog = document.getElementById('monthlySessionPrompt');
     const promptTitle = document.getElementById('monthlySessionPromptTitle');
@@ -320,6 +361,7 @@
     };
     const update = result => {
         const session = result.session;
+        widget.dataset.active = String(Boolean(session));
         window.dispatchEvent(new CustomEvent('monthly-session-state', {
             detail: { active: Boolean(session) }
         }));
@@ -422,6 +464,97 @@
         minimize.textContent = '+';
         minimize.setAttribute('aria-label', 'Expand monthly session bubble');
     }
+
+    // ---------- Draggable widget (chat-head behavior) ----------
+    const positionKey = 'monthlySessionWidgetPosition';
+    const edge = 12;
+    const dragThreshold = 5;
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let position = { side: 'right', top: null };
+    let drag = null;
+    try {
+        const saved = JSON.parse(window.localStorage.getItem(positionKey) || 'null');
+        if (saved && (saved.side === 'left' || saved.side === 'right') && Number.isFinite(saved.top)) position = saved;
+    } catch (_) {}
+    const clampTop = top => Math.min(Math.max(edge, top), Math.max(edge, window.innerHeight - widget.offsetHeight - edge));
+    const savePosition = () => {
+        try { window.localStorage.setItem(positionKey, JSON.stringify(position)); } catch (_) {}
+    };
+    const applyPosition = () => {
+        if (position.top === null) return;
+        widget.style.transition = 'none';
+        widget.style.top = `${clampTop(position.top)}px`;
+        widget.style.bottom = 'auto';
+        if (position.side === 'left') {
+            widget.style.left = `${edge}px`;
+            widget.style.right = 'auto';
+        } else {
+            widget.style.right = `${edge}px`;
+            widget.style.left = 'auto';
+        }
+    };
+    widget.addEventListener('pointerdown', event => {
+        if (event.button !== 0 || event.target.closest('button')) return;
+        const rect = widget.getBoundingClientRect();
+        drag = { id: event.pointerId, startX: event.clientX, startY: event.clientY, left: rect.left, top: rect.top, moved: false };
+        widget.setPointerCapture(event.pointerId);
+    });
+    widget.addEventListener('pointermove', event => {
+        if (!drag || event.pointerId !== drag.id) return;
+        const dx = event.clientX - drag.startX;
+        const dy = event.clientY - drag.startY;
+        if (!drag.moved && Math.hypot(dx, dy) < dragThreshold) return;
+        if (!drag.moved) {
+            drag.moved = true;
+            widget.dataset.dragging = 'true';
+            widget.style.transition = 'none';
+            widget.style.right = 'auto';
+            widget.style.bottom = 'auto';
+        }
+        const maxLeft = Math.max(edge, window.innerWidth - widget.offsetWidth - edge);
+        widget.style.left = `${Math.min(Math.max(edge, drag.left + dx), maxLeft)}px`;
+        widget.style.top = `${clampTop(drag.top + dy)}px`;
+    });
+    const endDrag = event => {
+        if (!drag || event.pointerId !== drag.id) return;
+        const moved = drag.moved;
+        drag = null;
+        if (widget.hasPointerCapture(event.pointerId)) widget.releasePointerCapture(event.pointerId);
+        delete widget.dataset.dragging;
+        if (!moved) return;
+        const rect = widget.getBoundingClientRect();
+        position = {
+            side: rect.left + rect.width / 2 < window.innerWidth / 2 ? 'left' : 'right',
+            top: clampTop(rect.top),
+        };
+        savePosition();
+        if (reduceMotion.matches) {
+            applyPosition();
+            return;
+        }
+        widget.style.transition = 'left .18s ease';
+        widget.style.left = `${position.side === 'left' ? edge : window.innerWidth - rect.width - edge}px`;
+        window.setTimeout(applyPosition, 200);
+    };
+    widget.addEventListener('pointerup', endDrag);
+    widget.addEventListener('pointercancel', endDrag);
+    grip.addEventListener('keydown', event => {
+        if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+        event.preventDefault();
+        const rect = widget.getBoundingClientRect();
+        const currentSide = position.top === null
+            ? (rect.left + rect.width / 2 < window.innerWidth / 2 ? 'left' : 'right')
+            : position.side;
+        position = {
+            side: event.key === 'ArrowLeft' ? 'left' : event.key === 'ArrowRight' ? 'right' : currentSide,
+            top: clampTop((position.top ?? rect.top) + (event.key === 'ArrowUp' ? -24 : event.key === 'ArrowDown' ? 24 : 0)),
+        };
+        applyPosition();
+        savePosition();
+    });
+    window.addEventListener('resize', applyPosition);
+    applyPosition();
+
     refresh().catch(error => { status.textContent = error.message; });
     window.setInterval(() => refresh().catch(() => {}), 15000);
 })();

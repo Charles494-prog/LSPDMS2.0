@@ -54,6 +54,7 @@ class SuperadminController extends Controller
         $smtpSettings = SystemSmtpSetting::query()->first();
         $smtpPasswordConfigured = filled($smtpSettings?->getRawOriginal('app_password'));
         $smtpDatabaseConfigured = filled($smtpSettings?->email) && $smtpPasswordConfigured;
+        $smtpNeedsVerification = $smtpConfiguration->needsVerification();
         $smtpConfiguredFromEnvironment = $smtpConfiguration->isEnvironmentConfigured();
         $smtpConfigured = $smtpConfiguration->isConfigured();
         $securitySettings = GlobalVariable::query()->first();
@@ -79,6 +80,8 @@ class SuperadminController extends Controller
             'smtpDatabaseConfigured' => $smtpDatabaseConfigured,
             'smtpConfiguredFromEnvironment' => $smtpConfiguredFromEnvironment && ! $smtpDatabaseConfigured,
             'smtpConfigured' => $smtpConfigured,
+            'smtpNeedsVerification' => $smtpNeedsVerification,
+            'smtpVerification' => $smtpConfiguration->verificationState((string) $request->session()->get('login_user.gmail', '')),
             'smtpRequiredForAuthentication' => (bool) ($securitySettings?->require_otp ?? false)
                 || (bool) ($securitySettings?->allow_forgot_password ?? false),
             'headSecretaryTransferCandidates' => $users->filter(fn (User $user): bool => $user->is_verified

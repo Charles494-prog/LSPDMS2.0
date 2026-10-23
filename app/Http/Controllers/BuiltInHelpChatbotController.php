@@ -4,64 +4,16 @@ namespace App\Http\Controllers;
 
 use App\Models\GlobalVariable;
 use App\Models\Record;
+use App\Services\LspBotMatcher;
 use App\Services\R210Eligibility;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class BuiltInHelpChatbotController extends Controller
 {
-    private const TOPICS = [
-        'delistment' => [
-            'terms' => ['delist', 'delisted', 'delisting', 'de-list', 'de-listment', 'inactive member', 'endorse r2-10', 'r2-10'],
-            'title' => 'De-Listment and R2-10',
-            'feature' => 'Delistment_allow',
-            'route' => 'de-listment',
-            'steps' => 'Open De-Listment from the main menu. Find the member in the appropriate status section. The page shows R2-10 eligibility and endorsement status; endorse eligible records there, then use the Delist action when the workflow permits it.',
-        ],
-        'records' => [
-            'terms' => ['edit member data', 'edit data', 'edit record', 'edit', 'change data', 'change member', 'update record', 'update member', 'modify member', 'member information', 'registry number', 'birthday', 'kapisanan'],
-            'title' => 'Finding and editing member information',
-            'feature' => 'Inquire_Allow',
-            'route' => 'inquire-modify',
-            'steps' => 'To edit a member, open Inquire / Modify and search for the record. I can only direct you there; I cannot edit or change records for you. Available fields and actions depend on your account permissions.',
-        ],
-        'forms' => [
-            'terms' => ['print', 'printing', 'generate form', 'forms', 'r4-01', 'r4-02', 'r4-03', 'resumen', 'weekly form', 'monthly form'],
-            'title' => 'Generating and printing forms',
-            'feature' => 'form_generator_allow',
-            'route' => 'form-generator',
-            'steps' => 'Open Form Generator. Choose the Monthly or Weekly section, then select the form or Resumen generator you need. Use its Generate / Print action and your browser’s print dialog. Weekly R4-02 and R4-03 are available; their print layouts may be updated when the official copies are provided.',
-        ],
-        'bnh' => [
-            'terms' => ['bnh', 'binhi helper', 'qualified', 'minuses', 'minus count', 'bnh resumen'],
-            'title' => 'BNH Helper and Resumen',
-            'feature' => 'filter_bnh_helper_allow',
-            'route' => 'filter-bnh-helper',
-            'steps' => 'Open Filter & BNH Helper from the main menu. Choose the BNH summary view and select whether to show qualified counts or total minuses.',
-        ],
-        'tarheta' => [
-            'terms' => ['tarheta', 'filing status', 'filing number', 'status checker'],
-            'title' => 'Tarheta and filing status',
-            'feature' => 'tarheta_status_allow',
-            'route' => 'tarheta-status',
-            'steps' => 'Open Tarheta Status Checker. You can search records, update Tarheta and filing details, and switch filing-status monitoring on or off for the current view.',
-        ],
-        'dashboard' => [
-            'terms' => ['dashboard', 'charts', 'statistics', 'statistics page', 'records by purok'],
-            'title' => 'Dashboard and reports',
-            'feature' => 'dashboard_allow',
-            'route' => 'dashboard',
-            'steps' => 'Open Dashboard from the main menu to review record totals, Purok breakdowns, CFO groups, and updating progress.',
-        ],
-        'permission' => [
-            'terms' => ['permission', 'access', 'cant open', 'cannot open', 'not allowed', 'head secretary', 'secretary access'],
-            'title' => 'Requesting access',
-            'feature' => null,
-            'route' => null,
-            'steps' => 'A Head Secretary manages secretary permissions in the Administration dashboard. Tell them the feature you need and ask them to enable the matching access. The chatbot will only link to tools your account can access.',
-        ],
-    ];
+    // What LSPBot knows (questions, answers, links, permissions) now lives in config/lspbot.php.
 
     public function index(Request $request): mixed
     {
@@ -72,7 +24,7 @@ class BuiltInHelpChatbotController extends Controller
         ]);
     }
 
-    public function reply(Request $request, R210Eligibility $eligibility): JsonResponse
+    public function reply(Request $request, R210Eligibility $eligibility, LspBotMatcher $matcher): JsonResponse
     {
         $validated = $request->validate([
             'message' => ['required', 'string', 'max:500'],
@@ -110,31 +62,44 @@ class BuiltInHelpChatbotController extends Controller
             }
         }
 
-        $topic = $this->findTopic($message);
+        $result = $matcher->match($originalMessage);
+        $topic = $result['entry'];
 
         if ($topic === null) {
+            // Unanswered questions are logged (storage/logs/laravel.log) so you can see what to teach LSPBot next.
+            Log::info('LSPBot could not match a question.', ['message' => $originalMessage, 'score' => round($result['score'], 2)]);
+
+            if ($result['suggestions'] !== []) {
+                $options = implode("\n", array_map(fn (string $title): string => '• '.$title, $result['suggestions']));
+
+                return response()->json([
+                    'reply' => "I’m not completely sure what you meant. Did you mean one of these?\n{$options}\nTry asking again with a few more details about what you want to do.",
+                ]);
+            }
+
+            return response()->json(['reply' => (string) config('lspbot.fallback')]);
+        }
+
+        $feature = $topic['feature'] ?? null;
+        $answer = $matcher->answerFor($topic);
+
+        if ($feature !== null && ! ($permissions[$feature] ?? false)) {
+            $title = $topic['title'] ?? 'this feature';
+
             return response()->json([
-                'reply' => 'I can point you to De-Listment and R2-10, Inquire / Modify, form printing, the BNH Helper, and Tarheta or filing tools. If your account has lookup access, I can also answer brief record questions and counts. I only guide and locate features—I cannot edit or change records. What would you like to find?',
+                'reply' => "You do not currently have permission to open {$title}. Ask your Head Secretary to enable the required access. I have not provided a link because your account cannot access this feature.",
             ]);
         }
 
-        if ($topic['feature'] === null) {
-            return response()->json(['reply' => $topic['steps']]);
-        }
-
-        if (! ($permissions[$topic['feature']] ?? false)) {
-            return response()->json([
-                'reply' => "You do not currently have permission to open {$topic['title']}. Ask your Head Secretary to enable the required access. I have not provided a link because your account cannot access this feature.",
-            ]);
-        }
-
-        return response()->json([
-            'reply' => $topic['steps'],
-            'link' => [
-                'label' => "Open {$topic['title']}",
+        $response = ['reply' => $answer];
+        if (! empty($topic['route'])) {
+            $response['link'] = [
+                'label' => $topic['link_label'] ?? 'Open '.($topic['title'] ?? 'this page'),
                 'url' => route($topic['route']),
-            ],
-        ]);
+            ];
+        }
+
+        return response()->json($response);
     }
 
     private function permissions(array $user): array
@@ -312,25 +277,5 @@ class BuiltInHelpChatbotController extends Controller
             : 'Matching record(s):'."\n";
 
         return $prefix.$shown;
-    }
-
-    private function findTopic(string $message): ?array
-    {
-        $matches = [];
-        foreach (self::TOPICS as $key => $topic) {
-            foreach ($topic['terms'] as $term) {
-                if (str_contains($message, $term)) {
-                    $matches[] = [$key, mb_strlen($term)];
-                }
-            }
-        }
-
-        if ($matches === []) {
-            return null;
-        }
-
-        usort($matches, fn (array $left, array $right): int => $right[1] <=> $left[1]);
-
-        return self::TOPICS[$matches[0][0]];
     }
 }

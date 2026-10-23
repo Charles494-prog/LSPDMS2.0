@@ -95,6 +95,21 @@
         .messages-back { display:grid; }
         .message-bubble { max-width:88%; }
     }
+    /* Sent bubble: readable text on the accent background */
+.message-row.mine .message-bubble { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
+.message-row.mine .message-text,
+.message-row.mine .message-meta { color:var(--on-accent); }
+.message-row.mine .message-meta { opacity:.65; }
+
+/* Send button: ">" icon, no box */
+#sendButton { display:grid; place-items:center; width:44px; height:44px; padding:0; border:0; border-radius:50%; background:transparent; color:var(--text); font-size:0; cursor:pointer; transition:color .15s ease, transform .15s ease; }
+#sendButton::after { content:"›"; font-size:2rem; line-height:1; }
+#sendButton:hover:not(:disabled) { color:var(--text-muted); }
+#sendButton:active:not(:disabled) { transform:scale(.88); }
+#sendButton:disabled { opacity:.35; cursor:default; }
+
+/* Soften input focus ring */
+textarea:focus-visible, input:focus-visible { outline:none; border-color:var(--text-muted); }
 </style>
 @endpush
 

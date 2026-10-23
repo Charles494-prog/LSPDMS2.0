@@ -1,11 +1,11 @@
 <style>
     .resumen-page { max-width:1500px; margin:0 auto; font-family:Tahoma,Arial,sans-serif; font-weight:700; }
-    .resumen-tools { display:flex; flex-wrap:wrap; align-items:end; gap:.65rem; margin-bottom:1rem; padding:.85rem; border:1px solid var(--border); border-radius:12px; background:var(--surface); }
-    .resumen-tools label { display:grid; gap:.3rem; min-width:180px; color:var(--text-muted); font-size:.76rem; }
-    .resumen-tools select,.resumen-tools button,.resumen-tools a { min-height:38px; padding:.45rem .7rem; border:1px solid var(--border); border-radius:7px; background:var(--bg); color:var(--text); font:700 .82rem Tahoma,Arial,sans-serif; }
-    .resumen-tools button,.resumen-tools a { display:inline-flex; align-items:center; justify-content:center; border:0; background:var(--accent); color:#fff; text-decoration:none; cursor:pointer; }
-    .resumen-note { margin:0 0 1rem; padding:.75rem; border:1px solid #f4c982; border-radius:8px; background:#fff8e8; color:#7a4b00; font-size:.82rem; }
-    .resumen-scroll { overflow-x:auto; padding:.4rem; border:1px solid var(--border); border-radius:10px; background:#fff; }
+    .resumen-tools { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:.75rem 1.25rem; margin-bottom:1rem; padding:.7rem 0; border-top:1px solid var(--border); border-bottom:1px solid var(--border); font-weight:500; }
+    .resumen-note { flex:1 1 420px; margin:0; color:var(--text-muted); font-family:Tahoma,Arial,sans-serif; font-size:.79rem; font-weight:500; line-height:1.5; }
+    .resumen-download { display:inline-flex; align-items:center; justify-content:center; min-height:36px; padding:0 .95rem; border:1px solid var(--text); border-radius:999px; background:var(--text); color:var(--bg); font:700 .8rem Tahoma,Arial,sans-serif; text-decoration:none; cursor:pointer; transition:opacity .12s; }
+    .resumen-download:hover { opacity:.85; }
+    .resumen-download:focus-visible { outline:2px solid color-mix(in srgb,var(--text) 55%,transparent); outline-offset:2px; }
+    .resumen-scroll { overflow-x:auto; padding:.4rem; border:1px solid var(--border); border-radius:4px; background:#fff; }
     .resumen-sheet { min-width:1320px; color:#111; font:700 8px Tahoma,Arial,sans-serif; }
     .resumen-sheet h1 { margin:0 0 .4rem; text-align:center; font-size:14px; }
     .resumen-table { width:100%; border-collapse:collapse; table-layout:fixed; color:#111; font:700 8px Tahoma,Arial,sans-serif; }
@@ -20,10 +20,13 @@
     .resumen-signatory { padding-top:1.5rem; border-top:1px solid #111; }
     .resumen-signatory { width:33.33%; vertical-align:bottom; }
     .resumen-signatory strong { display:block; margin-bottom:.25rem; text-transform:uppercase; }
+    @media (prefers-reduced-motion:reduce) {
+        .resumen-download { transition:none; }
+    }
     @media print {
         @page { size:landscape; margin:.25in; }
         body { background:#fff!important; }
-        .sidebar,.topbar,.overlay,.resumen-tools,.resumen-note { display:none!important; }
+        .sidebar,.topbar,.overlay,.resumen-tools { display:none!important; }
         .main-area,.content { width:100%!important; margin:0!important; padding:0!important; }
         .resumen-page { max-width:none; }
         .resumen-scroll { overflow:visible; padding:0; border:0; }
@@ -37,10 +40,9 @@
 <div class="resumen-page">
     @unless($pdf ?? false)
     <div class="resumen-tools">
-        <a href="{{ route('forms.monthly.resumen.download') }}">Download DOCX</a>
+        <p class="resumen-note">The starting count (A) is the previous month’s closing MS/UWP total. Additions (B, C+) are added; C-, D, DD, E, G, and H are deducted to calculate this month’s total.</p>
+        <a class="resumen-download" href="{{ route('forms.monthly.resumen.download') }}">Download DOCX</a>
     </div>
-
-    <p class="resumen-note">The starting count (A) is the previous month’s closing MS/UWP total. Additions (B, C+) are added; C-, D, DD, E, G, and H are deducted to calculate this month’s total.</p>
     @endunless
 
     <div class="resumen-scroll">

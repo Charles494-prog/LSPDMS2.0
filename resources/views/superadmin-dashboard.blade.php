@@ -6,14 +6,11 @@
 <style>
     /* =====================================================================
        Superadmin Dashboard — monochrome / Vercel-style theme
-       Monochrome theme styles.
-       HTML and JS stay untouched (all selectors/classes are preserved).
        Colors come from your layout's theme variables (--bg, --surface,
        --border, --text, --text-muted) so light/dark still follows the app.
        Color is used ONLY for success / danger states.
        ===================================================================== */
     :root {
-        /* Fallbacks only apply if the app layout does not define its own theme variables */
         --sa-fb-fg: #0a0a0a; --sa-fb-bg: #fafafa; --sa-fb-surface: #ffffff; --sa-fb-border: #eaeaea; --sa-fb-muted: #666666;
         --sa-fg: var(--text, var(--sa-fb-fg));
         --sa-on-fg: var(--bg, var(--sa-fb-surface));
@@ -81,7 +78,7 @@
     .sa-tab-panel { display: none; }
     .sa-tab-panel.active { display: block; }
 
-    /* ===== SMTP alert / setup ===== */
+    /* ===== SMTP alert ===== */
     .smtp-setup-alert {
         display:flex; align-items:center; justify-content:space-between; gap:1rem; margin:0 0 1.2rem;
         padding:1rem 1.15rem; border:1px solid var(--sa-border);
@@ -93,47 +90,20 @@
     .smtp-setup-alert strong { display:block; margin-bottom:.15rem; font-size:.9rem; font-weight:600; }
     .smtp-setup-alert p { margin:0; color:var(--sa-ink-soft); font-size:.82rem; line-height:1.45; }
     .smtp-setup-alert .sa-btn { flex:none; }
-    .smtp-setup-wrap { width:min(100%,1080px); margin:0 auto; }
-    .smtp-setup-card { overflow:hidden; padding:0; }
-    .smtp-setup-heading { padding:1.45rem 1.6rem 1.2rem; border-bottom:1px solid var(--sa-border); }
-    .smtp-setup-heading-top { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
-    .smtp-setup-heading h2 { margin:0; color:var(--sa-navy); font-size:1.1rem; font-weight:600; letter-spacing:-.02em; }
-    .smtp-setup-heading p { margin:.35rem 0 0; color:var(--sa-ink-soft); font-size:.86rem; line-height:1.5; }
-    .smtp-setup-status { display:inline-flex; align-items:center; gap:.45rem; flex:none; padding:.3rem .65rem; border:1px solid var(--sa-border); border-radius:var(--sa-radius); color:var(--sa-ink-soft); font-size:.74rem; font-weight:500; white-space:nowrap; }
-    .smtp-setup-status::before { width:.45rem; height:.45rem; border-radius:50%; background:var(--sa-ink-soft); content:""; }
-    .smtp-setup-status.is-configured::before { background:var(--sa-success); }
-    .smtp-setup-grid { display:grid; grid-template-columns:minmax(250px,.85fr) minmax(0,1.15fr); }
-    .smtp-guide { padding:1.4rem 1.6rem; border-right:1px solid var(--sa-border); background:var(--sa-bg); }
-    .smtp-guide h3, .smtp-form h3 { margin:0; color:var(--sa-navy); font-size:.9rem; font-weight:600; }
-    .smtp-guide-intro { margin:.35rem 0 1rem; color:var(--sa-ink-soft); font-size:.8rem; line-height:1.5; }
-    .smtp-guide ol { display:grid; gap:.9rem; margin:0; padding:0; list-style:none; counter-reset:smtp-setup; }
-    .smtp-guide li { position:relative; min-height:1.75rem; padding-left:2.25rem; color:var(--sa-ink-soft); font-size:.8rem; line-height:1.5; counter-increment:smtp-setup; }
-    .smtp-guide li::before { position:absolute; left:0; top:0; display:grid; width:1.5rem; height:1.5rem; place-items:center; border:1px solid var(--sa-border); border-radius:50%; background:var(--sa-surface); color:var(--sa-navy); font-size:.72rem; font-weight:600; content:counter(smtp-setup); }
-    .smtp-guide li strong { color:var(--sa-navy); font-weight:600; }
-    .smtp-guide a { color:var(--sa-navy); font-weight:500; text-underline-offset:3px; }
-    .smtp-guide-note { margin:1.1rem 0 0; padding-top:.9rem; border-top:1px solid var(--sa-border); color:var(--sa-ink-soft); font-size:.75rem; line-height:1.5; }
-    .smtp-form { display:flex; flex-direction:column; padding:1.4rem 1.6rem; }
-    .smtp-form h3 { margin-bottom:1rem; }
-    .smtp-field { display:grid; gap:.4rem; margin-bottom:1rem; }
-    .smtp-field label { color:var(--sa-navy); font-size:.8rem; font-weight:500; }
-    .smtp-field input { width:100%; min-height:40px; padding:.55rem .75rem; border:1px solid var(--sa-border); border-radius:var(--sa-radius); background:var(--sa-surface); color:var(--sa-navy); font:inherit; font-size:.87rem; }
-    .smtp-field input:focus-visible { outline:none; border-color:var(--sa-navy); box-shadow:0 0 0 1px var(--sa-navy); }
-    .smtp-field-hint { color:var(--sa-ink-soft); font-size:.74rem; line-height:1.45; }
-    .smtp-save-row { display:flex; align-items:center; justify-content:space-between; gap:.8rem; margin-top:auto; padding-top:.9rem; border-top:1px solid var(--sa-border); }
-    .smtp-save-row p { margin:0; color:var(--sa-ink-soft); font-size:.74rem; line-height:1.4; }
     .smtp-security-alert { margin:0 0 1rem; padding:.8rem .95rem; border:1px solid var(--sa-border); border-left:2px solid var(--sa-navy); border-radius:var(--sa-radius-lg); background:var(--sa-bg); color:var(--sa-navy); font-size:.82rem; line-height:1.5; }
     .smtp-security-alert button { margin-left:.25rem; padding:0; border:0; background:none; color:var(--sa-navy); font:inherit; font-weight:600; text-decoration:underline; text-underline-offset:3px; cursor:pointer; }
     @media(max-width:760px) {
-        .smtp-setup-grid { grid-template-columns:1fr; }
-        .smtp-guide { border-right:0; border-bottom:1px solid var(--sa-border); }
         .smtp-setup-alert { align-items:flex-start; flex-direction:column; }
     }
-    @media(max-width:480px) {
-        .smtp-setup-heading,.smtp-guide,.smtp-form { padding:1.1rem; }
-        .smtp-setup-heading-top { align-items:flex-start; flex-direction:column; }
-        .smtp-save-row { align-items:flex-start; flex-direction:column; }
-        .smtp-save-row .sa-btn { width:100%; }
-    }
+
+    /* ===== SMTP form fields (used inside the popup) ===== */
+    .smtp-field { display:grid; gap:.4rem; margin-bottom:1rem; }
+    .smtp-field label { color:var(--sa-navy); font-size:.8rem; font-weight:500; }
+    .smtp-field input { width:100%; box-sizing:border-box; min-height:40px; padding:.55rem .75rem; border:1px solid var(--sa-border); border-radius:var(--sa-radius); background:var(--sa-surface); color:var(--sa-navy); font:inherit; font-size:.87rem; }
+    .smtp-field input:focus-visible { outline:none; border-color:var(--sa-navy); box-shadow:0 0 0 1px var(--sa-navy); }
+    .smtp-field-hint { color:var(--sa-ink-soft); font-size:.74rem; line-height:1.45; }
+    .smtp-code-input { width: 11ch; padding: .55rem .75rem; border: 1px solid var(--sa-border); border-radius: var(--sa-radius); background: var(--sa-bg); color: var(--sa-navy); font-family: var(--sa-mono); font-size: 1.2rem; font-weight: 600; letter-spacing: .3em; text-align: center; }
+    .smtp-code-input:focus { outline: none; border-color: var(--sa-navy); box-shadow: 0 0 0 1px var(--sa-navy); }
 
     /* ===== BNH reset ===== */
     .bnh-reset-grid { grid-template-columns:1fr; }
@@ -314,7 +284,7 @@
     .sa-status-pill.off svg { color: var(--sa-danger); }
     .sa-status-pill svg { width: 7px; height: 7px; }
 
-    /* Toggle switch (pill shape kept — it is the control's affordance) */
+    /* Toggle switch */
     .sa-toggle { position: relative; display: inline-block; width: 38px; height: 22px; flex-shrink: 0; }
     .sa-toggle input { opacity: 0; width: 0; height: 0; }
     .sa-toggle-track {
@@ -750,6 +720,70 @@
     .sa-skeleton { display: block; height: .8rem; border-radius: 4px; background: linear-gradient(90deg, var(--sa-border), color-mix(in srgb, var(--sa-border) 40%, transparent), var(--sa-border)); background-size: 200% 100%; animation: sa-shimmer 1.2s linear infinite; }
     @keyframes sa-shimmer { to { background-position: -200% 0; } }
     @media (prefers-reduced-motion: reduce) { .sa-skeleton { animation: none; } }
+
+    /* ===== Backups: sources, rename, manual upload ===== */
+    .sa-badge.is-manual { background: var(--sa-accent); border-color: var(--sa-accent); color: var(--sa-on-fg); }
+    .sa-badge.is-source { margin-left: 0; }
+    .backup-upload { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+    .backup-file-input { flex: 1 1 280px; min-width: 0; padding: .35rem; border: 1px solid var(--sa-border); border-radius: var(--sa-radius); background: var(--sa-bg); color: var(--sa-ink-soft); font: inherit; font-size: .85rem; }
+    .backup-file-input::file-selector-button { margin-right: .75rem; padding: .4rem .8rem; border: 1px solid var(--sa-border); border-radius: var(--sa-radius); background: var(--sa-surface); color: var(--sa-navy); font: inherit; font-weight: 500; cursor: pointer; }
+    .backup-file-input:focus-visible { outline: 2px solid var(--sa-navy); outline-offset: 2px; }
+    .backup-actions { display: flex; justify-content: flex-end; gap: .4rem; }
+    .backup-rename { display: grid; gap: .35rem; min-width: 260px; }
+    .backup-rename-row { display: flex; align-items: center; gap: .4rem; }
+    .backup-rename-row input { flex: 1; min-width: 0; padding: .35rem .55rem; border: 1px solid var(--sa-border); border-radius: var(--sa-radius); background: var(--sa-bg); color: var(--sa-navy); font-family: var(--sa-mono); font-size: .82rem; }
+    .backup-rename-row input:focus { outline: none; border-color: var(--sa-navy); box-shadow: 0 0 0 1px var(--sa-navy); }
+    .backup-rename-row span { color: var(--sa-ink-soft); font-family: var(--sa-mono); font-size: .82rem; }
+    .backup-rename-error { margin: 0; color: var(--sa-danger); font-size: .78rem; }
+
+    .sa-badge.is-import { border-color: var(--sa-navy); color: var(--sa-navy); }
+    .sa-badge.is-new { background: var(--sa-success-bg); border-color: var(--sa-success); color: var(--sa-success); }
+    tr.sa-row-new td { background: color-mix(in srgb, var(--sa-success) 7%, transparent); }
+
+    /* ===== SMTP: sender card + popup ===== */
+    .smtpx-card { display: flex; align-items: center; gap: 1.6rem; padding: 1.75rem; }
+    .smtpx-logo-wrap { display: grid; place-items: center; flex: none; width: 96px; height: 96px; border: 1px solid var(--sa-border); border-radius: var(--sa-radius); background: var(--sa-bg); }
+    .smtpx-logo { width: 60px; height: 60px; object-fit: contain; }
+    .smtpx-modal-logo { width: 22px; height: 22px; object-fit: contain; }
+    .smtpx-body { min-width: 0; flex: 1; }
+    .smtpx-body[hidden] { display: none; }
+    .smtpx-label { margin: 0 0 .35rem; color: var(--sa-ink-soft); font-size: .72rem; font-weight: 500; letter-spacing: .02em; }
+    .smtpx-title { margin: 0; color: var(--sa-navy); font-size: 1.15rem; font-weight: 600; letter-spacing: -.02em; overflow-wrap: anywhere; }
+    .smtpx-email-row { display: flex; align-items: center; gap: .6rem; }
+    .smtpx-mark { display: grid; place-items: center; width: 22px; height: 22px; flex: none; border-radius: 50%; font-size: .8rem; font-weight: 700; }
+    .smtpx-mark svg { width: 13px; height: 13px; }
+    .smtpx-mark.is-ok { background: var(--sa-success); color: #fff; }
+    .smtpx-mark.is-warn { border: 1px solid var(--sa-danger); color: var(--sa-danger); }
+    .smtpx-status { margin: .35rem 0 0; color: var(--sa-ink-soft); font-size: .82rem; font-weight: 500; }
+    .smtpx-text { margin: .7rem 0 0; max-width: 62ch; color: var(--sa-ink-soft); font-size: .85rem; line-height: 1.55; }
+    .smtpx-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-top: 1.2rem; }
+    .smtpx-remove { color: var(--sa-ink-soft); font-size: .82rem; margin-left: .35rem; }
+    .smtpx-remove:hover { color: var(--sa-danger); }
+    .smtpx-modal { max-width: 460px; }
+    #smtpModal { align-items: center; }
+    .smtpx-warn { margin: 0 0 1rem; padding: .7rem .9rem; border: 1px solid var(--sa-border); border-left: 3px solid var(--sa-danger); border-radius: var(--sa-radius); color: var(--sa-navy); font-size: .82rem; line-height: 1.5; }
+    .smtpx-warn[hidden] { display: none; }
+    #smtpModal .smtp-code-input { width: 100%; box-sizing: border-box; }
+    #smtpModal [hidden] { display: none !important; }
+    .smtp-field-hint a { color: var(--sa-navy); font-weight: 500; text-underline-offset: 3px; }
+    .smtp-verify-code label { display: block; margin-bottom: .4rem; color: var(--sa-navy); font-size: .8rem; font-weight: 500; }
+    .smtp-done { display: grid; justify-items: center; gap: .5rem; padding: .5rem 0 0; text-align: center; }
+    .smtp-done h2 { margin: .4rem 0 0; font-size: 1.1rem; font-weight: 600; color: var(--sa-navy); }
+    .smtp-done p { margin: 0; color: var(--sa-ink-soft); font-size: .88rem; line-height: 1.5; overflow-wrap: anywhere; }
+    @media (max-width: 560px) { .smtpx-card { flex-direction: column; align-items: flex-start; } }
+    .smtp-verify-label { display: block; margin-bottom: .55rem; color: var(--sa-navy); font-size: .8rem; font-weight: 500; }
+    .otp { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: .5rem; }
+    .otp-box {
+        width: 100%; box-sizing: border-box; aspect-ratio: 1 / 1.12; padding: 0; text-align: center;
+        border: 1px solid var(--sa-border); border-radius: var(--sa-radius); background: var(--sa-bg); color: var(--sa-navy);
+        font-family: var(--sa-mono); font-size: 1.5rem; font-weight: 600; caret-color: var(--sa-navy);
+        transition: border-color .12s ease, box-shadow .12s ease;
+    }
+    .otp-box:focus { outline: none; border-color: var(--sa-navy); box-shadow: 0 0 0 1px var(--sa-navy); background: var(--sa-surface); }
+    .otp-box.filled { border-color: var(--sa-ink-soft); }
+    .otp.is-error .otp-box { border-color: var(--sa-danger); animation: otp-shake .3s ease; }
+    @keyframes otp-shake { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
+    @media (prefers-reduced-motion: reduce) { .otp.is-error .otp-box { animation: none; } }
 </style>
 
 <div class="sa-page">
@@ -764,9 +798,11 @@
             <div class="smtp-setup-alert-copy">
                 <span class="smtp-setup-alert-icon" aria-hidden="true">!</span>
                 <div>
-                    <strong>Email delivery is not configured</strong>
+                    <strong>{{ $smtpNeedsVerification ? 'Email delivery is not verified' : 'Email delivery is not configured' }}</strong>
                     <p id="smtpSetupAlertText">
-                        @if ($smtpRequiredForAuthentication)
+                        @if ($smtpNeedsVerification)
+                            The SMTP account is saved but has not been confirmed. Send a verification code to the Head Secretary's Gmail to finish setup.
+                        @elseif ($smtpRequiredForAuthentication)
                             Email verification and password recovery are enabled, but these emails cannot be delivered until SMTP is set up.
                         @else
                             Configure SMTP to enable system email delivery, including account verification and password recovery.
@@ -980,75 +1016,48 @@
         </div>
     </div>
 
+    <!-- ============ EMAIL DELIVERY (single Gmail sender) ============ -->
     <div class="sa-tab-panel" id="tab-smtp-settings">
-        <div class="smtp-setup-wrap">
-            <section class="sa-card smtp-setup-card" aria-labelledby="smtp-setup-title">
-                <header class="smtp-setup-heading">
-                    <div class="smtp-setup-heading-top">
-                        <div>
-                            <h2 id="smtp-setup-title" tabindex="-1">Email delivery</h2>
-                            <p>Connect a Gmail account for sign-in verification and password recovery messages.</p>
-                        </div>
-                        <span class="smtp-setup-status{{ $smtpConfigured ? ' is-configured' : '' }}" id="smtpSetupStatus">
-                            {{ $smtpConfiguredFromEnvironment ? 'Configured via app environment' : ($smtpConfigured ? 'Configured' : 'Setup required') }}
-                        </span>
-                    </div>
-                </header>
-                <div class="smtp-setup-grid">
-                    <aside class="smtp-guide" aria-labelledby="smtp-guide-title">
-                        <h3 id="smtp-guide-title">Before you start</h3>
-                        <p class="smtp-guide-intro">Use a Google App Password, not your regular Google password.</p>
-                        <ol>
-                            <li>Sign in to the Gmail account that should send LSPDMS emails.</li>
-                            <li>Enable <strong>2-Step Verification</strong> in that Google Account.</li>
-                            <li>Create an app password from <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer">Google App Passwords</a>.</li>
-                            <li>Enter the Gmail address and paste the generated password on this page.</li>
-                        </ol>
-                        <p class="smtp-guide-note">The app password is stored encrypted and never displayed again. Spaces in the password are removed when saved.</p>
-                    </aside>
+        <header class="sa-panel-head"><h2>Email delivery</h2><p>The Gmail account LSPDMS uses for sign-in codes and password recovery. Only one account can be connected.</p></header>
 
-                    <form class="smtp-form" id="smtpSettingsForm" autocomplete="off">
-                        @csrf
-                        <h3>Sender account</h3>
-                        <div class="smtp-field">
-                            <label for="smtpEmail">Gmail address</label>
-                            <input id="smtpEmail" name="email" type="email" maxlength="255" value="{{ $smtpEmail }}" required autocomplete="email" placeholder="name@gmail.com">
-                            <span class="smtp-field-hint">This address appears as the sender for system emails.</span>
-                        </div>
-                        <div class="smtp-field">
-                            <label for="smtpAppPassword">Google App Password</label>
-                            <input id="smtpAppPassword" name="app_password" type="password" maxlength="255" @required(!$smtpPasswordConfigured) autocomplete="new-password" placeholder="{{ $smtpPasswordConfigured ? 'Enter a new password to replace the saved one' : 'Paste your 16-character app password' }}">
-                            <span class="smtp-field-hint" id="smtpPasswordState">
-                                {{ $smtpPasswordConfigured
-                                    ? 'A password is saved securely. Leave blank to keep it.'
-                                    : ($smtpConfiguredFromEnvironment
-                                        ? 'Laravel is currently using environment SMTP settings. Enter an app password to move this configuration into the admin-managed settings.'
-                                        : 'Required to enable email delivery.') }}
-                            </span>
-                        </div>
-                        <div class="smtp-save-row">
-                            <p>Changes apply to new outgoing emails immediately.</p>
-                            <button type="submit" class="sa-btn sa-btn-primary" id="saveSmtpSettingsBtn">
-                                {{ $smtpConfigured ? 'Save email settings' : 'Save and enable email' }}
-                            </button>
-                        </div>
-                    </form>
+        <div class="sa-card smtpx-card">
+            <div class="smtpx-logo-wrap"><svg class="smtpx-logo" viewBox="0 0 48 48" aria-hidden="true"><path fill="#4caf50" d="M45,16.2l-5,2.75l-5,4.75L35,40h7c1.657,0,3-1.343,3-3V16.2z"/><path fill="#1e88e5" d="M3,16.2l3.614,1.71L13,23.7V40H6c-1.657,0-3-1.343-3-3V16.2z"/><polygon fill="#e53935" points="35,11.2 24,19.45 13,11.2 12,17 13,23.7 24,31.95 35,23.7 36,17"/><path fill="#c62828" d="M3,12.298V16.2l10,7.5V11.2L9.876,8.859C9.132,8.301,8.228,8,7.298,8h0C4.924,8,3,9.924,3,12.298z"/><path fill="#fbc02d" d="M45,12.298V16.2l-10,7.5V11.2l3.124-2.341C38.868,8.301,39.772,8,40.702,8h0C43.076,8,45,9.924,45,12.298z"/></svg></div>
+
+            {{-- No account connected --}}
+            <div class="smtpx-body" id="smtpEmpty" hidden>
+                <p class="smtpx-label">Sender</p>
+                <h2 class="smtpx-title">No Gmail connected</h2>
+                <p class="smtpx-text">
+                    Connect a Gmail account to send sign-in codes and password recovery emails.
+                    @if ($smtpConfiguredFromEnvironment)
+                        Emails currently send using the server's environment settings.
+                    @endif
+                </p>
+                <div class="smtpx-actions">
+                    <button type="button" class="sa-btn sa-btn-primary" id="smtpConnectBtn">Connect Gmail</button>
                 </div>
-            </section>
+            </div>
+
+            {{-- Account connected --}}
+            <div class="smtpx-body" id="smtpAccountView" hidden>
+                <p class="smtpx-label">Current sender</p>
+                <div class="smtpx-email-row">
+                    <span class="smtpx-mark" id="smtpAccountIcon" aria-hidden="true"></span>
+                    <h2 class="smtpx-title" id="smtpAccountEmail"></h2>
+                </div>
+                <p class="smtpx-status" id="smtpAccountStatus"></p>
+                <p class="smtpx-text" id="smtpAccountNote"></p>
+                <div class="smtpx-actions">
+                    <button type="button" class="sa-btn sa-btn-primary" id="smtpCodeBtn" hidden>Enter code</button>
+                    <button type="button" class="sa-btn sa-btn-ghost" id="smtpChangeBtn">Change Gmail</button>
+                    <button type="button" class="sa-link-btn smtpx-remove" id="smtpRemoveBtn">Remove</button>
+                </div>
+            </div>
         </div>
     </div>
 
     <div class="sa-tab-panel" id="tab-database">
         <header class="sa-panel-head"><h2>Database configuration</h2><p>Export, import, and back up LSPDMS data.</p></header>
-        <div class="sa-result" id="databaseImportResult" role="status" hidden>
-            <span class="sa-result-check" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
-            <div class="sa-result-body">
-                <strong id="databaseImportResultMessage">Database import complete.</strong>
-                <span>Safety backup saved as <code id="databaseImportResultFile"></code></span>
-            </div>
-            <button type="button" class="sa-btn sa-btn-ghost sa-btn-sm" data-open-backups>View backups</button>
-            <button type="button" class="sa-modal-close" id="dismissImportResult" aria-label="Dismiss">&times;</button>
-        </div>
         <div class="sa-card">
             <div class="sa-card-head">
                 <div>
@@ -1136,14 +1145,52 @@
 
     <!-- ============ DATABASE BACKUPS ============ -->
     <div class="sa-tab-panel" id="tab-backups">
-        <header class="sa-panel-head"><h2>Database backups</h2><p>Safety copies saved automatically before each database import.</p></header>
+        <header class="sa-panel-head"><h2>Database backups</h2><p>Safety copies made before each import, the monthly automatic backup, and backups you add yourself.</p></header>
+        <div class="sa-result" id="databaseImportResult" role="status" hidden>
+            <span class="sa-result-check" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+            <div class="sa-result-body">
+                <strong id="databaseImportResultMessage">Database import complete.</strong>
+                <span>Safety backup saved. It is listed below as <strong>Before import</strong>: <code id="databaseImportResultFile"></code></span>
+            </div>
+            <button type="button" class="sa-modal-close" id="dismissImportResult" aria-label="Dismiss">&times;</button>
+        </div>
+
+        <div class="sa-card">
+            <div class="sa-card-head">
+                <div>
+                    <h2>Add a manual backup</h2>
+                    <p>Export the database yourself, then save the file here. The export must include the <code class="dim-phrase">login_user</code> and <code class="dim-phrase">messages</code> tables. Saving a manual backup does not change the live database.</p>
+                </div>
+            </div>
+            <div class="backup-upload">
+                <input class="backup-file-input" id="backupUploadFile" type="file" accept=".sql" aria-label="Choose an .sql export to save as a manual backup">
+                <button type="button" class="sa-btn sa-btn-primary" id="backupUploadBtn" disabled>Save as manual backup</button>
+            </div>
+            <div class="sql-file-selected" id="backupUploadSelected" role="status" hidden>
+                <span class="sql-file-check" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+                <div class="sql-file-meta">
+                    <small>File selected</small>
+                    <strong id="backupUploadName"></strong>
+                    <span id="backupUploadSize"></span>
+                </div>
+                <button type="button" class="sa-btn sa-btn-ghost sa-btn-sm" id="backupUploadClear">Remove</button>
+            </div>
+            <p class="sql-file-error" id="backupUploadError" role="alert" hidden></p>
+        </div>
+
         <div class="sa-card">
             <div class="sa-card-head">
                 <div>
                     <h2>Saved backups</h2>
-                    <p>Stored privately on the server and not publicly accessible. Download a copy to keep it somewhere safe.</p>
+                    <p>Stored privately on the server and not publicly accessible. Backups older than 1 year are deleted automatically (the newest backup is always kept).</p>
                 </div>
                 <button type="button" class="sa-btn sa-btn-ghost" id="refreshBackupsBtn">Refresh</button>
+            </div>
+            <div class="hakbang-status-tabs" role="group" aria-label="Filter backups by source">
+                <button type="button" class="hakbang-status-btn active" data-backup-source="" aria-pressed="true">All</button>
+                <button type="button" class="hakbang-status-btn" data-backup-source="import" aria-pressed="false">Before import</button>
+                <button type="button" class="hakbang-status-btn" data-backup-source="auto" aria-pressed="false">Monthly auto</button>
+                <button type="button" class="hakbang-status-btn" data-backup-source="manual" aria-pressed="false">Manual</button>
             </div>
             <span class="sa-table-meta" id="backupsCount" aria-live="polite"></span>
             <div class="sa-table-wrap">
@@ -1151,6 +1198,7 @@
                     <thead>
                         <tr>
                             <th scope="col">File</th>
+                            <th scope="col">Source</th>
                             <th scope="col">Created</th>
                             <th scope="col">Size</th>
                             <th scope="col"><span class="sr-only">Actions</span></th>
@@ -1575,6 +1623,78 @@
     </div>
 </div>
 
+<!-- ============ SMTP POPUP: connect / code / success ============ -->
+<div class="sa-modal-overlay" id="smtpModal" aria-hidden="true">
+    <div class="sa-modal smtpx-modal" role="dialog" aria-modal="true" aria-labelledby="smtpModalTitle">
+
+        {{-- Step 1: Gmail + app password --}}
+        <form id="smtpSettingsForm" autocomplete="off">
+            @csrf
+            <div class="sa-modal-header">
+                <div class="dim-title">
+                    <span class="dim-icon" aria-hidden="true"><svg class="smtpx-modal-logo" viewBox="0 0 48 48" aria-hidden="true"><path fill="#4caf50" d="M45,16.2l-5,2.75l-5,4.75L35,40h7c1.657,0,3-1.343,3-3V16.2z"/><path fill="#1e88e5" d="M3,16.2l3.614,1.71L13,23.7V40H6c-1.657,0-3-1.343-3-3V16.2z"/><polygon fill="#e53935" points="35,11.2 24,19.45 13,11.2 12,17 13,23.7 24,31.95 35,23.7 36,17"/><path fill="#c62828" d="M3,12.298V16.2l10,7.5V11.2L9.876,8.859C9.132,8.301,8.228,8,7.298,8h0C4.924,8,3,9.924,3,12.298z"/><path fill="#fbc02d" d="M45,12.298V16.2l-10,7.5V11.2l3.124-2.341C38.868,8.301,39.772,8,40.702,8h0C43.076,8,45,9.924,45,12.298z"/></svg></span>
+                    <div>
+                        <h2 id="smtpModalTitle">Connect Gmail</h2>
+                        <p id="smtpFormSub">We'll email a 6-digit code to your account to confirm it works.</p>
+                    </div>
+                </div>
+                <button type="button" class="sa-modal-close" data-smtp-close aria-label="Close">&times;</button>
+            </div>
+
+            <p class="smtpx-warn" id="smtpReplaceNote" hidden>This replaces the current sender. Emails won't send until the new Gmail is verified.</p>
+
+            <div class="smtp-field">
+                <label for="smtpEmail">Gmail address</label>
+                <input id="smtpEmail" name="email" type="email" maxlength="255" required autocomplete="email" placeholder="name@gmail.com">
+            </div>
+            <div class="smtp-field">
+                <label for="smtpAppPassword">Google App Password</label>
+                <input id="smtpAppPassword" name="app_password" type="password" maxlength="255" required autocomplete="new-password" placeholder="16-character app password">
+                <span class="smtp-field-hint">Not your normal password. <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer">Create one in Google</a> (needs 2-Step Verification). It's stored encrypted and never shown again.</span>
+            </div>
+            <div class="sa-modal-save-bar">
+                <button type="button" class="sa-btn sa-btn-ghost" data-smtp-close>Cancel</button>
+                <button type="submit" class="sa-btn sa-btn-primary" id="saveSmtpSettingsBtn">Send code</button>
+            </div>
+        </form>
+
+        {{-- Step 2: enter code --}}
+        <div id="smtpStepCode" hidden>
+            <div class="sa-modal-header">
+                <div>
+                    <h2>We sent you a code</h2>
+                    <p id="smtpCodeText"></p>
+                </div>
+                <button type="button" class="sa-modal-close" data-smtp-close aria-label="Close">&times;</button>
+            </div>
+            <div class="smtp-verify-code">
+                <span class="smtp-verify-label" id="smtpCodeLabel">6-digit code</span>
+                <div class="otp" id="smtpCodeBoxes" role="group" aria-labelledby="smtpCodeLabel">
+                    <input class="otp-box" type="text" inputmode="numeric" autocomplete="one-time-code" aria-label="Digit 1"><input class="otp-box" type="text" inputmode="numeric" autocomplete="off" aria-label="Digit 2"><input class="otp-box" type="text" inputmode="numeric" autocomplete="off" aria-label="Digit 3"><input class="otp-box" type="text" inputmode="numeric" autocomplete="off" aria-label="Digit 4"><input class="otp-box" type="text" inputmode="numeric" autocomplete="off" aria-label="Digit 5"><input class="otp-box" type="text" inputmode="numeric" autocomplete="off" aria-label="Digit 6">
+                </div>
+                <input id="smtpVerifyCode" type="hidden">
+            </div>
+            <p class="sa-inline-error" id="smtpModalError" role="alert" hidden></p>
+            <div class="sa-modal-save-bar">
+                <button type="button" class="sa-btn sa-btn-ghost" id="smtpVerifyResendBtn">Resend code</button>
+                <button type="button" class="sa-btn sa-btn-primary" id="smtpVerifyConfirmBtn" disabled>Verify</button>
+            </div>
+        </div>
+
+        {{-- Step 3: success --}}
+        <div id="smtpStepDone" hidden>
+            <div class="smtp-done">
+                <span class="sa-result-check" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+                <h2>Gmail verified</h2>
+                <p id="smtpDoneText"></p>
+            </div>
+            <div class="sa-modal-save-bar">
+                <button type="button" class="sa-btn sa-btn-primary" id="smtpDoneBtn">Done</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="sa-modal-overlay" id="databaseImportModal" aria-hidden="true">
     <div class="sa-modal database-import-modal" role="dialog" aria-modal="true" aria-labelledby="databaseImportModalTitle" aria-describedby="databaseImportWarning">
         <div class="sa-modal-header">
@@ -1595,7 +1715,7 @@
 
         <div class="dim-backup">
             <span class="dim-backup-icon" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="14" height="4"/><path d="M4 8v8h12V8M8 12h4"/></svg></span>
-            <p><strong>A safety backup is created first.</strong> Its file name is shown when the import finishes and it is listed under <button type="button" class="sa-link-btn" data-open-backups>Database backups</button>.</p>
+            <p><strong>A safety backup is created first.</strong> When the import finishes you are taken to <button type="button" class="sa-link-btn" data-open-backups>Database backups</button>, where it is listed as <em>Before import</em>.</p>
         </div>
 
         <div class="database-import-summary">
@@ -1745,7 +1865,6 @@
             button.addEventListener('click', () => {
                 activateTab('smtp-settings');
                 window.history.replaceState(null, '', '#smtp-settings');
-                document.getElementById('smtp-setup-title')?.focus();
             });
         });
         const smtpSetupAlert = document.getElementById('smtpSetupAlert');
@@ -1753,11 +1872,12 @@
         const smtpSecurityAlert = document.getElementById('smtpSecurityAlert');
         const requireOtpSetting = document.getElementById('requireOtpSetting');
         const allowForgotPasswordSetting = document.getElementById('allowForgotPasswordSetting');
+        const smtpNeedsVerificationAtLoad = @json($smtpNeedsVerification);
         const refreshSmtpPrompt = () => {
             if (!smtpSetupAlert) return;
             const otpEnabled = Boolean(requireOtpSetting?.checked);
             const forgotPasswordEnabled = Boolean(allowForgotPasswordSetting?.checked);
-            if (smtpSetupAlertText) {
+            if (smtpSetupAlertText && !smtpNeedsVerificationAtLoad) {
                 smtpSetupAlertText.textContent = otpEnabled && forgotPasswordEnabled
                     ? 'Email verification and password recovery are enabled, but these emails cannot be delivered until SMTP is set up.'
                     : otpEnabled
@@ -1832,6 +1952,11 @@
             r402Hakbangs: @json(url('/superadmin/r4-02/hakbangs')),
             databaseBackups: @json(\Illuminate\Support\Facades\Route::has('superadmin.database.backups') ? route('superadmin.database.backups') : null),
             databaseBackupDownload: @json(\Illuminate\Support\Facades\Route::has('superadmin.database.backups.download') ? route('superadmin.database.backups.download', ['file' => '__FILE__']) : null),
+            databaseBackupStore: @json(\Illuminate\Support\Facades\Route::has('superadmin.database.backups.store') ? route('superadmin.database.backups.store') : null),
+            smtpVerificationStatus: @json(\Illuminate\Support\Facades\Route::has('superadmin.smtp-settings.verification.status') ? route('superadmin.smtp-settings.verification.status') : null),
+            smtpVerificationSend: @json(\Illuminate\Support\Facades\Route::has('superadmin.smtp-settings.verification.send') ? route('superadmin.smtp-settings.verification.send') : null),
+            smtpVerificationVerify: @json(\Illuminate\Support\Facades\Route::has('superadmin.smtp-settings.verification.verify') ? route('superadmin.smtp-settings.verification.verify') : null),
+            databaseBackupRename: @json(\Illuminate\Support\Facades\Route::has('superadmin.database.backups.rename') ? route('superadmin.database.backups.rename', ['file' => '__FILE__']) : null),
         };
         const toastContainer = document.getElementById('saToastContainer');
         if (toastContainer && toastContainer.parentElement !== document.body) {
@@ -1987,33 +2112,6 @@
             } catch (error) {
                 passwordInput.value = '';
                 showToast(error.message, 'error');
-                setBusy(button, false);
-            }
-        });
-
-        const smtpSettingsForm = document.getElementById('smtpSettingsForm');
-        smtpSettingsForm?.addEventListener('submit', async event => {
-            event.preventDefault();
-            const button = document.getElementById('saveSmtpSettingsBtn');
-            setBusy(button, true);
-            try {
-                const result = await sendFormData(
-                    superadminUrls.smtpSettings,
-                    new URLSearchParams(new FormData(smtpSettingsForm)),
-                    'PUT'
-                );
-                document.getElementById('smtpAppPassword').value = '';
-                document.getElementById('smtpAppPassword').required = false;
-                document.getElementById('smtpPasswordState').textContent = 'A password is saved securely. Leave blank to keep it.';
-                document.getElementById('smtpSetupStatus').textContent = 'Configured';
-                document.getElementById('smtpSetupStatus').classList.add('is-configured');
-                document.getElementById('saveSmtpSettingsBtn').textContent = 'Save email settings';
-                if (smtpSetupAlert) smtpSetupAlert.hidden = true;
-                if (smtpSecurityAlert) smtpSecurityAlert.hidden = true;
-                showToast(result.message);
-            } catch (error) {
-                showToast(error.message, 'error');
-            } finally {
                 setBusy(button, false);
             }
         });
@@ -3232,13 +3330,21 @@
             });
             renderChips();
         })();
-        // ===== Database backups list =====
+        // ===== Database backups (automatic + manual) =====
         (function initBackups() {
             const body = document.getElementById('backupsBody');
             const state = document.getElementById('backupsState');
             const count = document.getElementById('backupsCount');
             const refresh = document.getElementById('refreshBackupsBtn');
+            const sourceButtons = document.querySelectorAll('[data-backup-source]');
+            const uploadInput = document.getElementById('backupUploadFile');
+            const uploadButton = document.getElementById('backupUploadBtn');
+            const uploadSelected = document.getElementById('backupUploadSelected');
+            const uploadError = document.getElementById('backupUploadError');
             if (!body) return;
+            let items = [];
+            let sourceFilter = '';
+
             const formatDate = iso => {
                 const date = new Date(iso);
                 return Number.isNaN(date.getTime()) ? String(iso) : new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium', timeStyle: 'medium', timeZone: 'Asia/Manila' }).format(date);
@@ -3251,18 +3357,18 @@
                 return `${(value / 1024 / 1024).toFixed(1)} MB`;
             };
             const showState = message => { state.textContent = message; state.hidden = !message; };
-            const cell = (child, className) => {
+            const cell = child => {
                 const td = document.createElement('td');
-                if (className) td.className = className;
                 td.append(child);
                 return td;
             };
+            const urlFor = (template, name) => template.replace('__FILE__', encodeURIComponent(name));
 
             function renderSkeleton() {
                 body.replaceChildren();
                 for (let i = 0; i < 4; i++) {
                     const row = document.createElement('tr');
-                    ['60%', '45%', '30%', '40%'].forEach(width => {
+                    ['60%', '30%', '45%', '25%', '35%'].forEach(width => {
                         const bar = document.createElement('span');
                         bar.className = 'sa-skeleton';
                         bar.style.width = width;
@@ -3270,6 +3376,140 @@
                     });
                     body.appendChild(row);
                 }
+            }
+
+            function startRename(nameCell, item) {
+                const dot = item.name.lastIndexOf('.');
+                const base = dot > 0 ? item.name.slice(0, dot) : item.name;
+                const extension = dot > 0 ? item.name.slice(dot) : '';
+                const wrap = document.createElement('div');
+                wrap.className = 'backup-rename';
+                const line = document.createElement('div');
+                line.className = 'backup-rename-row';
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.value = base;
+                input.maxLength = 100;
+                input.setAttribute('aria-label', `New name for ${item.name}`);
+                const suffix = document.createElement('span');
+                suffix.textContent = extension;
+                const save = document.createElement('button');
+                save.type = 'button';
+                save.className = 'sa-btn sa-btn-primary sa-btn-sm';
+                save.textContent = 'Save';
+                const cancel = document.createElement('button');
+                cancel.type = 'button';
+                cancel.className = 'sa-btn sa-btn-ghost sa-btn-sm';
+                cancel.textContent = 'Cancel';
+                const error = document.createElement('p');
+                error.className = 'backup-rename-error';
+                error.setAttribute('role', 'alert');
+                error.hidden = true;
+                line.append(input, suffix, save, cancel);
+                wrap.append(line, error);
+                const originalNodes = [...nameCell.childNodes];
+                nameCell.replaceChildren(wrap);
+                input.focus();
+                input.select();
+
+                let saving = false;
+                const onOutside = event => {
+                    if (!saving && !wrap.contains(event.target)) cancelRename();
+                };
+                function cancelRename() {
+                    document.removeEventListener('mousedown', onOutside, true);
+                    nameCell.replaceChildren(...originalNodes);
+                }
+                document.addEventListener('mousedown', onOutside, true);
+
+                const submit = async () => {
+                    error.hidden = true;
+                    saving = true;
+                    setBusy(save, true);
+                    try {
+                        const result = await sendUpdate(urlFor(superadminUrls.databaseBackupRename, item.name), { name: input.value.trim() }, 'PUT');
+                        document.removeEventListener('mousedown', onOutside, true);
+                        showToast(result.message);
+                        await load();
+                    } catch (failure) {
+                        saving = false;
+                        error.textContent = failure.message;
+                        error.hidden = false;
+                        setBusy(save, false);
+                        input.focus();
+                    }
+                };
+                save.addEventListener('click', submit);
+                cancel.addEventListener('click', cancelRename);
+                input.addEventListener('keydown', event => {
+                    if (event.key === 'Enter') { event.preventDefault(); submit(); }
+                    if (event.key === 'Escape') { event.stopPropagation(); cancelRename(); }
+                });
+            }
+
+            function render() {
+                body.replaceChildren();
+                const visible = items.filter(item => !sourceFilter || item.source === sourceFilter);
+                count.textContent = items.length ? `${visible.length} of ${items.length} backup${items.length === 1 ? '' : 's'}` : '';
+                if (!items.length) { showState('No backups yet. One is created automatically before each database import, or add one above.'); return; }
+                if (!visible.length) { showState('No backups match this filter.'); return; }
+                showState('');
+
+                visible.forEach(item => {
+                    const row = document.createElement('tr');
+                    const isNew = Boolean(window.saHighlightBackup) && item.name === window.saHighlightBackup;
+                    if (isNew) row.classList.add('sa-row-new');
+                    const nameCell = document.createElement('td');
+                    const name = document.createElement('span');
+                    name.className = 'sa-mono';
+                    name.textContent = item.name;
+                    nameCell.appendChild(name);
+                    if (isNew) {
+                        const fresh = document.createElement('span');
+                        fresh.className = 'sa-badge is-new';
+                        fresh.textContent = 'New';
+                        nameCell.appendChild(fresh);
+                    }
+                    if (item === items[0]) {
+                        const latest = document.createElement('span');
+                        latest.className = 'sa-badge';
+                        latest.textContent = 'Latest';
+                        nameCell.appendChild(latest);
+                    }
+
+                    const sourceInfo = {
+                        import: { label: 'Before import', css: ' is-import', hint: 'Safety backup made right before a database import' },
+                        auto: { label: 'Monthly auto', css: '', hint: 'Monthly automatic backup' },
+                        manual: { label: 'Manual', css: ' is-manual', hint: 'Added by a Head Secretary from an exported file' },
+                    }[item.source] || { label: item.source, css: '', hint: '' };
+                    const source = document.createElement('span');
+                    source.className = `sa-badge is-source${sourceInfo.css}`;
+                    source.textContent = sourceInfo.label;
+                    source.title = sourceInfo.hint;
+
+                    const actions = document.createElement('div');
+                    actions.className = 'backup-actions';
+                    if (superadminUrls.databaseBackupRename) {
+                        const renameButton = document.createElement('button');
+                        renameButton.type = 'button';
+                        renameButton.className = 'sa-btn sa-btn-ghost sa-btn-sm';
+                        renameButton.textContent = 'Rename';
+                        renameButton.setAttribute('aria-label', `Rename ${item.name}`);
+                        renameButton.addEventListener('click', () => startRename(nameCell, item));
+                        actions.appendChild(renameButton);
+                    }
+                    if (superadminUrls.databaseBackupDownload) {
+                        const link = document.createElement('a');
+                        link.className = 'sa-btn sa-btn-ghost sa-btn-sm';
+                        link.href = urlFor(superadminUrls.databaseBackupDownload, item.name);
+                        link.textContent = 'Download';
+                        link.setAttribute('aria-label', `Download ${item.name}`);
+                        actions.appendChild(link);
+                    }
+
+                    row.append(nameCell, cell(source), cell(document.createTextNode(formatDate(item.created_at))), cell(document.createTextNode(formatSize(item.size))), cell(actions));
+                    body.appendChild(row);
+                });
             }
 
             async function load() {
@@ -3286,40 +3526,13 @@
                     const response = await fetch(superadminUrls.databaseBackups, { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } });
                     const result = await response.json();
                     if (!response.ok) throw new Error(result.message || 'The backups could not be loaded.');
-                    const items = Array.isArray(result.data) ? result.data : [];
-                    body.replaceChildren();
-                    if (!items.length) {
-                        showState('No backups yet. One is created automatically before each database import.');
-                        return;
+                    items = Array.isArray(result.data) ? result.data : [];
+                    render();
+                    if (result.pruned > 0) {
+                        showToast(`${result.pruned} backup${result.pruned === 1 ? '' : 's'} older than 1 year ${result.pruned === 1 ? 'was' : 'were'} deleted automatically.`);
                     }
-                    count.textContent = `${items.length} backup${items.length === 1 ? '' : 's'}`;
-                    items.forEach((item, index) => {
-                        const row = document.createElement('tr');
-                        const nameWrap = document.createElement('div');
-                        const name = document.createElement('span');
-                        name.className = 'sa-mono';
-                        name.textContent = item.name;
-                        nameWrap.appendChild(name);
-                        if (index === 0) {
-                            const badge = document.createElement('span');
-                            badge.className = 'sa-badge';
-                            badge.textContent = 'Latest';
-                            nameWrap.appendChild(badge);
-                        }
-                        const action = document.createElement('div');
-                        action.style.textAlign = 'right';
-                        if (superadminUrls.databaseBackupDownload) {
-                            const link = document.createElement('a');
-                            link.className = 'sa-btn sa-btn-ghost sa-btn-sm';
-                            link.href = superadminUrls.databaseBackupDownload.replace('__FILE__', encodeURIComponent(item.name));
-                            link.textContent = 'Download';
-                            link.setAttribute('aria-label', `Download ${item.name}`);
-                            action.appendChild(link);
-                        }
-                        row.append(cell(nameWrap), cell(formatDate(item.created_at)), cell(formatSize(item.size)), cell(action));
-                        body.appendChild(row);
-                    });
                 } catch (error) {
+                    items = [];
                     body.replaceChildren();
                     showState(error.message);
                     showToast(error.message, 'error');
@@ -3329,6 +3542,56 @@
             }
             window.saLoadBackups = load;
             refresh?.addEventListener('click', load);
+            sourceButtons.forEach(button => button.addEventListener('click', () => {
+                sourceFilter = button.dataset.backupSource;
+                sourceButtons.forEach(item => {
+                    item.classList.toggle('active', item === button);
+                    item.setAttribute('aria-pressed', String(item === button));
+                });
+                render();
+            }));
+
+            // ----- Manual backup upload -----
+            function resetUpload() {
+                uploadInput.value = '';
+                uploadSelected.hidden = true;
+                uploadButton.disabled = true;
+            }
+            const showUploadError = message => { uploadError.textContent = message; uploadError.hidden = !message; };
+            uploadInput?.addEventListener('change', () => {
+                showUploadError('');
+                const file = uploadInput.files?.[0];
+                if (!file) { resetUpload(); return; }
+                if (!/\.sql$/i.test(file.name)) { resetUpload(); showUploadError('Choose an .sql export file.'); return; }
+                document.getElementById('backupUploadName').textContent = file.name;
+                document.getElementById('backupUploadSize').textContent = `${(file.size / 1024 / 1024).toFixed(1)} MB · ready to save`;
+                uploadSelected.hidden = false;
+                uploadButton.disabled = !superadminUrls.databaseBackupStore;
+                if (!superadminUrls.databaseBackupStore) showUploadError('Manual backups are not enabled on the server yet. Add the backup routes to enable them.');
+            });
+            document.getElementById('backupUploadClear')?.addEventListener('click', () => { resetUpload(); showUploadError(''); });
+            uploadButton?.addEventListener('click', async () => {
+                const file = uploadInput.files?.[0];
+                if (!file || !superadminUrls.databaseBackupStore) return;
+                showUploadError('');
+                const formData = new FormData();
+                formData.append('file', file);
+                setBusy(uploadButton, true);
+                try {
+                    const result = await sendFormData(superadminUrls.databaseBackupStore, formData);
+                    showToast(`${result.message} Saved as ${result.data.name}`);
+                    resetUpload();
+                    await load();
+                } catch (error) {
+                    showUploadError(error.message);
+                    showToast(error.message, 'error');
+                    uploadButton.disabled = false;
+                } finally {
+                    setBusy(uploadButton, false);
+                    uploadButton.disabled = !uploadInput.files?.length;
+                }
+            });
+
             if (document.getElementById('tab-backups')?.classList.contains('active')) load();
         })();
 
@@ -3350,11 +3613,278 @@
                     document.getElementById('databaseImportResultMessage').textContent = result.message || 'Database import complete.';
                     document.getElementById('databaseImportResultFile').textContent = result.backup;
                     banner.hidden = false;
-                    activateTab('database');
+                    window.saHighlightBackup = result.backup;
+                    activateTab('backups');
+                    window.history.replaceState(null, '', '#backups');
+                    window.saLoadBackups?.();
                 }
             }
         } catch (error) { /* sessionStorage unavailable: the toast already reported the result */ }
         document.getElementById('dismissImportResult')?.addEventListener('click', () => { document.getElementById('databaseImportResult').hidden = true; });
+
+        // ===== SMTP setup: one Gmail sender, popup flow =====
+        (function initSmtpSetup() {
+            const $ = id => document.getElementById(id);
+            const modal = $('smtpModal');
+            const form = $('smtpSettingsForm');
+            if (!modal || !form) return;
+            const stepCode = $('smtpStepCode');
+            const stepDone = $('smtpStepDone');
+            const codeInput = $('smtpVerifyCode');
+            const boxGroup = $('smtpCodeBoxes');
+            const boxes = [...boxGroup.querySelectorAll('.otp-box')];
+            function syncCode() {
+                codeInput.value = boxes.map(box => box.value).join('');
+                confirmButton.disabled = codeInput.value.length !== 6;
+                boxes.forEach(box => box.classList.toggle('filled', box.value !== ''));
+                boxGroup.classList.remove('is-error');
+            }
+            function fillCode(digits, start = 0) {
+                digits.slice(0, 6 - start).split('').forEach((digit, offset) => { boxes[start + offset].value = digit; });
+                syncCode();
+                boxes[Math.min(start + digits.length, 5)].focus();
+            }
+            function clearCode(focus = true) {
+                boxes.forEach(box => { box.value = ''; });
+                syncCode();
+                if (focus) boxes[0].focus();
+            }
+            const confirmButton = $('smtpVerifyConfirmBtn');
+            const resendButton = $('smtpVerifyResendBtn');
+            const modalError = $('smtpModalError');
+            const saveButton = $('saveSmtpSettingsBtn');
+            const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+            let state = @json($smtpVerification);
+            let resendTimer = null;
+
+            if (modal.parentElement !== document.body) document.body.appendChild(modal);
+
+            const fmt = iso => new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Manila' }).format(new Date(iso));
+            const showModalError = message => { modalError.textContent = message || ''; modalError.hidden = !message; };
+
+            function showStep(step) {
+                form.hidden = step !== 'form';
+                stepCode.hidden = step !== 'code';
+                stepDone.hidden = step !== 'done';
+            }
+
+            function render() {
+                const saved = Boolean(state.saved);
+                $('smtpEmpty').hidden = saved;
+                $('smtpAccountView').hidden = !saved;
+                if (!saved) return;
+
+                const verified = Boolean(state.verified);
+                const mark = $('smtpAccountIcon');
+                mark.className = `smtpx-mark ${verified ? 'is-ok' : 'is-warn'}`;
+                mark.innerHTML = verified ? CHECK : '!';
+                $('smtpAccountEmail').textContent = state.email || '';
+                $('smtpAccountStatus').textContent = verified
+                    ? `Verified${state.verified_at ? ` on ${fmt(state.verified_at)}` : ''} · in use`
+                    : 'Not verified · not in use';
+                $('smtpAccountNote').textContent = verified
+                    ? 'This Gmail account sends all system emails, including sign-in codes and password recovery. To use another account, change it. The current one is replaced.'
+                    : "This account is saved but can't send emails until you enter the code we sent.";
+                const codeButton = $('smtpCodeBtn');
+                codeButton.hidden = verified;
+                codeButton.textContent = state.pending ? 'Enter code' : 'Send code';
+
+                if (verified) {
+                    if (smtpSetupAlert) smtpSetupAlert.hidden = true;
+                    if (smtpSecurityAlert) smtpSecurityAlert.hidden = true;
+                }
+            }
+
+            function updateResend(seconds) {
+                window.clearInterval(resendTimer);
+                let remaining = Math.max(0, Number(seconds) || 0);
+                const paint = () => {
+                    resendButton.disabled = remaining > 0;
+                    resendButton.textContent = remaining > 0 ? `Resend in ${remaining}s` : 'Resend code';
+                };
+                paint();
+                if (remaining === 0) return;
+                resendTimer = window.setInterval(() => {
+                    remaining -= 1;
+                    paint();
+                    if (remaining <= 0) window.clearInterval(resendTimer);
+                }, 1000);
+            }
+
+            function openModal() { modal.classList.add('active'); modal.setAttribute('aria-hidden', 'false'); }
+            function closeModal() {
+                modal.classList.remove('active');
+                modal.setAttribute('aria-hidden', 'true');
+                window.clearInterval(resendTimer);
+            }
+
+            function openForm() {
+                form.reset();
+                $('smtpEmail').value = '';
+                $('smtpModalTitle').textContent = state.saved ? 'Change Gmail' : 'Connect Gmail';
+                $('smtpReplaceNote').hidden = !state.saved;
+                showStep('form');
+                openModal();
+                $('smtpEmail').focus();
+            }
+
+            function openCode() {
+                $('smtpCodeText').textContent = `Enter the 6-digit code sent to ${state.sent_to || state.recipient || 'your Gmail'}${state.expires_at ? `. It expires ${fmt(state.expires_at)}` : ''}.`;
+                showModalError('');
+                clearCode(false);
+                updateResend(state.resend_in);
+                showStep('code');
+                openModal();
+                boxes[0].focus();
+            }
+
+            async function requestCode(button) {
+                showModalError('');
+                setBusy(button, true);
+                try {
+                    const result = await sendUpdate(superadminUrls.smtpVerificationSend, {}, 'POST');
+                    state = result.state;
+                    render();
+                    openCode();
+                    showToast(result.message);
+                } catch (error) {
+                    showModalError(error.message);
+                    showToast(error.message, 'error');
+                } finally {
+                    setBusy(button, false);
+                    if (button === resendButton) updateResend(state.resend_in);
+                }
+            }
+
+            // Save -> code is emailed -> code step
+            form.addEventListener('submit', async event => {
+                event.preventDefault();
+                setBusy(saveButton, true);
+                try {
+                    const result = await sendFormData(superadminUrls.smtpSettings, new URLSearchParams(new FormData(form)), 'PUT');
+                    $('smtpAppPassword').value = '';
+                    state = result.state;
+                    render();
+                    if (result.email_sent && state.pending) {
+                        openCode();
+                    } else {
+                        closeModal();
+                        showToast(result.message, 'error');
+                    }
+                } catch (error) {
+                    showToast(error.message, 'error');
+                } finally {
+                    setBusy(saveButton, false);
+                }
+            });
+
+            $('smtpConnectBtn').addEventListener('click', openForm);
+            $('smtpChangeBtn').addEventListener('click', openForm);
+            $('smtpCodeBtn').addEventListener('click', event => {
+                if (state.pending) openCode(); else requestCode(event.currentTarget);
+            });
+
+            $('smtpRemoveBtn').addEventListener('click', async event => {
+                const button = event.currentTarget;
+                const confirmed = await confirmAction({
+                    title: 'Remove this Gmail sender?',
+                    message: `${state.email || 'This account'} will be deleted. System emails (sign-in codes, password recovery) won't send until a new Gmail is connected and verified.`,
+                    confirmLabel: 'Remove Gmail',
+                    danger: true,
+                });
+                if (!confirmed) return;
+                setBusy(button, true);
+                try {
+                    const result = await sendUpdate(superadminUrls.smtpSettings, {}, 'DELETE');
+                    state = result.state;
+                    render();
+                    showToast(result.message);
+                } catch (error) {
+                    showToast(error.message, 'error');
+                } finally {
+                    setBusy(button, false);
+                }
+            });
+
+            // Popup controls
+            modal.querySelectorAll('[data-smtp-close]').forEach(button => button.addEventListener('click', closeModal));
+            modal.addEventListener('click', event => { if (event.target === modal) closeModal(); });
+            document.addEventListener('keydown', event => {
+                if (event.key === 'Escape' && modal.classList.contains('active')) closeModal();
+            });
+            resendButton.addEventListener('click', () => requestCode(resendButton));
+            boxes.forEach((box, i) => {
+                box.addEventListener('focus', () => box.select());
+                box.addEventListener('keydown', event => {
+                    if (event.ctrlKey || event.metaKey || event.altKey) return;
+                    if (/^\d$/.test(event.key)) {
+                        event.preventDefault();
+                        box.value = event.key;
+                        syncCode();
+                        if (i < 5) boxes[i + 1].focus();
+                    } else if (event.key === 'Backspace') {
+                        event.preventDefault();
+                        if (box.value) { box.value = ''; }
+                        else if (i > 0) { boxes[i - 1].value = ''; boxes[i - 1].focus(); }
+                        syncCode();
+                    } else if (event.key === 'Delete') {
+                        event.preventDefault(); box.value = ''; syncCode();
+                    } else if (event.key === 'ArrowLeft' && i > 0) {
+                        event.preventDefault(); boxes[i - 1].focus();
+                    } else if (event.key === 'ArrowRight' && i < 5) {
+                        event.preventDefault(); boxes[i + 1].focus();
+                    } else if (event.key === 'Enter') {
+                        event.preventDefault();
+                        if (!confirmButton.disabled) confirmButton.click();
+                    } else if (event.key.length === 1) {
+                        event.preventDefault(); // block letters and symbols
+                    }
+                });
+                // Mobile keyboards and one-time-code autofill arrive here
+                box.addEventListener('input', () => {
+                    const digits = box.value.replace(/\D/g, '');
+                    box.value = '';
+                    if (digits) fillCode(digits, digits.length >= 6 ? 0 : i);
+                    else syncCode();
+                });
+                box.addEventListener('paste', event => {
+                    event.preventDefault();
+                    const digits = (event.clipboardData?.getData('text') || '').replace(/\D/g, '');
+                    if (digits) fillCode(digits, digits.length >= 6 ? 0 : i);
+                });
+            });
+            confirmButton.addEventListener('click', async () => {
+                showModalError('');
+                setBusy(confirmButton, true);
+                try {
+                    const result = await sendUpdate(superadminUrls.smtpVerificationVerify, { code: codeInput.value }, 'POST');
+                    state = result.state;
+                    render();
+                    $('smtpDoneText').textContent = `${state.email} is now the sender for all LSPDMS system emails.`;
+                    window.clearInterval(resendTimer);
+                    showStep('done');
+                    showToast('Gmail verified.');
+                } catch (error) {
+                    showModalError(error.message);
+                    boxGroup.classList.add('is-error');
+                    boxes.forEach(box => { box.value = ''; });
+                    boxes.forEach(box => box.classList.remove('filled'));
+                    codeInput.value = '';
+                    boxes[0].focus();
+                } finally {
+                    setBusy(confirmButton, false);
+                    confirmButton.disabled = state.verified || codeInput.value.length !== 6;
+                }
+            });
+            $('smtpDoneBtn').addEventListener('click', closeModal);
+
+            // Top alert's "Configure SMTP" button should open the popup directly
+            document.querySelectorAll('[data-open-smtp]').forEach(button => button.addEventListener('click', () => {
+                if (!state.saved) openForm();
+            }));
+
+            render();
+        })();
     })();
 </script>
-@endsection 
+@endsection

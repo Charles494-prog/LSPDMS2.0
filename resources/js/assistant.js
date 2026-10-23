@@ -6,6 +6,8 @@ if (root) {
     const input = document.getElementById('assistantInput');
     const send = document.getElementById('assistantSend');
     const error = document.getElementById('assistantError');
+    let session = 0; // bumped on every reset, so a reply that arrives after the panel was closed is discarded
+    const GREETING = 'Hi! I am LSPBot! I can help you find features and answer permission-approved record questions. That said though, I don\u2019t change records \u{1F642}';
     function appendMessage(role, text, link = null) {
         const bubble = document.createElement('div');
         bubble.className = `assistant-message${role === 'user' ? ' user' : ''}`;
@@ -24,6 +26,17 @@ if (root) {
         return bubble;
     }
 
+    // Same three bouncing dots the regular chats show while the other person is typing.
+    function showTyping() {
+        const typing = document.createElement('div');
+        typing.className = 'assistant-typing';
+        typing.setAttribute('aria-label', 'LSPBot is typing');
+        typing.append(document.createElement('span'), document.createElement('span'), document.createElement('span'));
+        feed.append(typing);
+        feed.scrollTop = feed.scrollHeight;
+        return typing;
+    }
+
     form.addEventListener('submit', async event => {
         event.preventDefault();
         const text = input.value.trim();
@@ -31,12 +44,12 @@ if (root) {
 
         error.hidden = true;
         error.textContent = '';
-        document.getElementById('assistantWelcome')?.remove();
         const userBubble = appendMessage('user', text);
+        const typing = showTyping();
+        const mySession = session;
         input.value = '';
         input.disabled = true;
         send.disabled = true;
-        send.textContent = 'Looking…';
 
         try {
             const response = await fetch(root.dataset.endpoint, {
@@ -55,17 +68,18 @@ if (root) {
                 throw new Error(validationMessage || data.message || 'The assistant could not reply. Please try again.');
             }
 
+            if (mySession !== session) return;
+            typing.remove();
             appendMessage('model', data.reply, data.link);
         } catch (requestError) {
             userBubble.remove();
             input.value = text;
             error.textContent = requestError.message || 'The assistant could not reply. Please try again.';
             error.hidden = false;
-            input.focus();
         } finally {
+            typing.remove();
             input.disabled = false;
             send.disabled = false;
-            send.textContent = 'Send';
             input.focus();
         }
     });
@@ -77,18 +91,32 @@ if (root) {
         }
     });
 
-    document.getElementById('assistantClear').addEventListener('click', () => {
+    // LSPBot keeps no memory: whenever its panel is closed, the conversation is erased
+    // and the next time it opens it starts again from the greeting.
+    function resetConversation() {
+        session++;
         feed.replaceChildren();
-        const welcome = document.createElement('p');
-        welcome.className = 'assistant-welcome';
-        welcome.id = 'assistantWelcome';
-        const heading = document.createElement('strong');
-        heading.textContent = 'Hi! I’m LSPBot! Your LSPDMS Guide and AI Assistant!';
-        welcome.append(heading, 'Ask me where to find a tool, how to complete a workflow, or—if enabled—questions like “How many MS are there?” I’ll point you to the right place, but I can’t edit records.');
-        feed.append(welcome);
+        const greeting = document.createElement('div');
+        greeting.className = 'assistant-message';
+        greeting.id = 'assistantGreeting';
+        greeting.textContent = GREETING;
+        feed.append(greeting);
         error.hidden = true;
         error.textContent = '';
         input.value = '';
-        input.focus();
-    });
+        input.disabled = false;
+        send.disabled = false;
+    }
+
+    const main = root.closest('.messages-main');
+    let wasOpen = !root.hidden && (!main || main.classList.contains('assistant-active'));
+    const syncOpenState = () => {
+        const open = !root.hidden && (!main || main.classList.contains('assistant-active'));
+        if (wasOpen && !open) resetConversation();
+        wasOpen = open;
+    };
+    const observer = new MutationObserver(syncOpenState);
+    observer.observe(root, { attributes: true, attributeFilter: ['hidden'] });
+    if (main) observer.observe(main, { attributes: true, attributeFilter: ['class'] });
+    window.addEventListener('pagehide', resetConversation);
 }

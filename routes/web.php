@@ -3,6 +3,7 @@
 use App\Http\Controllers\BroadcastAuthController;
 use App\Http\Controllers\AdminDatabaseController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DatabaseBackupController;
 use App\Http\Controllers\DeliberationController;
 use App\Http\Controllers\DelistmentController;
 use App\Http\Controllers\FilterBnhHelperController;
@@ -22,7 +23,6 @@ use App\Http\Controllers\SystemSmtpSettingsController;
 use App\Http\Controllers\TarhetaStatusController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\DatabaseBackupController;
 
 Route::get('/', function () {
     return redirect('/intro');
@@ -174,13 +174,29 @@ Route::middleware('login.session')->group(function () {
             ->name('superadmin.database.import');
         Route::post('/superadmin/database/export.xlsx', [AdminDatabaseController::class, 'exportXlsx'])
             ->name('superadmin.database.export-xlsx');
-                Route::get('/superadmin/database/backups', [DatabaseBackupController::class, 'index'])
+        Route::get('/superadmin/database/backups', [DatabaseBackupController::class, 'index'])
             ->name('superadmin.database.backups');
+        Route::post('/superadmin/database/backups', [DatabaseBackupController::class, 'store'])
+            ->middleware('throttle:5,1')
+            ->name('superadmin.database.backups.store');
         Route::get('/superadmin/database/backups/{file}', [DatabaseBackupController::class, 'download'])
-            ->where('file', '[A-Za-z0-9._-]+')
+            ->where('file', '[^/]+')
             ->name('superadmin.database.backups.download');
+        Route::put('/superadmin/database/backups/{file}', [DatabaseBackupController::class, 'rename'])
+            ->where('file', '[^/]+')
+            ->name('superadmin.database.backups.rename');
         Route::put('/superadmin/smtp-settings', [SystemSmtpSettingsController::class, 'update'])
             ->name('superadmin.smtp-settings.update');
+        Route::delete('/superadmin/smtp-settings', [SystemSmtpSettingsController::class, 'destroy'])
+            ->name('superadmin.smtp-settings.destroy');
+        Route::get('/superadmin/smtp-settings/verification', [SystemSmtpSettingsController::class, 'verificationStatus'])
+            ->name('superadmin.smtp-settings.verification.status');
+        Route::post('/superadmin/smtp-settings/verification/send', [SystemSmtpSettingsController::class, 'sendVerification'])
+            ->middleware('throttle:6,1')
+            ->name('superadmin.smtp-settings.verification.send');
+        Route::post('/superadmin/smtp-settings/verification/verify', [SystemSmtpSettingsController::class, 'verify'])
+            ->middleware('throttle:10,1')
+            ->name('superadmin.smtp-settings.verification.verify');
         Route::get('/superadmin/record-activity/download', [SuperadminController::class, 'downloadRecordAuditLogs'])
             ->name('superadmin.record-activity.download');
         Route::post('/superadmin/r4-02/hakbangs', [SuperadminController::class, 'storeR402Hakbang'])->name('superadmin.r4-02.hakbangs.store');

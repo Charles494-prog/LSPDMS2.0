@@ -10,6 +10,7 @@ use App\Models\Message;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -125,7 +126,11 @@ class MessageController extends Controller
         $unread = $conversation->messages()->where('sender_id', '!=', $user->id)
             ->whereNull('read_at')->where('expires_at', '>', now());
         $unreadIds = $unread->pluck('id');
-        $unread->update(['delivered_at' => now(), 'read_at' => now(), 'updated_at' => now()]);
+        $unread->update([
+            'delivered_at' => DB::raw('COALESCE(delivered_at, NOW())'),
+            'read_at' => now(),
+            'updated_at' => now(),
+        ]);
 
         if ($unreadIds->isNotEmpty()) {
             foreach ($messages->whereIn('id', $unreadIds) as $message) {
@@ -145,31 +150,46 @@ class MessageController extends Controller
             'attachment' => ['nullable', 'image', 'mimes:jpg,jpeg,png,gif,webp', 'max:10240'],
         ]);
         $body = trim((string) ($validated['body'] ?? ''));
-        $attachment = $request->file('attachment');
+        $file = $request->file('attachment');
+        $attachment = $file instanceof UploadedFile ? $file : null;
 
         if ($body === '' && ! $attachment) {
             throw ValidationException::withMessages(['body' => 'Add a message or choose an image to send.']);
         }
 
-        $message = DB::transaction(function () use ($conversation, $user, $body, $attachment): Message {
-            $message = $conversation->messages()->create([
-                'sender_id' => $user->id,
-                'body' => $body !== '' ? $body : null,
-                'expires_at' => now()->addYear(),
-            ]);
+        $storedPath = null;
 
-            if ($attachment) {
-                $path = $attachment->store('messages/'.$conversation->id, 'local');
-                $message->forceFill([
-                    'attachment_path' => $path,
-                    'attachment_name' => $attachment->getClientOriginalName(),
-                    'attachment_mime' => $attachment->getMimeType(),
-                    'attachment_size' => $attachment->getSize(),
-                ])->save();
+        try {
+            $message = DB::transaction(function () use ($conversation, $user, $body, $attachment, &$storedPath): Message {
+                $message = $conversation->messages()->create([
+                    'sender_id' => $user->id,
+                    'body' => $body !== '' ? $body : null,
+                    'expires_at' => now()->addYear(),
+                ]);
+
+                if ($attachment) {
+                    $path = $attachment->store('messages/'.$conversation->id, 'local');
+                    if ($path === false) {
+                        throw ValidationException::withMessages(['attachment' => 'The image could not be saved. Please try again.']);
+                    }
+                    $storedPath = $path;
+
+                    $message->forceFill([
+                        'attachment_path' => $path,
+                        'attachment_name' => $attachment->getClientOriginalName(),
+                        'attachment_mime' => $attachment->getMimeType(),
+                        'attachment_size' => $attachment->getSize(),
+                    ])->save();
+                }
+
+                return $message->load('sender');
+            });
+        } catch (Throwable $exception) {
+            if ($storedPath !== null) {
+                Storage::disk('local')->delete($storedPath);
             }
-
-            return $message->load('sender');
-        });
+            throw $exception;
+        }
 
         $this->broadcastSafely(new MessageSent($message));
 
@@ -205,7 +225,7 @@ class MessageController extends Controller
     public function attachment(Request $request, Message $message): mixed
     {
         $this->authorizeMessageParticipant($request, $message);
-        abort_if(! $message->attachment_path || $message->expires_at->isPast(), 404);
+        abort_if(! $message->attachment_path, 404);
         abort_unless(Storage::disk('local')->exists($message->attachment_path), 404);
 
         return Storage::disk('local')->response(
@@ -261,6 +281,12 @@ class MessageController extends Controller
     {
         $name = trim($user->full_name);
 
+        $avatarUrl = null;
+        if ($user->profile_picture) {
+            $segments = array_map('rawurlencode', explode('/', ltrim((string) $user->profile_picture, '/')));
+            $avatarUrl = asset('storage/'.implode('/', $segments));
+        }
+
         return [
             'id' => $user->id,
             'name' => $name !== '' ? $name : $user->gmail,
@@ -269,9 +295,7 @@ class MessageController extends Controller
             'can_message' => (bool) $user->is_verified,
             'status' => $user->is_verified ? 'Active' : 'Suspended',
             'avatar' => $user->profile_picture,
-            'avatar_url' => $user->profile_picture
-                ? '/storage/'.implode('/', array_map('rawurlencode', explode('/', ltrim($user->profile_picture, '/'))))
-                : null,
+            'avatar_url' => $avatarUrl,
         ];
     }
 
