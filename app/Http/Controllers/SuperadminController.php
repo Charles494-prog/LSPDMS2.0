@@ -10,7 +10,10 @@ use App\Models\RecordAuditLog;
 use App\Models\SystemSmtpSetting;
 use App\Models\User;
 use App\Services\DatabaseBackupService;
+use App\Services\SecurityPolicy;
 use App\Services\SystemSmtpConfiguration;
+use App\Support\PasswordVerifier;
+use App\Support\Role;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,8 +27,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SuperadminController extends Controller
 {
-    public function index(Request $request, SystemSmtpConfiguration $smtpConfiguration)
+    public function index(Request $request, SystemSmtpConfiguration $smtpConfiguration, SecurityPolicy $securityPolicy)
     {
+        // Show the real state: OTP / forgot password cannot stay on without a verified sender.
+        $securityPolicy->enforceEmailAvailability($this->changedBy($request));
         $auditFilters = $this->validatedAuditFilters($request);
         $users = User::query()
             ->select([
@@ -84,8 +89,9 @@ class SuperadminController extends Controller
             'smtpVerification' => $smtpConfiguration->verificationState((string) $request->session()->get('login_user.gmail', '')),
             'smtpRequiredForAuthentication' => (bool) ($securitySettings?->require_otp ?? false)
                 || (bool) ($securitySettings?->allow_forgot_password ?? false),
+            'emailFeaturesAvailable' => $securityPolicy->emailFeaturesAvailable(),
             'headSecretaryTransferCandidates' => $users->filter(fn (User $user): bool => $user->is_verified
-                && mb_strtolower(trim((string) $user->tungkulin)) === 'secretary'
+                && Role::isSecretary($user->tungkulin)
                 && (int) $user->id !== (int) $request->session()->get('login_user.id'))->values(),
         ]);
     }
@@ -216,7 +222,7 @@ class SuperadminController extends Controller
     public function updateUser(Request $request, User $user): JsonResponse
     {
         $validated = $request->validate([
-            'tungkulin' => ['sometimes', 'nullable', 'string', 'max:100', Rule::in(['Secretary', 'Head Secretary'])],
+            'tungkulin' => ['sometimes', 'required', 'string', 'max:100', Rule::in([Role::SECRETARY, Role::HEAD_SECRETARY])],
             'is_verified' => ['sometimes', 'boolean'],
         ]);
 
@@ -226,11 +232,7 @@ class SuperadminController extends Controller
             ]);
         }
 
-        $isHeadSecretary = static fn (?string $role): bool => in_array(
-            mb_strtolower(trim(preg_replace('/\s+/', ' ', (string) $role) ?? '')),
-            ['head secretary', 'secretary head'],
-            true
-        );
+        $isHeadSecretary = static fn (?string $role): bool => Role::isHeadSecretary($role);
         $isSelf = (int) $request->session()->get('login_user.id') === (int) $user->id;
         $targetIsHead = $isHeadSecretary($user->tungkulin);
 
@@ -299,26 +301,17 @@ class SuperadminController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $isHeadSecretary = static fn (?string $role): bool => in_array(
-                mb_strtolower(trim(preg_replace('/\s+/', ' ', (string) $role) ?? '')),
-                ['head secretary', 'secretary head'],
-                true
-            );
-
-            if (! $isHeadSecretary($currentHead->tungkulin) || ! $currentHead->is_verified) {
+            if (! Role::isHeadSecretary($currentHead->tungkulin) || ! $currentHead->is_verified) {
                 throw ValidationException::withMessages([
                     'target_user_id' => 'Only the active Head Secretary can transfer this role.',
                 ]);
             }
-            $passwordMatches = str_starts_with((string) $currentHead->password, '$')
-                ? Hash::check($validated['current_password'], $currentHead->password)
-                : hash_equals((string) $currentHead->password, $validated['current_password']);
-            if (! $passwordMatches) {
+            if (! PasswordVerifier::check($validated['current_password'], $currentHead->password)) {
                 throw ValidationException::withMessages([
                     'current_password' => 'The current password is incorrect.',
                 ]);
             }
-            if (! $target->is_verified || mb_strtolower(trim((string) $target->tungkulin)) !== 'secretary') {
+            if (! $target->is_verified || ! Role::isSecretary($target->tungkulin)) {
                 throw ValidationException::withMessages([
                     'target_user_id' => 'Choose a verified Secretary account for the transfer.',
                 ]);
@@ -485,14 +478,37 @@ class SuperadminController extends Controller
         ]);
     }
 
-    public function updateSecuritySettings(Request $request): JsonResponse
+    public function updateSecuritySettings(Request $request, SecurityPolicy $securityPolicy): JsonResponse
     {
         $validated = $request->validate([
             'require_otp' => ['required', 'boolean'],
             'allow_forgot_password' => ['required', 'boolean'],
         ]);
-        $globalVariables = GlobalVariable::query()->first() ?? new GlobalVariable;
-        $globalVariables->fill($validated)->save();
+        $validated = array_map(fn (mixed $value): bool => filter_var($value, FILTER_VALIDATE_BOOLEAN), $validated);
+
+        $globalVariables = DB::transaction(function () use ($validated, $securityPolicy): GlobalVariable {
+            $globalVariables = GlobalVariable::query()->lockForUpdate()->first() ?? new GlobalVariable;
+            $turningOn = ($validated['require_otp'] && ! $globalVariables->require_otp)
+                || ($validated['allow_forgot_password'] && ! $globalVariables->allow_forgot_password);
+            // Enabling needs a verified sender; turning a feature off is always allowed.
+            if ($turningOn && ! $securityPolicy->emailFeaturesAvailable()) {
+                throw ValidationException::withMessages([
+                    'security' => 'Require OTP and Allow Forgot Password need a verified Gmail sender. Save the SMTP account and confirm its code first.',
+                ]);
+            }
+
+            $otpTurnedOn = $validated['require_otp'] && ! $globalVariables->require_otp;
+            $globalVariables->fill($validated)->save();
+            if ($otpTurnedOn) {
+                // Remember-me sign-ins must not skip the new second step.
+                DB::table('login_user')->whereNotNull('remember_token')->update([
+                    'remember_token' => null,
+                    'remember_token_expires_at' => null,
+                ]);
+            }
+
+            return $globalVariables;
+        });
 
         return response()->json([
             'message' => 'Security settings saved.',

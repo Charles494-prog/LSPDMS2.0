@@ -7,6 +7,7 @@ use App\Models\Purok;
 use App\Models\Record;
 use App\Models\GlobalVariable;
 use App\Services\R210Eligibility;
+use App\Support\Role;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -15,6 +16,9 @@ use Illuminate\Validation\ValidationException;
 
 class RecordsController extends Controller
 {
+    /** @var \Illuminate\Support\Collection<int, Purok>|null */
+    private ?\Illuminate\Support\Collection $purokSettings = null;
+
     public function search(Request $request, R210Eligibility $eligibility): JsonResponse
     {
         $validated = $request->validate([
@@ -72,7 +76,7 @@ class RecordsController extends Controller
             $name = $this->nameParts($record->full_name ?? '');
             if ($name['letters'] !== '') {
                 $nameGroups['name:'.$name['letters'].':'.$name['suffix']][] = $record;
-                $namedRecords[] = ['record' => $record, ...$name];
+                $namedRecords[] = ['record' => $record, ...$name, 'length' => mb_strlen($name['letters'])];
             }
         }
 
@@ -116,6 +120,14 @@ class RecordsController extends Controller
                 }
 
                 if ($leftName === $rightName) {
+                    continue;
+                }
+
+                // The edit distance is at least the length difference, so pairs whose
+                // lengths alone keep them under 90% are skipped without changing results.
+                $longest = max($namedRecords[$left]['length'], $namedRecords[$right]['length']);
+                $lengthGap = abs($namedRecords[$left]['length'] - $namedRecords[$right]['length']);
+                if ((int) round((1 - $lengthGap / $longest) * 100) < 90) {
                     continue;
                 }
 
@@ -173,22 +185,7 @@ class RecordsController extends Controller
 
         $attributes = [];
             if (array_key_exists('registry_number', $validated)) {
-                $registry = mb_strtoupper(trim($validated['registry_number']));
-                if ($registry !== 'RFID') {
-                    $duplicates = Record::query()
-                        ->whereKeyNot($record->getKey())
-                        ->whereRaw('UPPER(TRIM(registry)) = ?', [$registry])
-                        ->orderBy('full_name')
-                        ->get(['id', 'full_name', 'registry']);
-                    if ($duplicates->isNotEmpty()) {
-                        $matches = $duplicates->map(fn (Record $duplicate): string => trim((string) $duplicate->full_name)
-                            .' (record #'.$duplicate->id.', registry '.trim((string) $duplicate->registry).')')->implode(', ');
-                        throw ValidationException::withMessages([
-                            'registry_number' => ["This registry number is already assigned to: {$matches}."],
-                        ]);
-                    }
-                }
-                $validated['registry_number'] = $registry;
+                $validated['registry_number'] = mb_strtoupper(trim($validated['registry_number']));
             }
 
             if (array_key_exists('grupo', $validated) && $validated['grupo'] !== null && $validated['grupo'] !== '') {
@@ -240,6 +237,10 @@ class RecordsController extends Controller
 
             DB::transaction(function () use ($record, $attributes, $validated): void {
                 $lockedRecord = Record::query()->lockForUpdate()->findOrFail($record->getKey());
+                if (array_key_exists('registry_number', $validated)) {
+                    // Checked under a lock inside the transaction, so two edits cannot both take the same number.
+                    $this->ensureRegistryIsFree($validated['registry_number'], (int) $record->getKey());
+                }
                 $maritalFieldsChanged = array_key_exists('is_married', $validated);
                 $isMarried = $maritalFieldsChanged
                     ? (bool) $validated['is_married']
@@ -329,9 +330,7 @@ class RecordsController extends Controller
     private function canViewDelistmentEligibility(Request $request): bool
     {
         $user = $request->session()->get('login_user', []);
-        $role = mb_strtolower(trim(preg_replace('/\s+/', ' ', (string) ($user['tungkulin'] ?? '')) ?? ''));
-
-        return in_array($role, ['head secretary', 'secretary head'], true)
+        return Role::isHeadSecretary($user['tungkulin'] ?? '')
             || (bool) ($user['Delistment_allow'] ?? false);
     }
 
@@ -361,13 +360,38 @@ class RecordsController extends Controller
     private function purokSettingForRecord(Record $record): ?Purok
     {
         $number = $this->normalizePurokNumber($record->purok);
-        $puroks = $number === null ? collect() : Purok::query()
-            ->where('purok_number', $number)
-            ->orderBy('grupo_start')
-            ->orderBy('id')
-            ->get();
+        // Loaded once per request instead of once per record in a result list.
+        $this->purokSettings ??= Purok::query()->orderBy('grupo_start')->orderBy('id')->get();
+        $puroks = $number === null
+            ? collect()
+            : $this->purokSettings->where('purok_number', $number)->values();
 
         return $this->purokForGrupo($puroks, $record->grupo);
+    }
+
+    /**
+     * 'RFID' is shared by many members and never conflicts; any other registry
+     * number may belong to one record only. Runs inside the update transaction.
+     */
+    private function ensureRegistryIsFree(string $registry, int $recordId): void
+    {
+        if ($registry === 'RFID') {
+            return;
+        }
+
+        $duplicates = Record::query()
+            ->whereKeyNot($recordId)
+            ->whereRaw('UPPER(TRIM(registry)) = ?', [$registry])
+            ->orderBy('full_name')
+            ->lockForUpdate()
+            ->get(['id', 'full_name', 'registry']);
+        if ($duplicates->isNotEmpty()) {
+            $matches = $duplicates->map(fn (Record $duplicate): string => trim((string) $duplicate->full_name)
+                .' (record #'.$duplicate->id.', registry '.trim((string) $duplicate->registry).')')->implode(', ');
+            throw ValidationException::withMessages([
+                'registry_number' => ["This registry number is already assigned to: {$matches}."],
+            ]);
+        }
     }
 
 

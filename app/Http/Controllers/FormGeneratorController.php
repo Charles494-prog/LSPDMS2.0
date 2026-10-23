@@ -4,14 +4,15 @@ namespace App\Http\Controllers;
 
 use App\Models\GlobalVariable;
 use App\Models\MonthlyMovementSession;
-use App\Models\MonthlySessionMovement;
 use App\Models\Purok;
 use App\Models\R401Snapshot;
 use App\Models\Record;
 use App\Services\MonthlyResumenReport;
+use App\Services\PurokSelection;
 use App\Services\R401DocxExporter;
 use App\Services\R401ReportBuilder;
 use App\Services\ResumenDocxExporter;
+use App\Support\Role;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -91,22 +92,15 @@ class FormGeneratorController extends Controller
     public function downloadR401(Request $request, R401DocxExporter $exporter): BinaryFileResponse
     {
         $request->validate([
-            'purok' => ['required', 'string', 'max:20'],
+            'purok' => ['required', 'string', 'max:'.PurokSelection::MAX_LENGTH],
             'kalagayan' => ['required', 'string', 'in:MS,UWP'],
         ]);
         $data = $this->r401ReportData($request);
         abort_if($data['reportRows'] === [], 404, 'No records match the selected Purok and Kalagayan.');
         $globalVariables = $data['globalVariables'];
-        $kalihim = $data['selectedStatus'] === 'UWP'
-            ? ($globalVariables?->kalihim_uwp ?: $globalVariables?->kalihim_ms)
-            : ($globalVariables?->kalihim_ms ?: $globalVariables?->kalihim_uwp);
-        $reportPages = array_map(function (array $page) use ($data, $kalihim): array {
-            $page['kalihim_name'] = $data['usePurokSecretary']
-                ? $page['secretary_name']
-                : (string) $kalihim;
-
-            return $page;
-        }, $data['reportPages']);
+        $kalihim = $data['kalihimName'];
+        // r401ReportData() already filled each page's Kalihim (segment secretary or the global fallback).
+        $reportPages = $data['reportPages'];
         $path = $exporter->generate([
             'district' => $globalVariables?->district,
             'dcode' => $globalVariables?->dcode,
@@ -152,29 +146,46 @@ class FormGeneratorController extends Controller
             ->orderByDesc('id')
             ->paginate(25)
             ->withQueryString();
+        $fileStore = app(\App\Services\FileStore::class);
+        foreach ($snapshots as $snapshot) {
+            // Disk file or database copy; the list shows a "file missing" badge otherwise.
+            $snapshot->file_available = is_string($snapshot->file_path) && $snapshot->file_path !== ''
+                && $fileStore->exists('local', $snapshot->file_path);
+        }
 
         return view('forms.monthly-r4-01-snapshots', [
             'snapshots' => $snapshots,
             'filters' => $filters,
             'years' => $years,
-            'canDeleteSnapshots' => in_array(mb_strtolower(trim((string) $request->session()->get('login_user.tungkulin', ''))), [
-                'head secretary',
-                'secretary head',
-            ], true),
+            'canDeleteSnapshots' => Role::isHeadSecretary((string) $request->session()->get('login_user.tungkulin', '')),
         ]);
     }
 
     public function viewR401Snapshot(R401Snapshot $snapshot)
     {
         abort_unless($snapshot->report_type === 'Monthly session', 404);
-        $previewPath = preg_replace('/\.docx$/i', '.html', $snapshot->file_path);
-        abort_unless(is_string($previewPath) && Storage::disk('local')->exists($previewPath), 404);
+        abort_unless($snapshot->format === 'docx', 404);
+        $previewPath = preg_replace('/\.docx$/i', '.html', (string) $snapshot->file_path);
 
-        return response(Storage::disk('local')->get($previewPath), 200, [
-            'Content-Type' => 'text/html; charset=UTF-8',
-            'Content-Disposition' => 'inline; filename="'.str_replace('.docx', '.html', $snapshot->file_name).'"',
-            'X-Content-Type-Options' => 'nosniff',
-        ]);
+        // Reads the disk file, or the stored_files copy after a restore on another PC.
+        $response = is_string($previewPath) && $previewPath !== ''
+            ? app(\App\Services\FileStore::class)->response(
+                'local',
+                $previewPath,
+                (string) preg_replace('/\.docx$/i', '.html', (string) $snapshot->file_name),
+                'text/html; charset=UTF-8',
+                'inline',
+            )
+            : null;
+
+        return $response ?? response(
+            '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Snapshot file missing</title></head>'
+            .'<body style="font-family:sans-serif;padding:1.5rem;color:#333">'
+            .'<p>The saved file for this snapshot is not on this server. It may have been removed, or this database was restored without its files.</p>'
+            .'</body></html>',
+            404,
+            ['Content-Type' => 'text/html; charset=UTF-8', 'X-Content-Type-Options' => 'nosniff'],
+        );
     }
 
     public function r401SnapshotSummary(R401Snapshot $snapshot): JsonResponse
@@ -300,14 +311,16 @@ class FormGeneratorController extends Controller
         ]);
         abort_unless($snapshot->report_type === 'Monthly session', 404);
 
-        $disk = Storage::disk('local');
-        $previewPath = preg_replace('/\.docx$/i', '.html', $snapshot->file_path);
-        foreach (array_filter([$snapshot->file_path, $previewPath]) as $path) {
-            if ($disk->exists($path) && ! $disk->delete($path)) {
-                throw new \RuntimeException('Unable to delete the saved monthly snapshot file.');
-            }
-        }
+        $paths = array_filter([
+            (string) $snapshot->file_path,
+            (string) preg_replace('/\.docx$/i', '.html', (string) $snapshot->file_path),
+        ]);
         $snapshot->delete();
+        // Removes the disk files and their stored_files copies.
+        $fileStore = app(\App\Services\FileStore::class);
+        foreach (array_unique($paths) as $path) {
+            $fileStore->delete('local', $path);
+        }
 
         return redirect()
             ->route('forms.monthly.r4-01.snapshots')
@@ -318,13 +331,20 @@ class FormGeneratorController extends Controller
     {
         abort_unless($snapshot->report_type === 'Monthly session', 404);
         abort_unless($snapshot->format === 'docx', 404);
-        abort_unless(Storage::disk('local')->exists($snapshot->file_path), 404);
 
-        return response()->download(
-            Storage::disk('local')->path($snapshot->file_path),
-            $snapshot->file_name,
-            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
-        );
+        $response = filled($snapshot->file_path)
+            ? app(\App\Services\FileStore::class)->response(
+                'local',
+                (string) $snapshot->file_path,
+                (string) $snapshot->file_name,
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'attachment',
+            )
+            : null;
+
+        return $response ?? redirect()
+            ->route('forms.monthly.r4-01.snapshots')
+            ->with('error', 'The saved file for "'.$snapshot->file_name.'" is not on this server, so it cannot be downloaded.');
     }
 
     private function resumenReportData(MonthlyResumenReport $resumenReport): array
@@ -355,41 +375,35 @@ class FormGeneratorController extends Controller
     private function r401ReportData(Request $request): array
     {
         $validated = $request->validate([
-            'purok' => ['nullable', 'string', 'max:20'],
+            'purok' => ['nullable', 'string', 'max:'.PurokSelection::MAX_LENGTH],
             'kalagayan' => ['nullable', 'string', 'in:MS,UWP'],
         ]);
-        if (isset($validated['purok']) && $validated['purok'] !== 'all') {
-            $request->validate(['purok' => ['integer', 'exists:puroks,purok_number']]);
-        }
+        // Tokens: "all", "N" (every segment of purok number N) or "N:ID" (one segment, e.g. Purok 2a), comma separated.
+        $selection = isset($validated['purok'])
+            ? PurokSelection::fromRequestValue($validated['purok'])
+            : null;
         $session = MonthlyMovementSession::query()
             ->whereNotNull('period_month')
             ->orderByDesc('period_month')
             ->orderByDesc('id')
             ->first();
         $month = Carbon::parse($session?->period_month ?? now())->startOfMonth();
-        $puroks = Purok::query()->orderBy('purok_number')->get(['purok_number', 'purok_name']);
+        $puroks = Purok::selectionOptions();
         $selectedPurok = $validated['purok'] ?? null;
         $selectedStatus = $validated['kalagayan'] ?? null;
-        $report = $selectedPurok !== null && $selectedStatus !== null
-            ? $this->r401ReportBuilder->build($selectedPurok, $selectedStatus, $session)
-            : ['rows' => [], 'pages' => []];
+        $report = $selection !== null && $selectedStatus !== null
+            ? $this->r401ReportBuilder->build($selection, $selectedStatus, $session)
+            : ['rows' => [], 'pages' => [], 'outside_range' => []];
         $globalVariables = GlobalVariable::query()->first();
         $usePurokSecretary = (bool) ($globalVariables?->r401_use_purok_secretary ?? false);
-        $globalKalihimName = $selectedStatus === 'UWP'
-            ? (($globalVariables?->kalihim_uwp ?: $globalVariables?->kalihim_ms) ?? '')
-            : (($globalVariables?->kalihim_ms ?: $globalVariables?->kalihim_uwp) ?? '');
-        $reportPages = array_map(function (array $page) use ($usePurokSecretary, $globalKalihimName): array {
-            $page['kalihim_name'] = $usePurokSecretary
-                ? $page['secretary_name']
-                : $globalKalihimName;
-
-            return $page;
-        }, $report['pages']);
+        $globalKalihimName = $this->r401ReportBuilder->globalKalihimName($globalVariables, $selectedStatus);
+        $reportPages = $this->r401ReportBuilder->withKalihimNames($report['pages'], $globalVariables, $selectedStatus);
 
         return [
             'month' => $month,
             'reportRows' => $report['rows'],
             'reportPages' => $reportPages,
+            'reportWarnings' => $this->r401ReportBuilder->outsideRangeWarnings($report['outside_range']),
             'puroks' => $puroks,
             'selectedPurok' => $selectedPurok,
             'selectedStatus' => $selectedStatus,
@@ -401,210 +415,6 @@ class FormGeneratorController extends Controller
             'kalihimName' => $globalKalihimName,
             'usePurokSecretary' => $usePurokSecretary,
         ];
-    }
-
-    private function selectedMemberRows(string $purok, string $status): array
-    {
-        $candidateRows = Record::query()
-            ->orderBy('full_name')
-            ->get([
-                'id',
-                'full_name',
-                'registry',
-                'gender',
-                'purok',
-                'grupo',
-                'kapisanan',
-                'date_of_baptism',
-                'evangelist',
-                'status',
-                'monthly_code',
-            ])
-            ->map(function (Record $record): array {
-                $monthlyCode = trim((string) $record->monthly_code);
-                [$codeStatus, $code] = $this->monthlyCodeParts(
-                    $monthlyCode,
-                    mb_strtoupper(trim((string) $record->status))
-                );
-
-                return [
-                    'record_id' => $record->id,
-                    'status' => $codeStatus ?: mb_strtoupper(trim((string) $record->status)),
-                    'code' => $monthlyCode === '' ? 'A' : ($code ?: 'A'),
-                    'name' => trim((string) $record->full_name),
-                    'registry' => strtoupper(trim((string) $record->registry)),
-                    'gender' => $this->displayGender((string) $record->gender),
-                    'purok' => trim((string) $record->purok),
-                    'grupo' => trim((string) $record->grupo),
-                    'kapisanan' => $this->displayKapisanan((string) $record->kapisanan),
-                    'date_of_baptism' => $record->date_of_baptism?->format('d/m/Y') ?? '',
-                    'doctrinator' => trim((string) $record->evangelist),
-                ];
-            })
-            ->filter(fn (array $row): bool => $row['status'] === $status);
-
-        $activeSessionId = MonthlyMovementSession::query()
-            ->where('active_key', 'active')
-            ->value('id');
-        if ($activeSessionId !== null) {
-            $movementRows = MonthlySessionMovement::query()
-                ->where('session_id', $activeSessionId)
-                ->orderBy('id')
-                ->get()
-                ->map(function (MonthlySessionMovement $movement): ?array {
-                    $previous = $movement->previous_values ?? [];
-                    [$codeStatus, $code] = $this->monthlyCodeParts(
-                        (string) $movement->monthly_code,
-                        mb_strtoupper(trim((string) ($previous['status'] ?? $movement->status)))
-                    );
-                    $memberStatus = $codeStatus ?: mb_strtoupper(trim((string) ($previous['status'] ?? $movement->status)));
-                    $memberPurok = trim((string) ($previous['purok'] ?? $movement->previous_purok));
-                    $memberGrupo = trim((string) ($previous['grupo'] ?? $movement->previous_grupo));
-                    if (! in_array($memberStatus, ['MS', 'UWP'], true) || $memberPurok === '') {
-                        return null;
-                    }
-
-                    return [
-                        'record_id' => $movement->record_id,
-                        'status' => $memberStatus,
-                        'code' => $code ?: 'A',
-                        'name' => trim((string) $movement->full_name),
-                        'registry' => strtoupper(trim((string) $movement->registry)),
-                        'gender' => $this->displayGender((string) $movement->gender),
-                        'purok' => $memberPurok,
-                        'grupo' => $memberGrupo,
-                        'kapisanan' => $this->displayKapisanan((string) $movement->kapisanan),
-                        'date_of_baptism' => $movement->date_of_baptism?->format('d/m/Y') ?? '',
-                        'doctrinator' => trim((string) $movement->evangelist),
-                    ];
-                })
-                ->filter(fn (?array $row): bool => $row !== null && $row['status'] === $status);
-            $candidateRows = $candidateRows->concat($movementRows);
-        }
-
-        $candidateRows = $candidateRows
-            ->unique(fn (array $row): string => implode('|', [
-                (string) ($row['record_id'] ?? $row['name'].'|'.$row['registry']),
-                $row['status'],
-                $row['code'],
-                $this->numericSortKey($row['purok']),
-                preg_replace('/\D+/', '', $row['grupo']) ?? '',
-            ]))
-            ->when($purok !== 'all', fn ($rows) => $rows->filter(
-                fn (array $row): bool => $this->numericSortKey($row['purok']) === (int) $purok
-            ))
-            ->groupBy(fn (array $row): string => (string) $this->numericSortKey($row['purok']))
-            ->sortBy(fn ($group, string $key): int => $this->numericSortKey($key));
-        $purokDetails = Purok::query()
-            ->orderBy('purok_number')
-            ->orderBy('grupo_start')
-            ->get(['id', 'purok_number', 'purok_name', 'manggagawa', 'ministerial_id', 'grupo_start', 'grupo_end', 'full_purok']);
-        $reportRows = [];
-        $reportPages = [];
-
-        foreach ($candidateRows as $purokNumber => $purokRecords) {
-            $number = (int) $purokNumber;
-            $splitPuroks = $purokDetails->where('purok_number', $number)->values();
-            $assignedRecords = $splitPuroks->mapWithKeys(function (Purok $splitPurok) use ($purokRecords): array {
-                $min = $splitPurok->full_purok ? 1 : (int) $splitPurok->grupo_start;
-                $max = $splitPurok->full_purok ? 24 : (int) $splitPurok->grupo_end;
-
-                return [
-                    $splitPurok->id => $purokRecords->filter(
-                        fn (array $row): bool => (int) $row['grupo'] >= $min && (int) $row['grupo'] <= $max
-                    ),
-                ];
-            });
-            if ($splitPuroks->isEmpty()) {
-                $assignedRecords->put(null, $purokRecords);
-            }
-
-            foreach ($assignedRecords as $splitPurokId => $splitRecords) {
-                if ($splitRecords->isEmpty()) {
-                    continue;
-                }
-                $splitPurok = $splitPuroks->firstWhere('id', $splitPurokId);
-                $rows = $splitRecords
-                    ->sort(function (array $left, array $right): int {
-                        $codeOrder = ($left['code'] === 'A' ? 0 : 1) <=> ($right['code'] === 'A' ? 0 : 1);
-                        if ($codeOrder !== 0) {
-                            return $codeOrder;
-                        }
-                        $grupoOrder = (int) $left['grupo'] <=> (int) $right['grupo'];
-
-                        return $grupoOrder !== 0 ? $grupoOrder : strcasecmp($left['name'], $right['name']);
-                    })
-                    ->values()
-                    ->map(function (array $row): array {
-                        return [
-                            'code' => $row['code'],
-                            'name' => $row['name'],
-                            'registry' => $row['registry'],
-                            'gender' => $row['gender'],
-                            'purok_grupo' => $this->numericSortKey($row['purok']).'-'.trim($row['grupo'], " \t\n\r\0\x0B-"),
-                            'kapisanan' => $row['kapisanan'],
-                            'date_of_baptism' => $row['date_of_baptism'],
-                            'doctrinator' => $row['doctrinator'],
-                        ];
-                    })->all();
-                $reportRows = [...$reportRows, ...$rows];
-                foreach (array_chunk($rows, 20) as $pageIndex => $pageRows) {
-                    $reportPages[] = [
-                        'purok_number' => $purokNumber,
-                        'purok_name' => $splitPurok?->purok_name ?? 'Purok '.$purokNumber,
-                        'maysakop_name' => trim((string) ($splitPurok?->manggagawa ?? '')),
-                        'assigned_number' => trim((string) ($splitPurok?->ministerial_id ?? '')),
-                        'page_number' => $pageIndex + 1,
-                        'rows' => $pageRows,
-                    ];
-                }
-            }
-        }
-
-        return ['rows' => $reportRows, 'pages' => $reportPages];
-    }
-
-    private function monthlyCodeParts(string $monthlyCode, string $fallbackStatus = ''): array
-    {
-        $parts = explode(':', trim($monthlyCode), 2);
-        if (count($parts) < 2) {
-            return [mb_strtoupper(trim($fallbackStatus)), mb_strtoupper(trim($monthlyCode, " \t\n\r\0\x0B\"'"))];
-        }
-
-        $status = mb_strtoupper(trim($parts[0]));
-        if (! in_array($status, ['MS', 'UWP', 'MK'], true)) {
-            $status = mb_strtoupper(trim($fallbackStatus));
-        }
-
-        return [
-            $status,
-            mb_strtoupper(trim(explode('/', $parts[1], 2)[0], " \t\n\r\0\x0B\"'")),
-        ];
-    }
-
-    private function numericSortKey(string $value): int
-    {
-        return (int) preg_replace('/\D+/', '', $value);
-    }
-
-    private function displayGender(string $gender): string
-    {
-        return match (mb_strtolower(trim($gender))) {
-            'l', 'male' => 'L',
-            'b', 'female' => 'B',
-            default => '',
-        };
-    }
-
-    private function displayKapisanan(string $kapisanan): string
-    {
-        return match (mb_strtolower(trim($kapisanan))) {
-            'b', 'buklod' => 'B',
-            'k', 'kadiwa' => 'K',
-            's', 'suliranin' => 'S',
-            'binhi' => 'b',
-            default => trim($kapisanan),
-        };
     }
 
     public function notes(Request $request): JsonResponse

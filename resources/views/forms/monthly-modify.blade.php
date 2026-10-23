@@ -288,8 +288,14 @@
         [...purok.options].forEach(option => {
             option.disabled = Boolean(option.value && selectedRecord?.purok_id && option.value === String(selectedRecord.purok_id));
         });
+        const currentStatus = (selectedRecord?.status || '').toUpperCase();
+        // R2-10 endorsed MS/UWP records may only move to MK (the server enforces this too).
+        const endorsedSwapBlocked = Boolean(selectedRecord?.r2_10_endorsed) && ['MS', 'UWP'].includes(currentStatus);
         [...statusSelect.options].forEach(option => {
-            option.disabled = Boolean(option.value && (selectedRecord?.status || '').toUpperCase() === 'MK' && option.value !== 'MK');
+            option.disabled = Boolean(option.value && (
+                (currentStatus === 'MK' && option.value !== 'MK')
+                || (endorsedSwapBlocked && ['MS', 'UWP'].includes(option.value) && option.value !== currentStatus)
+            ));
         });
         if (!hasMonthlySession) {
             rangeHelp.textContent = 'Start a monthly session before modifying records.';
@@ -301,6 +307,8 @@
                     : 'Only MS, UWP, and MK records can be changed.';
         } else if (samePurok) {
             rangeHelp.textContent = 'Select a different configured Purok. For a Grupo-only correction, use Inquire / Modify.';
+        } else if (changingStatus && endorsedSwapBlocked) {
+            rangeHelp.textContent = `You can't change ${currentStatus} to ${currentStatus === 'MS' ? 'UWP' : 'MS'} since it's already R2-10 endorsed. It can only move to MK.`;
         }
         save.disabled = unavailable || (!transferring && !changingStatus)
             || samePurok

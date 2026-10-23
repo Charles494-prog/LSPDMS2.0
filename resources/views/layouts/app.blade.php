@@ -38,7 +38,7 @@
     $displayName = $displayName !== '' ? $displayName : ($authenticatedUser['gmail'] ?? 'User');
     $initials = mb_strtoupper(mb_substr(trim((string) ($authenticatedUser['first_name'] ?? '')), 0, 1) . mb_substr(trim((string) ($authenticatedUser['last_name'] ?? '')), 0, 1));
     $initials = $initials !== '' ? $initials : mb_strtoupper(mb_substr($displayName, 0, 1));
-    $avatarUrl = !empty($authenticatedUser['profile_picture']) ? asset('storage/' . $authenticatedUser['profile_picture']) : null;
+    $avatarUrl = \App\Http\Controllers\ProfilePictureController::urlFor($authenticatedUser['id'] ?? null, $authenticatedUser['profile_picture'] ?? null);
 @endphp
 <!DOCTYPE html>
 <html lang="en" data-theme="{{ (($authenticatedUser['dark_mode'] ?? false)) ? 'dark' : 'light' }}">
@@ -46,6 +46,7 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
         <meta name="csrf-token" content="{{ csrf_token() }}">
+        <meta name="lspdms-user" content="{{ (int) ($authenticatedUser['id'] ?? 0) }}:{{ (int) ($authenticatedUser['auth_version'] ?? 0) }}">
         <title>@yield('title', 'Dashboard') - {{ config('app.name', 'LSPDMS') }}</title>
         @include('components.brand-meta')
         {{-- Apply the saved sidebar state before first paint so the layout never jumps on load. --}}
@@ -528,7 +529,7 @@
                         </div>
                         <div class="theme-switch-status" id="themeSwitchStatus" role="status" aria-live="polite"></div>
                         <div class="divider"></div>
-                        <form method="POST" action="{{ url('/logout') }}">
+                        <form method="POST" action="{{ url('/logout') }}" data-lspdms-logout>
                             @csrf
                             <button type="submit" class="logout-item">
                                 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{!! $icons['logout'] !!}</svg>
@@ -544,10 +545,10 @@
             </main>
         </div>
 
-        @unless (request()->routeIs('messages.*'))
+        @if (! request()->routeIs('messages.*') && ! empty($authenticatedUser['id']))
             <section class="chat-widget" id="chatWidget"
                 data-unread-url="{{ route('messages.unread-count') }}"
-                data-user-id="{{ $authenticatedUser['id'] }}"
+                data-user-id="{{ $authenticatedUser['id'] ?? '' }}"
                 data-auth-url="{{ route('broadcasting.auth') }}"
                 data-csrf="{{ csrf_token() }}"
                 data-reverb-configured="{{ config('broadcasting.default') === 'reverb' && filled(config('broadcasting.connections.reverb.key')) && filled(config('broadcasting.connections.reverb.secret')) && filled(config('broadcasting.connections.reverb.app_id')) ? 'true' : 'false' }}"
@@ -567,7 +568,7 @@
                     <span class="chat-unread-badge" id="chatUnreadBadge" aria-live="polite" aria-atomic="true" hidden></span>
                 </button>
             </section>
-        @endunless
+        @endif
 
         <script>
             const root = document.documentElement;
@@ -744,6 +745,18 @@
         </script>
         <script>
             (() => {
+                // Logging out in one tab signs out every open tab of this browser at once.
+                const rendered = document.querySelector('meta[name="lspdms-user"]')?.content || '0:0';
+                const goToLogin = () => (window.top || window).location.assign('/login');
+                let authChannel = null;
+                try { authChannel = new BroadcastChannel('lspdms-auth'); } catch (error) { authChannel = null; }
+                authChannel?.addEventListener('message', event => { if (event.data?.type === 'logout') goToLogin(); });
+                window.addEventListener('storage', event => { if (event.key === 'lspdms-logout') goToLogin(); });
+                document.querySelectorAll('form[data-lspdms-logout]').forEach(form => form.addEventListener('submit', () => {
+                    try { authChannel?.postMessage({ type: 'logout' }); } catch (error) { /* channel closed */ }
+                    try { localStorage.setItem('lspdms-logout', String(Date.now())); } catch (error) { /* storage blocked */ }
+                }));
+
                 let checking = false;
                 const checkSession = async () => {
                     if (checking || !navigator.onLine) return; // never overlap requests
@@ -761,7 +774,12 @@
                             window.location.assign(`/login?access=${reason}`);
                         }
                         else {
-                            const { permissions } = await response.json();
+                            const { permissions, user_id: userId, auth_version: authVersion } = await response.json();
+                            // The browser now belongs to another login (or a fresh one): reload instead of acting on stale data.
+                            if (userId !== undefined && `${userId}:${authVersion}` !== rendered) {
+                                window.location.reload();
+                                return;
+                            }
                             document.querySelectorAll('[data-feature]').forEach(link => {
                                 const allowed = Boolean(permissions[link.dataset.feature]);
                                 link.hidden = !allowed;
@@ -797,9 +815,12 @@
                 }, 10000);
                 // Re-check right away when the tab becomes visible again instead of waiting for the next tick.
                 document.addEventListener('visibilitychange', () => { if (!document.hidden) checkSession(); });
+                // A page restored from the back/forward cache must not show a signed-out session.
+                window.addEventListener('pageshow', event => { if (event.persisted) checkSession(); });
             })();
         </script>
         @stack('scripts')
+        @vite('resources/js/motion.js')
         @unless (request()->routeIs('messages.*'))
             @vite('resources/js/chat-notifications.js')
         @endunless

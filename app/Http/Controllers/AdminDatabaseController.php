@@ -2,12 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\DatabaseBackupFailed;
+use App\Exceptions\DatabaseMaintenanceInProgress;
 use App\Services\DatabaseBackupService;
+use App\Support\PasswordVerifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use OpenSpout\Common\Entity\Cell\EmptyCell;
 use OpenSpout\Common\Entity\Cell\StringCell;
@@ -25,6 +26,7 @@ class AdminDatabaseController extends Controller
             'exclude_tables.*' => ['required', 'string', 'distinct', Rule::in(['login_user', 'messages'])],
         ]);
         $excludedTables = $validated['exclude_tables'] ?? [];
+        $backups->audit('database_export_sql', count($backups->tableNames()) - count($excludedTables), $this->actor($request));
 
         return response()->streamDownload(function () use ($backups, $excludedTables): void {
             $stream = fopen('php://output', 'wb');
@@ -51,8 +53,13 @@ class AdminDatabaseController extends Controller
 
         return response()->json([
             'tables' => $inspection['tables'],
+            'row_counts' => $inspection['row_counts'],
             'omitted_tables' => $inspection['omitted_tables'],
-            'message' => 'The import replaces data only in the listed tables. Omitted tables will remain unchanged.',
+            'ignored_tables' => $inspection['ignored_tables'],
+            'message' => 'The import replaces data only in the listed tables. Omitted tables will remain unchanged.'
+                .($inspection['ignored_tables'] === []
+                    ? ''
+                    : ' Protected tables in the file are skipped and never imported: '.implode(', ', $inspection['ignored_tables']).'.'),
         ]);
     }
 
@@ -67,21 +74,32 @@ class AdminDatabaseController extends Controller
         $user = DB::table('login_user')->where('id', $userId)->first();
         abort_unless($user, 403);
 
-        $passwordMatches = str_starts_with((string) $user->password, '$')
-            ? Hash::check($validated['current_password'], $user->password)
-            : hash_equals((string) $user->password, $validated['current_password']);
-        if (! $passwordMatches) {
+        if (! PasswordVerifier::check($validated['current_password'], $user->password)) {
             return response()->json([
                 'message' => 'The current password is incorrect.',
                 'errors' => ['current_password' => ['The current password is incorrect.']],
             ], 422);
         }
 
-        $backupPath = $backups->import($validated['sql_file']);
+        try {
+            $result = $backups->import($validated['sql_file'], $this->actor($request));
+        } catch (DatabaseMaintenanceInProgress $exception) {
+            return response()->json(['message' => $exception->getMessage()], 423);
+        } catch (DatabaseBackupFailed $exception) {
+            return response()->json([
+                'message' => $exception->getMessage(),
+                'errors' => ['sql_file' => [$exception->getMessage()]],
+            ], 422);
+        }
 
         return response()->json([
-            'message' => 'Database import completed. A safety backup was saved before the import.',
-            'backup_file' => basename($backupPath),
+            'message' => 'Database import completed. A verified safety backup was saved before the import. '
+                .'If the imported accounts differ from this session, you will be asked to sign in again.',
+            'backup_file' => basename($result['backup_path']),
+            'tables' => $result['tables'],
+            'ignored_tables' => $result['ignored_tables'],
+            'inserted_rows' => $result['inserted_rows'],
+            'restored_files' => $result['restored_files'],
         ]);
     }
 
@@ -117,7 +135,7 @@ class AdminDatabaseController extends Controller
                     : $writer->addNewSheetAndMakeItCurrent();
                 $sheet->setName($this->sheetName($table, $validated['tables'], $index));
 
-                $columns = $backups->exportColumns($table);
+                $columns = $backups->xlsxColumns($table);
                 $writer->addRow(Row::fromValues($columns));
 
                 foreach (DB::table($table)->cursor() as $databaseRow) {
@@ -145,8 +163,17 @@ class AdminDatabaseController extends Controller
             }
         }
 
+        $backups->audit('database_export_xlsx', count($validated['tables']), $this->actor($request));
+
         return response()->download($path, 'lspdms-tables-'.now()->format('Ymd-His').'.xlsx')
             ->deleteFileAfterSend(true);
+    }
+
+    private function actor(Request $request): ?string
+    {
+        $gmail = trim((string) $request->session()->get('login_user.gmail', ''));
+
+        return $gmail !== '' ? $gmail : null;
     }
 
     private function sheetName(string $table, array $tables, int $index): string

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Purok;
 use App\Models\Record;
+use App\Support\Role;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -224,9 +225,7 @@ class FilterBnhHelperController extends Controller
     private function canViewMk(Request $request): bool
     {
         $user = $request->session()->get('login_user', []);
-        $role = mb_strtolower(trim(preg_replace('/\s+/', ' ', (string) ($user['tungkulin'] ?? '')) ?? ''));
-
-        return in_array($role, ['head secretary', 'secretary head'], true)
+        return Role::isHeadSecretary($user['tungkulin'] ?? '')
             || (bool) ($user['Delistment_allow'] ?? false);
     }
 

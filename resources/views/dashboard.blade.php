@@ -304,7 +304,9 @@
         --soft: #f5f5f5;
         --binhi: #15803d; --kadiwa: #2563eb; --buklod: #dc2626;
         --ot-bg: var(--card);
-        --ms: #16a34a; --uwp: #f97316; --mk: #eab308; --off: #9aa5b1;
+        /* Validated categorical slots (blue / orange / aqua): colour-blind safe in both themes. */
+        --ms: #2a78d6; --uwp: #eb6834; --mk: #1baf7a; --off: #9aa5b1;
+        --grid: #ececec;
         --g-good: #16a34a; --g-mid: #eab308; --g-low: #dc2626;
         --radius: 10px; --radius-sm: 6px;
         max-width: 1500px; margin: 0 auto; padding: 0;
@@ -313,6 +315,8 @@
     html[data-theme="dark"] .dash {
         --soft: #171717;
         --off: #6b7280;
+        --ms: #3987e5; --uwp: #d95926; --mk: #199e70;
+        --grid: #1f1f1f;
         --binhi: #4ade80; --kadiwa: #60a5fa; --buklod: #f87171;
         --g-good: #22c55e; --g-mid: #facc15; --g-low: #f87171;
     }
@@ -640,13 +644,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const NO_ACCESS = 'MK records are only available to accounts with De-Listment access.';
     const MK_HIDDEN = ' · MK records are hidden for your account';
 
-    let INK, MUTED, LINE, CARD;
+    let INK, MUTED, LINE, CARD, GRID;
     const readTheme = () => {
         const css = getComputedStyle(dashRoot);
         INK = css.getPropertyValue('--ink').trim();
         MUTED = css.getPropertyValue('--muted').trim();
         LINE = css.getPropertyValue('--line').trim();
         CARD = css.getPropertyValue('--ot-bg').trim();
+        GRID = css.getPropertyValue('--grid').trim() || LINE;
     };
     readTheme();
     if (typeof Chart !== 'undefined') {
@@ -709,9 +714,12 @@ document.addEventListener('DOMContentLoaded', () => {
     /* ---------- Data (server-rendered, prepared once, re-prepared on retry) ---------- */
     // NOTE: all figures come from the controller payload. No new endpoints are used.
     const DASHBOARD = @json($dashboardPayload);
-    const COLORS = { MS: '#16a34a', UWP: '#f97316', MK: '#eab308', INACTIVE: '#9aa5b1', UNSPECIFIED: '#c8ced5' };
-    const EXTRA_COLORS = ['#60a5fa', '#3b82f6', '#93c5fd', '#2563eb', '#bfdbfe'];
-    const colorFor = (code, index = 0) => COLORS[code] || EXTRA_COLORS[index % EXTRA_COLORS.length];
+    // Status colours come from the theme (validated palette, light and dark steps).
+    const COLOR_VARS = { MS: '--ms', UWP: '--uwp', MK: '--mk', INACTIVE: '--off' };
+    const EXTRA_COLORS = ['#6250d6', '#e87ba4', '#008300', '#e34948', '#eda100'];
+    const colorFor = (code, index = 0) => COLOR_VARS[code]
+        ? getComputedStyle(dashRoot).getPropertyValue(COLOR_VARS[code]).trim()
+        : (code === 'UNSPECIFIED' ? '#c8ced5' : EXTRA_COLORS[index % EXTRA_COLORS.length]);
     const CFO_GROUPS = ['Buklod', 'Kadiwa', 'Binhi'];
     const CFO_STATUS_KEYS = ['MS', 'UWP', 'MK'];
     const GROUP_VARS = { Binhi: 'var(--binhi)', Kadiwa: 'var(--kadiwa)', Buklod: 'var(--buklod)' };
@@ -964,30 +972,55 @@ document.addEventListener('DOMContentLoaded', () => {
     const isAllMonths = () => state.s === 0 && state.e === lastMonthIndex();
     const movementCodeModal = $('movement-code-modal');
 
-    // Draws each point's value above the marker. Thins out automatically when points are
-    // too close together so labels never pile up. The first and last points always show.
-    const valueLabels = {
-        id: 'valueLabels',
+    const lastIndexOf = values => { for (let i = values.length - 1; i >= 0; i--) if (values[i] !== null && values[i] !== undefined) return i; return -1; };
+
+    // Labels only the latest value of each line (never every point), in ink, beside its end-dot.
+    // When two end labels would collide they are spread apart and tied back with a short leader.
+    const endLabels = {
+        id: 'endLabels',
         afterDatasetsDraw(chart) {
             const { ctx, chartArea } = chart;
-            const count = chart.data.labels.length;
-            if (!count) return;
-            const spacing = count > 1 ? chartArea.width / (count - 1) : chartArea.width;
-            const step = Math.max(1, Math.ceil(34 / spacing));
-            ctx.save();
-            ctx.font = `600 10.5px ${Chart.defaults.font.family}`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'bottom';
-            ctx.fillStyle = INK;
+            const items = [];
             chart.data.datasets.forEach((set, di) => {
                 if (!chart.isDatasetVisible(di)) return;
-                chart.getDatasetMeta(di).data.forEach((point, i) => {
-                    const value = set.data[i];
-                    if (value === null || value === undefined) return;
-                    if (i % step !== 0 && i !== count - 1) return;
-                    ctx.fillText(nf.format(value), point.x, point.y - 8);
-                });
+                const i = lastIndexOf(set.data);
+                if (i < 0) return;
+                const point = chart.getDatasetMeta(di).data[i];
+                items.push({ x: point.x, y: point.y, ty: point.y, text: nf.format(set.data[i]) });
             });
+            items.sort((a, b) => a.y - b.y);
+            for (let k = 1; k < items.length; k++) {
+                if (items[k].ty - items[k - 1].ty < 16) items[k].ty = items[k - 1].ty + 16;
+            }
+            ctx.save();
+            ctx.font = `600 12px ${Chart.defaults.font.family}`;
+            ctx.textBaseline = 'middle';
+            ctx.textAlign = 'left';
+            items.forEach(item => {
+                const ty = Math.min(Math.max(item.ty, chartArea.top + 6), chartArea.bottom - 6);
+                const tx = item.x + 12;
+                if (Math.abs(ty - item.y) > 2) {
+                    ctx.strokeStyle = MUTED; ctx.lineWidth = 1;
+                    ctx.beginPath(); ctx.moveTo(item.x + 5, item.y); ctx.lineTo(tx - 3, ty); ctx.stroke();
+                }
+                ctx.fillStyle = INK;
+                ctx.fillText(item.text, tx, ty);
+            });
+            ctx.restore();
+        },
+    };
+
+    // A hairline that follows the hovered month, so the tooltip reads as one column of values.
+    const crosshair = {
+        id: 'crosshair',
+        afterDatasetsDraw(chart) {
+            const active = chart.tooltip?.getActiveElements?.() || [];
+            if (!active.length) return;
+            const { ctx, chartArea } = chart;
+            const x = active[0].element.x;
+            ctx.save();
+            ctx.strokeStyle = MUTED; ctx.globalAlpha = .45; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(x, chartArea.top); ctx.lineTo(x, chartArea.bottom); ctx.stroke();
             ctx.restore();
         },
     };
@@ -1126,18 +1159,23 @@ document.addEventListener('DOMContentLoaded', () => {
         state.s = 0; state.e = lastMonthIndex(); state.puroks = new Set();
         const canvas = $('ot-chart');
         Chart.getChart(canvas)?.destroy();
+        // 2px lines; a dot only on the latest point (ringed in the card colour) and on hover.
+        const isLast = c => c.dataIndex === lastIndexOf(c.dataset.data);
         const dataset = status => ({
-            label: status, data: [], borderColor: colorFor(status), backgroundColor: colorFor(status), borderWidth: 1.75, tension: .2,
-            pointRadius: 3, pointHoverRadius: 5, pointBackgroundColor: CARD, pointBorderColor: colorFor(status), pointBorderWidth: 1.75, spanGaps: false,
+            label: status, data: [], borderColor: colorFor(status), backgroundColor: colorFor(status),
+            borderWidth: 2, tension: .35, borderCapStyle: 'round', borderJoinStyle: 'round', spanGaps: false,
+            pointRadius: c => (isLast(c) ? 4.5 : 0), pointHoverRadius: 6, pointHitRadius: 14,
+            pointBackgroundColor: colorFor(status), pointBorderColor: CARD, pointBorderWidth: 2,
+            pointHoverBackgroundColor: colorFor(status), pointHoverBorderColor: CARD, pointHoverBorderWidth: 2,
         });
         otChart = new Chart(canvas, {
             type: 'line',
             data: { labels: [], datasets: historyStatuses.map(dataset) },
-            plugins: [valueLabels],
+            plugins: [endLabels, crosshair],
             options: {
                 responsive: true, maintainAspectRatio: false,
                 interaction: { mode: 'index', intersect: false },
-                layout: { padding: { top: 24, right: 12, bottom: 4, left: 0 } },
+                layout: { padding: { top: 16, right: 48, bottom: 4, left: 0 } },
                 onClick(event, elements, chart) {
                     const point = chart.getElementsAtEventForMode(event, 'nearest', { intersect: false, axis: 'x' }, true)[0] || elements[0];
                     const monthIndex = point ? idxs[point.index] : undefined;
@@ -1145,13 +1183,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 },
                 scales: {
                     x: { min: 0, max: Math.max(0, MONTHS.length - 1), offset: false, grid: { display: false }, border: { color: LINE }, ticks: { color: MUTED, padding: 10, autoSkip: true, maxRotation: 0, maxTicksLimit: 12, font: { size: 11 } } },
-                    y: { min: 0, grace: '6%', grid: { color: LINE, drawTicks: false, lineWidth: 1 }, border: { display: false }, ticks: { color: MUTED, padding: 12, maxTicksLimit: 6, font: { size: 11 }, callback: v => nf.format(v) }, title: { display: false, text: 'Records', color: MUTED } },
+                    y: { min: 0, grace: '8%', grid: { color: GRID, drawTicks: false, lineWidth: 1 }, border: { display: false }, ticks: { color: MUTED, padding: 12, maxTicksLimit: 5, font: { size: 11 }, callback: v => nf.format(v) }, title: { display: false, text: 'Records', color: MUTED } },
                 },
                 plugins: {
                     legend: { display: false },
                     tooltip: {
-                        padding: 10, boxPadding: 4, cornerRadius: 8, usePointStyle: true,
-                        backgroundColor: INK, titleColor: CARD, bodyColor: CARD,
+                        padding: 12, boxPadding: 6, cornerRadius: 10, usePointStyle: true, caretSize: 0,
+                        backgroundColor: CARD, borderColor: LINE, borderWidth: 1,
+                        titleColor: INK, bodyColor: INK, titleFont: { weight: '600' },
                         callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y === null ? 'No snapshot' : nf.format(c.parsed.y)}` },
                     },
                 },
@@ -1603,13 +1642,22 @@ document.addEventListener('DOMContentLoaded', () => {
         readTheme();
         if (typeof Chart === 'undefined' || !otChart) return;
         Chart.defaults.color = MUTED;
-        otChart.data.datasets.forEach(set => { set.pointBackgroundColor = CARD; });
+        // Each theme has its own validated step of every series colour.
+        otChart.data.datasets.forEach(set => {
+            const color = colorFor(set.label);
+            Object.assign(set, {
+                borderColor: color, backgroundColor: color, pointBackgroundColor: color, pointHoverBackgroundColor: color,
+                pointBorderColor: CARD, pointHoverBorderColor: CARD,
+            });
+        });
         const { x, y } = otChart.options.scales;
         x.border.color = LINE; x.ticks.color = MUTED;
-        y.grid.color = LINE; y.ticks.color = MUTED; y.title.color = MUTED;
+        y.grid.color = GRID; y.ticks.color = MUTED; y.title.color = MUTED;
         const tip = otChart.options.plugins.tooltip;
-        tip.backgroundColor = INK; tip.titleColor = CARD; tip.bodyColor = CARD;
+        tip.backgroundColor = CARD; tip.borderColor = LINE; tip.titleColor = INK; tip.bodyColor = INK;
         otChart.update('none');
+        lastSig = null; // legend swatches carry the series colours too
+        renderOvertime();
     }
     new MutationObserver(applyChartTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 });

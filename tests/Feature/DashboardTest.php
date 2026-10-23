@@ -72,13 +72,13 @@ class DashboardTest extends TestCase
         $this->withSession(['login_user' => ['id' => 1]])
             ->get(route('dashboard'))
             ->assertOk()
-            ->assertSee('Breakdown Per CFO Group')
-            ->assertSee('Breakdown of CFO per Kalagayan')
+            ->assertSee('Breakdown per CFO group')
+            ->assertSee('Kalagayan per CFO group')
             ->assertDontSee('id="pie-chart"', false)
             ->assertDontSee('id="pie-legend"', false)
-            ->assertSee('class="panel span-4 cfo-panel"', false)
+            ->assertSee('class="kap" id="cfo-a-host"', false)
             ->assertSee('Chart.defaults.animation = false', false)
-            ->assertSee('grid-template-columns:minmax(100px, 150px)', false)
+            ->assertSee('grid-template-columns: minmax(100px, 150px)', false)
             ->assertSee("el('button', 'purok-row')", false)
             ->assertDontSee('id="purok-chart"', false)
             ->assertSee('id="cfo-status-seg"', false)
@@ -189,7 +189,7 @@ class DashboardTest extends TestCase
             ->assertSee('id="appFlashToast"', false)
             ->assertSee('Dashboard changes saved.')
             ->assertSee('safe-area-inset-left', false)
-            ->assertSee('height:260px', false)
+            ->assertSee('.ot-chart { position: relative; height: 420px;', false)
             ->assertViewHas('dashboardMetrics', function (array $metrics): bool {
                 $this->assertSame(['MS', 'MK', 'UWP'], array_keys($metrics['kalagayanCounts']));
                 $this->assertSame(['MS' => 1, 'MK' => 1, 'UWP' => 2], $metrics['kalagayanCounts']);
@@ -386,7 +386,7 @@ class DashboardTest extends TestCase
             ->assertOk()
             ->assertSee('Nov 2025')
             ->assertSee('historyStatuses.map(dataset)', false)
-            ->assertSee('statusTotals[status]', false)
+            ->assertSee('otChart.data.datasets[i].data = totals[status]', false)
             ->assertViewHas('dashboardMetrics', function (array $metrics): bool {
                 $this->assertSame('Nov 2025', $metrics['monthLabels'][10]);
                 $this->assertSame(25, $metrics['monthlyCounts'][10]['MS']);
@@ -399,6 +399,35 @@ class DashboardTest extends TestCase
                     'code' => 'B',
                     'count' => 2,
                 ], $metrics['movementDetails']);
+
+                return true;
+            });
+    }
+
+    public function test_months_without_a_snapshot_are_skipped_not_zero(): void
+    {
+        // Imported history ends Oct 2025; the next snapshot is Oct 2026 (Nov 2025 - Sep 2026 were never recorded).
+        MonthlyRecordSnapshot::query()->create([
+            'month' => '2026-10-01',
+            'purok_number' => 11,
+            'ms_count' => 0,
+            'uwp_count' => 0,
+            'mk_count' => 0,
+            'movement_counts' => [],
+        ]);
+
+        $this->withSession(['login_user' => ['id' => 1]])
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertViewHas('dashboardMetrics', function (array $metrics): bool {
+                // Months with no snapshot are left out: Oct 2025 is followed directly by Oct 2026.
+                $this->assertSame(11, count($metrics['monthLabels']));
+                $this->assertSame('Oct 2025', $metrics['monthLabels'][9]);
+                $this->assertSame('Oct 2026', $metrics['monthLabels'][10]);
+                $this->assertNotContains('Nov 2025', $metrics['monthLabels']);
+                $this->assertNotContains(null, $metrics['monthlyPurokCounts']);
+                // A real snapshot of zero stays a verified zero.
+                $this->assertSame(0, $metrics['monthlyPurokCounts'][10]['11']['MS']);
 
                 return true;
             });

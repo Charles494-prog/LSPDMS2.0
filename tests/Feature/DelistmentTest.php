@@ -88,7 +88,7 @@ class DelistmentTest extends TestCase
             ->get(route('de-listment'))
             ->assertOk()
             ->assertDontSee('Sample Member')
-            ->assertSee('delistment-charts-', false)
+            ->assertSee('delistment-charts', false) // built (hashed) or Vite dev-server URL
             ->assertDontSee('cdn.jsdelivr.net/npm/chart.js', false)
             ->assertSee('eligibilityChart.data.datasets[0].data = cats.map(c => c.count)', false)
             ->assertSee('chart-members-dialog')
@@ -351,12 +351,13 @@ class DelistmentTest extends TestCase
             'delisted_by_user_id' => $user->id,
             'delisted_by' => 'delister@example.test',
             'reason' => 'Member requested removal',
-            'delisted_at' => now('Asia/Manila')->format('Y-m-d H:i:s'),
+            // Stored in the app timezone like every other timestamp.
+            'delisted_at' => now()->format('Y-m-d H:i:s'),
         ]);
         $this->assertDatabaseCount('delistment_histories', 1);
     }
 
-    public function test_eligible_record_endorsement_persists_reason_and_appends_attributed_entry(): void
+    public function test_eligible_record_endorsement_keeps_only_the_current_reason_and_moves_the_previous_one_to_history(): void
     {
         $record = $this->record([
             'full_name' => 'Endorsement Candidate',
@@ -377,11 +378,25 @@ class DelistmentTest extends TestCase
             'id' => $record->id,
             'r2_10_endorsement' => 'ENDORSED',
         ]);
-        $this->assertStringContainsString('Existing reason.', $record->fresh()->reason_of_r2_10_endorsement);
+        $this->assertStringNotContainsString('Existing reason.', $record->fresh()->reason_of_r2_10_endorsement);
         $this->assertMatchesRegularExpression(
-            '/formalcharlesandreigalvan@gmail\.com \(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\): due to Reviewed and submitted with no changes\./',
+            '/^formalcharlesandreigalvan@gmail\.com \(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\): due to Reviewed and submitted with no changes\.\.?$/',
             $record->fresh()->reason_of_r2_10_endorsement
         );
+        $this->assertDatabaseHas('r2_10_endorsement_reasons', [
+            'record_id' => $record->id,
+            'reason' => 'Existing reason.',
+            'record_type' => 'MS',
+            'is_current' => false,
+        ]);
+        $this->assertDatabaseHas('r2_10_endorsement_reasons', [
+            'record_id' => $record->id,
+            'reason' => $record->fresh()->reason_of_r2_10_endorsement,
+            'record_type' => 'MS',
+            'endorsed_by' => 'formalcharlesandreigalvan@gmail.com',
+            'source' => 'delistment_endorse',
+            'is_current' => true,
+        ]);
         $this->assertSame('Existing log history.', $record->fresh()->log_section);
     }
 

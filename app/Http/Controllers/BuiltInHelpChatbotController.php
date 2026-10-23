@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\GlobalVariable;
 use App\Models\Record;
 use App\Services\LspBotMatcher;
-use App\Services\R210Eligibility;
+use App\Services\LspBotRecordQuery;
+use App\Support\Role;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 
 class BuiltInHelpChatbotController extends Controller
@@ -24,7 +24,7 @@ class BuiltInHelpChatbotController extends Controller
         ]);
     }
 
-    public function reply(Request $request, R210Eligibility $eligibility, LspBotMatcher $matcher): JsonResponse
+    public function reply(Request $request, LspBotMatcher $matcher, LspBotRecordQuery $records): JsonResponse
     {
         $validated = $request->validate([
             'message' => ['required', 'string', 'max:500'],
@@ -34,27 +34,39 @@ class BuiltInHelpChatbotController extends Controller
         $originalMessage = trim($validated['message']);
         $message = mb_strtolower($originalMessage);
 
-        if ($this->isRecordQuery($message)) {
+        $clock = $this->clockReply($message);
+        if ($clock !== null) {
+            return response()->json(['reply' => $clock]);
+        }
+
+        $previous = $request->session()->get('lspbot_last_query');
+        $query = $records->parse($originalMessage, is_array($previous) ? $previous : null);
+        $name = $query === null ? $this->lookupName($originalMessage) : null;
+
+        if ($query !== null || $name !== null) {
             if (! $permissions['chatbot_records_allow']) {
                 return response()->json([
                     'reply' => 'You do not have permission to look up member records through this chatbot. Ask your Head Secretary to enable “Allow chatbot record lookups” for your account.',
                 ]);
             }
 
-            $aggregate = $this->aggregateRequest($message);
-            if ($aggregate !== null) {
-                if ($aggregate['r210'] && ! $permissions['Delistment_allow']) {
+            if ($query !== null) {
+                if ($records->needsDelistmentAccess($query) && ! $permissions['Delistment_allow']) {
                     return response()->json([
                         'reply' => 'Your account cannot view R2-10 endorsement information. Ask your Head Secretary to enable De-Listment access.',
                     ]);
                 }
+                if ($records->listsMkNames($query) && ! $permissions['Delistment_allow']) {
+                    return response()->json([
+                        'reply' => 'MK member names are confidential. I can tell you how many there are, but listing names needs De-Listment access.',
+                    ]);
+                }
+                // Remembered so a follow-up like “how about Purok 2?” keeps the other conditions.
+                $request->session()->put('lspbot_last_query', $query);
 
-                return response()->json([
-                    'reply' => $this->aggregateReply($aggregate, $eligibility),
-                ]);
+                return response()->json(['reply' => $records->answer($query)]);
             }
 
-            $name = $this->lookupName($originalMessage);
             if ($name !== null) {
                 return response()->json([
                     'reply' => $this->lookupReply($name, $permissions['Delistment_allow']),
@@ -66,8 +78,13 @@ class BuiltInHelpChatbotController extends Controller
         $topic = $result['entry'];
 
         if ($topic === null) {
-            // Unanswered questions are logged (storage/logs/laravel.log) so you can see what to teach LSPBot next.
-            Log::info('LSPBot could not match a question.', ['message' => $originalMessage, 'score' => round($result['score'], 2)]);
+            // Unanswered questions are logged so you can see what to teach LSPBot next. The text itself is
+            // not logged: questions can contain member names.
+            Log::info('LSPBot could not match a question.', [
+                'length' => mb_strlen($originalMessage),
+                'score' => round($result['score'], 2),
+                'closest_topics' => array_slice($result['suggestions'], 0, 3),
+            ]);
 
             if ($result['suggestions'] !== []) {
                 $options = implode("\n", array_map(fn (string $title): string => '• '.$title, $result['suggestions']));
@@ -81,7 +98,7 @@ class BuiltInHelpChatbotController extends Controller
         }
 
         $feature = $topic['feature'] ?? null;
-        $answer = $matcher->answerFor($topic);
+        $answer = $matcher->answerFor($topic, $originalMessage);
 
         if ($feature !== null && ! ($permissions[$feature] ?? false)) {
             $title = $topic['title'] ?? 'this feature';
@@ -104,8 +121,7 @@ class BuiltInHelpChatbotController extends Controller
 
     private function permissions(array $user): array
     {
-        $role = mb_strtolower(trim(preg_replace('/\s+/', ' ', (string) ($user['tungkulin'] ?? '')) ?? ''));
-        $isHeadSecretary = in_array($role, ['head secretary', 'secretary head'], true);
+        $isHeadSecretary = Role::isHeadSecretary($user['tungkulin'] ?? '');
 
         return [
             'head_secretary' => $isHeadSecretary,
@@ -119,103 +135,18 @@ class BuiltInHelpChatbotController extends Controller
         ];
     }
 
-    private function isRecordQuery(string $message): bool
+    /** Live answers for the date and time (Manila), which a static answer cannot give. */
+    private function clockReply(string $message): ?string
     {
-        return $this->aggregateRequest($message) !== null
-            || $this->lookupName($message) !== null;
-    }
-
-    private function aggregateRequest(string $message): ?array
-    {
-        $isCountQuestion = preg_match('/\b(?:how many|count|number of|total)\b/i', $message) === 1;
-        $eligible = preg_match('/\beligible\b/i', $message) === 1;
-        $mentionsR210 = preg_match('/\br2[\s-]?10\b|\bendorse(?:d|ment)?\b|\bunendorsed\b/i', $message) === 1
-            || $eligible;
-        $status = null;
-        if (preg_match('/\b(MS|UWP|MK)\b/i', $message, $matches) === 1) {
-            $status = mb_strtoupper($matches[1]);
+        $now = Carbon::now('Asia/Manila');
+        if (preg_match('/\b(?:what time is it|what\'?s the time|current time|anong oras na|anong oras ngayon)\b/u', $message) === 1) {
+            return 'It is '.$now->format('g:i A').' in the Philippines right now.';
         }
-        $kapisanan = match (true) {
-            preg_match('/\bbinhis?\b/i', $message) === 1 => 'binhi',
-            preg_match('/\bkadiwas?\b/i', $message) === 1 => 'kadiwa',
-            preg_match('/\bbuklod\b/i', $message) === 1 => 'buklod',
-            default => null,
-        };
-
-        if (! $isCountQuestion || ($status === null && $kapisanan === null && ! $mentionsR210
-            && preg_match('/\b(?:records?|members?|active)\b/i', $message) !== 1)) {
-            return null;
+        if (preg_match('/\b(?:what\'?s the date|what is the date|today\'?s date|what day is it|what day is today|anong petsa|anong araw ngayon|anong araw na)\b/u', $message) === 1) {
+            return 'Today is '.$now->format('l, F j, Y').'.';
         }
 
-        $notEndorsed = preg_match('/\b(?:not|never|haven.t|hasn.t|has not|have not|pending|unendorsed)\b/i', $message) === 1
-            && $mentionsR210;
-        $endorsed = preg_match('/\bendorsed\b/i', $message) === 1 && ! $notEndorsed;
-
-        return [
-            'status' => $status,
-            'kapisanan' => $kapisanan,
-            'r210' => $mentionsR210,
-            'not_endorsed' => $notEndorsed,
-            'endorsed' => $endorsed,
-            'eligible' => $eligible,
-        ];
-    }
-
-    private function aggregateReply(array $query, R210Eligibility $eligibility): string
-    {
-        $records = Record::query();
-        if ($query['status'] !== null) {
-            $records->whereRaw('UPPER(TRIM(COALESCE(status, \'\'))) = ?', [$query['status']]);
-        } else {
-            $records->whereIn(DB::raw('UPPER(TRIM(COALESCE(status, \'\')))'), ['MS', 'UWP', 'MK']);
-        }
-
-        if ($query['kapisanan'] !== null) {
-            $groupValues = match ($query['kapisanan']) {
-                'binhi' => ['binhi'],
-                'kadiwa' => ['k', 'kadiwa'],
-                'buklod' => ['b', 'buklod'],
-                default => [],
-            };
-            $records->whereIn(DB::raw('LOWER(TRIM(COALESCE(kapisanan, \'\')))'), $groupValues);
-        }
-
-        if ($query['r210'] && $query['not_endorsed']) {
-            $records->whereRaw('UPPER(TRIM(COALESCE(r2_10_endorsement, \'\'))) <> ?', ['ENDORSED']);
-        } elseif ($query['r210'] && ($query['endorsed'] || ! $query['eligible'])) {
-            $records->whereRaw('UPPER(TRIM(COALESCE(r2_10_endorsement, \'\'))) = ?', ['ENDORSED']);
-        }
-
-        if ($query['eligible']) {
-            $requirements = GlobalVariable::query()->first();
-            $count = $records
-                ->get()
-                ->filter(fn (Record $record): bool => $eligibility->forRecord($record, $requirements))
-                ->count();
-        } else {
-            $count = $records->count();
-        }
-
-        $status = $query['status'] ?? 'active';
-        if ($query['r210']) {
-            if ($query['eligible'] && $query['not_endorsed']) {
-                return "There are {$count} {$status} record(s) eligible for R2-10 that are not yet endorsed.";
-            }
-            if ($query['eligible']) {
-                return "There are {$count} {$status} record(s) eligible for R2-10.";
-            }
-
-            $endorsement = $query['not_endorsed'] ? 'not yet endorsed' : 'endorsed';
-
-            return "There are {$count} {$status} record(s) that are {$endorsement} for R2-10.";
-        }
-        if ($query['kapisanan'] !== null) {
-            $group = ucfirst($query['kapisanan']);
-
-            return "There are {$count} {$status} {$group} record(s).";
-        }
-
-        return "There are {$count} {$status} record(s).";
+        return null;
     }
 
     private function lookupName(string $message): ?string

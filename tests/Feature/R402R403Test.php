@@ -43,7 +43,8 @@ class R402R403Test extends TestCase
         $this->withSession(['login_user' => ['id' => $secretary->id]])
             ->get(route('forms.weekly.r4-02', ['purok' => 1, 'kalagayan' => 'MS']))
             ->assertOk()
-            ->assertSee('R4-01 records: Purok One · MS')
+            ->assertSee('R4-01 records · MS')
+            ->assertSee('Purok One')
             ->assertSee('Member 1')
             ->assertSee('Member 4')
             ->assertDontSee('Other status');

@@ -8,6 +8,12 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Guarded: a database restored from an older SQL export can already have
+        // these columns while its migrations table does not list this migration.
+        if (Schema::hasColumn('system_smtp_settings', 'verified_at')) {
+            return;
+        }
+
         Schema::table('system_smtp_settings', function (Blueprint $table): void {
             $table->timestamp('verified_at')->nullable();
             $table->string('verified_fingerprint', 64)->nullable();

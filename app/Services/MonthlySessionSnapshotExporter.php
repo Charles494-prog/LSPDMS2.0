@@ -44,25 +44,17 @@ class MonthlySessionSnapshotExporter
             'lcode' => $lcode,
             'signatories' => $signatories,
         ];
-        $puroks = Purok::query()->orderBy('purok_number')->get(['purok_number', 'purok_name']);
+        $puroks = Purok::selectionOptions();
         $statusReports = [];
         $docxPaths = [];
-        $mergedPath = storage_path('app/monthly-forms/MONTHLY-'.bin2hex(random_bytes(12)).'.docx');
+        $mergedPath = ExportTempFiles::path('MONTHLY');
         try {
             $docxPaths[] = $this->resumenDocxExporter->generate($report, $locale, $lcode, $signatories);
             foreach (['MS', 'UWP'] as $status) {
-                $rows = $this->r401ReportBuilder->build('all', $status, $session);
-                $kalihimName = $status === 'UWP'
-                    ? ($globalVariables?->kalihim_uwp ?: $globalVariables?->kalihim_ms ?: '')
-                    : ($globalVariables?->kalihim_ms ?: $globalVariables?->kalihim_uwp ?: '');
-                $usePurokSecretary = (bool) ($globalVariables?->r401_use_purok_secretary ?? false);
-                $reportPages = array_map(function (array $page) use ($usePurokSecretary, $kalihimName): array {
-                    $page['kalihim_name'] = $usePurokSecretary
-                        ? $page['secretary_name']
-                        : $kalihimName;
-
-                    return $page;
-                }, $rows['pages']);
+                $rows = $this->r401ReportBuilder->build(PurokSelection::all(), $status, $session);
+                $kalihimName = $this->r401ReportBuilder->globalKalihimName($globalVariables, $status);
+                // A segment without an assigned secretary falls back to the global Kalihim instead of a blank line.
+                $reportPages = $this->r401ReportBuilder->withKalihimNames($rows['pages'], $globalVariables, $status);
                 $statusReports[$status] = [
                     'month' => $month,
                     'reportRows' => $rows['rows'],

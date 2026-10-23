@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Mail\PasswordResetLinkMail;
 use App\Models\GlobalVariable;
+use App\Models\SystemSmtpSetting;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -92,10 +94,11 @@ class AuthenticationPolicyTest extends TestCase
             ->get(route('dashboard'))
             ->assertOk()
             ->assertSee('Dashboard')
-            ->assertDontSee('De-Listment')
-            ->assertDontSee('Inquire / Modify')
-            ->assertDontSee('Tarheta Status Checker')
-            ->assertDontSee('Form Generator');
+            // Navigation links are filtered on the server (the dashboard's own help text may still name a feature).
+            ->assertDontSee('href="'.route('de-listment').'"', false)
+            ->assertDontSee('href="'.route('inquire-modify').'"', false)
+            ->assertDontSee('href="'.route('tarheta-status').'"', false)
+            ->assertDontSee('href="'.route('form-generator').'"', false);
 
         $this->withSession(['login_user' => ['id' => $secretary->id]])
             ->get(route('de-listment'))
@@ -163,36 +166,25 @@ class AuthenticationPolicyTest extends TestCase
             'remember_token' => Hash::make('remember-me'),
             'remember_token_expires_at' => now()->addDay(),
         ]);
-        $resetUrl = null;
-        Mail::shouldReceive('html')
-            ->once()
-            ->withArgs(function (string $html, callable $callback) use (&$resetUrl): bool {
-                preg_match('/href="(https?:\/\/[^"]+\/password\/reset\/[^"]+)"/', $html, $matches);
-                $resetUrl = isset($matches[1]) ? html_entity_decode($matches[1], ENT_QUOTES | ENT_HTML5) : null;
-                $callback(new class
-                {
-                    public function to(string $email): self
-                    {
-                        return $this;
-                    }
-
-                    public function subject(string $subject): self
-                    {
-                        return $this;
-                    }
-                });
-
-                return str_contains($html, 'Choose a new password')
-                    && str_contains($html, '60 minutes')
-                    && str_contains($html, 'If you did not request a password reset');
-            });
+        $this->verifiedSmtpAccount();
+        Mail::fake();
 
         $this->post(route('password.email'), ['email' => $user->gmail])
             ->assertRedirect(route('password.request', ['sent' => 1]));
+        $resetUrl = null;
+        Mail::assertSent(PasswordResetLinkMail::class, function (PasswordResetLinkMail $mail) use ($user, &$resetUrl): bool {
+            $resetUrl = $mail->url;
+            $html = $mail->render();
+
+            return $mail->hasTo($user->gmail)
+                && str_contains($html, 'Choose a new password')
+                && str_contains($html, '60 minutes')
+                && str_contains($html, 'If you did not request a password reset');
+        });
         $this->get(route('password.request', ['sent' => 1]))
             ->assertOk()
-            ->assertSee('Link sent!')
-            ->assertSee('Please check your email inbox.')
+            ->assertSee('Request received')
+            ->assertSee('we will try to email it a password reset link')
             ->assertSee('Send link again')
             ->assertSee('data-seconds="300"', false)
             ->assertSee('Go back to login');
@@ -224,6 +216,7 @@ class AuthenticationPolicyTest extends TestCase
     public function test_expired_password_reset_link_shows_the_expired_link_page(): void
     {
         GlobalVariable::query()->create(['allow_forgot_password' => true]);
+        $this->verifiedSmtpAccount();
         $user = $this->verifiedUser('expired-reset@example.test');
         $token = str_repeat('a', 64);
         DB::table('password_reset_tokens')->insert([
@@ -248,8 +241,9 @@ class AuthenticationPolicyTest extends TestCase
     public function test_password_reset_link_can_only_be_resent_after_five_minutes(): void
     {
         GlobalVariable::query()->create(['allow_forgot_password' => true]);
+        $this->verifiedSmtpAccount();
         $user = $this->verifiedUser('resend-reset@example.test');
-        Mail::shouldReceive('html')->twice();
+        Mail::fake();
 
         $this->post(route('password.email'), ['email' => $user->gmail])
             ->assertRedirect(route('password.request', ['sent' => 1]));
@@ -272,6 +266,7 @@ class AuthenticationPolicyTest extends TestCase
         $this->get(route('password.request', ['sent' => 1]))
             ->assertOk()
             ->assertSee('data-seconds="300"', false);
+        Mail::assertSent(PasswordResetLinkMail::class, 2);
     }
 
     public function test_logout_invalidates_other_active_sessions_for_the_account(): void
@@ -296,13 +291,16 @@ class AuthenticationPolicyTest extends TestCase
             ->getJson(route('session.status'))
             ->assertUnauthorized()
             ->assertJsonPath('session_invalid', true)
-            ->assertJsonPath('reason', 'signed_out_elsewhere')
-            ->assertSessionHas('_token', 'preserve-this-csrf-token');
+            ->assertJsonPath('reason', 'signed_out_elsewhere');
+        // The stale session is destroyed, so its CSRF token can no longer submit anything.
+        $this->assertNotSame('preserve-this-csrf-token', session()->token());
+        $this->assertFalse(session()->has('login_user'));
     }
 
     public function test_password_reset_revokes_existing_sessions(): void
     {
         GlobalVariable::query()->create(['allow_forgot_password' => true]);
+        $this->verifiedSmtpAccount();
         $user = $this->verifiedUser('reset-revokes@example.test');
         $token = str_repeat('x', 64);
         DB::table('password_reset_tokens')->insert([
@@ -330,6 +328,20 @@ class AuthenticationPolicyTest extends TestCase
             ->assertOk()
             ->assertSee('Change of Password Detected, Please Login Again.')
             ->assertSee('name="_token"', false);
+    }
+
+    private function verifiedSmtpAccount(): SystemSmtpSetting
+    {
+        $settings = SystemSmtpSetting::query()->create([
+            'email' => 'sender@example.test',
+            'app_password' => 'abcdabcdabcdabcd',
+        ]);
+        $settings->forceFill([
+            'verified_at' => now(),
+            'verified_fingerprint' => SystemSmtpSetting::fingerprintFor('sender@example.test', 'abcdabcdabcdabcd'),
+        ])->save();
+
+        return $settings;
     }
 
     private function verifiedUser(string $email, array $attributes = []): User

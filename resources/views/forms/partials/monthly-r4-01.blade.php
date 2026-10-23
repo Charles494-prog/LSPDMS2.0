@@ -116,7 +116,7 @@
 
         $purokLabels = [];
         foreach ($puroks as $p) {
-            $purokLabels[(string) $p->purok_number] = $p->purok_name ?: 'Purok '.$p->purok_number;
+            $purokLabels[(string) ($p->selection_token ?? $p->purok_number)] = $p->purok_name ?: 'Purok '.$p->purok_number;
         }
         $purokChipValue = null;
         if ($hasPurok) {
@@ -157,7 +157,7 @@
                     @foreach ($puroks as $purok)
                         @php($optionLabel = $purok->purok_name ?: 'Purok '.$purok->purok_number)
                         <li data-label="{{ $optionLabel }}">
-                            <button type="button" class="r401-filter-row r401-filter-option" role="checkbox" aria-checked="false" data-purok="{{ $purok->purok_number }}">
+                            <button type="button" class="r401-filter-row r401-filter-option" role="checkbox" aria-checked="false" data-purok="{{ $purok->selection_token ?? $purok->purok_number }}">
                                 <span>{{ $optionLabel }}</span>
                                 <svg class="r401-filter-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.5 3 3 6-7"/></svg>
                             </button>
@@ -215,6 +215,9 @@
     @elseif ($reportRows === [])
         <p class="r401-empty-note">No {{ $statusChipValue }} records were found in the selected Purok.</p>
     @endif
+    @foreach ($reportWarnings ?? [] as $reportWarning)
+        <p class="r401-empty-note" role="status" data-r401-warning>{{ $reportWarning }}</p>
+    @endforeach
     @endunless
 
     @php($tickedStatuses = array_values(array_intersect(['MS', 'UWP'], explode(',', is_array($selectedStatus ?? null) ? implode(',', $selectedStatus) : (string) ($selectedStatus ?? '')))))

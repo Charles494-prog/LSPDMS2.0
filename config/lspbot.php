@@ -87,7 +87,81 @@ return [
             'suggest' => false,
             'questions' => ['what can you do', 'what can i ask you', 'how can you help me', 'help', 'ano ang kaya mo', 'ano ang magagawa mo'],
             'keywords' => ['what can you do', 'what can i ask'],
-            'answer' => 'I can explain system features, help you find pages, answer common questions, and guide you through everyday tasks. If your account has lookup access, I can also answer brief record questions and counts, like “How many MS are there?” or “Find Juan Dela Cruz”. I only guide and locate features—I cannot edit or change records.',
+            'answer' => 'I can explain system features, help you find pages, answer common questions, and guide you through everyday tasks. If your account has lookup access, I can also answer record questions with any mix of conditions — for example “How many MS in Purok 1 Grupo 3?”, “How many Buklod male in Purok 2a?”, “MS per purok”, “List the UWP in Purok 1”, “How many members under 18?” or “Find Juan Dela Cruz” — and you can follow up with “how about Purok 2?”. I only read records; I never change them.',
+            'answer_tl' => 'Kaya kong ipaliwanag ang mga feature, ituro ang tamang page, at sumagot ng mga tanong. Kung may lookup access ka, puwede mo rin akong tanungin tungkol sa records, halimbawa “Ilan ang MS sa Purok 1 Grupo 3?”, “Ilang babae ang UWP?”, “MS per purok” o “Ilan naman sa Purok 2?”. Nagbabasa lang ako ng records; hindi ko binabago ang mga ito.',
+        ],
+        'data_questions_help' => [
+            'suggest' => false,
+            'questions' => [
+                'what data can i ask', 'what records can you count', 'what can i ask about records', 'how do i ask for counts',
+                'anong data ang puwede kong itanong', 'paano magtanong ng bilang', 'what filters do you know',
+            ],
+            'keywords' => ['data can i ask', 'records can you count', 'what filters', 'magtanong ng bilang'],
+            'answer' => "You can mix any of these in one question:\n• Status: MS, UWP, MK, active, inactive (or “including inactive”)\n• Place: Purok 1, Purok 2a/2b, Grupo 3 (several allowed)\n• Kapisanan: Binhi, Kadiwa, Buklod\n• Gender: male / female, married / single\n• Age: under 18, over 60, aged 18 to 30, minors, seniors\n• Dates: baptized in/before/since 2020, entered this year\n• R2-10: endorsed, not yet endorsed, eligible (needs De-Listment access)\n• Missing data: without birthday, no registry, no baptism date, with RFID\nAsk as a count (“how many…”), a breakdown (“…per purok”, “…by kapisanan”) or a list (“list the…”).",
+        ],
+        'how_are_you' => [
+            'suggest' => false,
+            'questions' => ['how are you', 'how are you doing', 'kumusta ka', 'kumusta ka na', 'kamusta ka', 'kamusta ka na', 'musta ka na', 'how is your day', 'okay ka lang ba'],
+            'keywords' => ['how are you', 'kumusta ka', 'kamusta ka'],
+            'answer' => [
+                'I’m doing great, thanks for asking! Ready to help with LSPDMS whenever you are.',
+                'All systems running smoothly on my side! How can I help you today?',
+                'I’m good! I hope your day is going well too. What would you like to do?',
+            ],
+            'answer_tl' => [
+                'Mabuti naman ako, salamat sa pagtatanong! Ano ang maitutulong ko?',
+                'Ayos lang ako! Sana maganda rin ang araw mo. Ano ang kailangan mo?',
+            ],
+        ],
+        'good_night' => [
+            'suggest' => false,
+            'questions' => ['good night', 'goodnight', 'magandang gabi', 'tulog na ako', 'pahinga na ako'],
+            'keywords' => ['good night', 'goodnight', 'tulog na'],
+            'answer' => ['Good night! Rest well — your records will be right here tomorrow.', 'Good night and God bless! Thanks for your work today.'],
+            'answer_tl' => ['Magandang gabi! Magpahinga ka nang mabuti.', 'Magandang gabi at ingat! Salamat sa paglilingkod mo ngayong araw.'],
+        ],
+        'compliment' => [
+            'suggest' => false,
+            'questions' => ['you are smart', 'you are helpful', 'good job', 'galing mo', 'ang galing mo', 'nice one', 'great bot', 'you are amazing'],
+            'keywords' => ['you are smart', 'good job', 'galing mo', 'great bot', 'helpful'],
+            'answer' => ['Thank you! That means a lot. Anything else I can help with?', 'Aww, thanks! I’m happy I could help.'],
+            'answer_tl' => ['Salamat! Masaya akong nakatulong. May iba ka pa bang kailangan?'],
+        ],
+        'encouragement' => [
+            'suggest' => false,
+            'questions' => [
+                'i am tired', 'im so tired', 'pagod na ako', 'nakakapagod', 'i am stressed', 'stressed na ako',
+                'ang dami kong gagawin', 'i have so much work', 'napapagod na ako',
+            ],
+            'keywords' => ['tired', 'pagod', 'stressed', 'nakakapagod', 'so much work'],
+            'answer' => [
+                'That sounds like a lot. Take a short break and some water — the work will still be here, and I can help make it lighter. What are you working on?',
+                'Thank you for all your hard work. One step at a time — tell me the task and I’ll help you find the fastest way through it.',
+            ],
+            'answer_tl' => [
+                'Mukhang marami kang ginagawa. Magpahinga ka muna sandali at uminom ng tubig. Sabihin mo kung ano ang gagawin at tutulungan kita.',
+                'Salamat sa sipag mo. Isa-isa lang — sabihin mo ang gawain at hahanapin natin ang pinakamabilis na paraan.',
+            ],
+        ],
+        'acknowledgement' => [
+            'suggest' => false,
+            'questions' => ['ok', 'okay', 'got it', 'i see', 'noted', 'sige', 'sige po', 'ah okay', 'gets', 'gets ko na'],
+            'keywords' => [],
+            'answer' => ['Great! Let me know if you need anything else.', 'Got it! I’m here if you have another question.'],
+            'answer_tl' => ['Sige! Sabihin mo lang kung may kailangan ka pa.'],
+        ],
+        'apology' => [
+            'suggest' => false,
+            'questions' => ['sorry', 'my bad', 'pasensya na', 'sorry po', 'paumanhin'],
+            'keywords' => ['sorry', 'pasensya', 'paumanhin'],
+            'answer' => 'No worries at all! What would you like to try next?',
+            'answer_tl' => 'Walang problema! Ano ang gusto mong subukan ngayon?',
+        ],
+        'creator' => [
+            'suggest' => false,
+            'questions' => ['who made you', 'who created you', 'who built lspbot', 'sino gumawa sayo', 'sino ang gumawa sa iyo'],
+            'keywords' => ['who made you', 'who created you', 'gumawa sayo'],
+            'answer' => 'I was built into LSPDMS for the Lupon sa Pagpapatibay secretaries. I run entirely inside the system — no outside AI service — and I only read the records your account is allowed to see.',
         ],
         'request_help' => [
             'suggest' => false,
@@ -129,7 +203,12 @@ return [
             'suggest' => false,
             'questions' => ['tell me a joke', 'whats a fun fact', 'joke', 'magkwento ka', 'magjoke ka'],
             'keywords' => ['joke', 'fun fact'],
-            'answer' => 'Sure! Why did the computer go to the doctor? It had a virus! I can also help with LSPDMS questions whenever you need.',
+            'answer' => [
+                'Sure! Why did the computer go to the doctor? It had a virus! I can also help with LSPDMS questions whenever you need.',
+                'Why don’t spreadsheets ever get lost? Because they always know which cell they’re in! Need help with anything in LSPDMS?',
+                'I told the database a joke… it didn’t get it, so I had to commit it twice. Anything I can help you with?',
+                'Why was the record so calm during the monthly session? Because it was already properly filed! What can I do for you?',
+            ],
         ],
 
         // ===== Part 2: Knowledge and navigation ==================================================
@@ -320,6 +399,34 @@ return [
             ],
             'keywords' => ['same month', 'in november', 'in december'],
             'answer' => 'No. You prepare the November Monthly Session during the last two weeks of October. In general, the session for a particular month is prepared during the last two weeks of the month before it.',
+        ],
+        'endorsed_status_change' => [
+            'title' => 'Changing the status of an R2-10 endorsed record',
+            'feature' => 'form_generator_allow',
+            'route' => 'forms.monthly.modify',
+            'questions' => [
+                'Why can’t I change MS to UWP?', 'Why can’t I change UWP to MS?', 'Can I move an endorsed record to UWP?',
+                'Can an R2-10 endorsed member go from MS to UWP?', 'Bakit hindi ko mapalitan ng UWP ang MS?',
+                'Bakit hindi mapalitan ang MS to UWP?', 'Pwede bang gawing UWP ang endorsed?',
+            ],
+            'keywords' => ['ms to uwp', 'uwp to ms', 'endorsed uwp', 'endorsed ms', 'change status endorsed', 'r210 endorsed status'],
+            'boost' => 0.15,
+            'answer' => 'You can’t change MS to UWP (or UWP to MS) once a record is already R2-10 endorsed. In Monthly Session, an endorsed MS or UWP record can only move to MK, and that move needs a new R2-10 reason; the earlier reason is kept in the record’s reason history.',
+            'answer_tl' => 'Hindi na puwedeng palitan ang MS to UWP (o UWP to MS) kapag R2-10 endorsed na ang record. Sa Monthly Session, sa MK lang puwedeng ilipat ang endorsed na MS o UWP, at kailangan ng bagong R2-10 reason.',
+        ],
+        'endorsed_subtract' => [
+            'title' => 'Subtracting an R2-10 endorsed record',
+            'feature' => 'form_generator_allow',
+            'route' => 'forms.monthly.deliberation',
+            'questions' => [
+                'Why can’t I subtract this record?', 'Why can’t I make an endorsed record inactive?',
+                'Can I subtract an R2-10 endorsed member?', 'Bakit hindi ma-subtract ang endorsed?',
+                'Bakit hindi magawang inactive ang endorsed?', 'Pwede bang i-subtract ang R2-10 endorsed?',
+            ],
+            'keywords' => ['subtract endorsed', 'endorsed inactive', 'cant subtract', 'hindi ma subtract', 'r210 endorsed subtract'],
+            'boost' => 0.15,
+            'answer' => 'You can’t subtract a record and make it INACTIVE once it is already R2-10 endorsed. Endorsed records leave the active list through the De-Listment workflow instead (after they are MK and endorsed, use Delist in De-Listment Portal).',
+            'answer_tl' => 'Hindi puwedeng i-subtract at gawing INACTIVE ang record kapag R2-10 endorsed na ito. Sa De-Listment workflow dumadaan ang endorsed na record.',
         ],
 
         // ===== Part 5: Administrator Portal ======================================================

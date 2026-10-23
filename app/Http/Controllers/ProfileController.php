@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\FileStore;
+use App\Support\PasswordVerifier;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -31,12 +33,28 @@ class ProfileController extends Controller
             'last_name' => $validated['last_name'],
         ];
 
+        $files = app(FileStore::class);
+        $previousPicture = (string) (DB::table('login_user')->where('id', $sessionUser['id'])->value('profile_picture') ?? '');
+        $newPicture = null;
         if ($request->hasFile('picture')) {
-            $path = $request->file('picture')->store('profile-pictures', 'public');
-            $updateData['profile_picture'] = $path;
+            // Kept on the public disk and in stored_files so SQL exports carry the picture.
+            $newPicture = $files->putUploadedFile('public', 'profile-pictures', $request->file('picture'));
+            $updateData['profile_picture'] = $newPicture;
         }
 
-        DB::table('login_user')->where('id', $sessionUser['id'])->update($updateData);
+        try {
+            DB::table('login_user')->where('id', $sessionUser['id'])->update($updateData);
+        } catch (\Throwable $exception) {
+            if ($newPicture !== null) {
+                $files->delete('public', $newPicture);
+            }
+            throw $exception;
+        }
+
+        if ($newPicture !== null && $previousPicture !== '' && $previousPicture !== $newPicture
+            && str_starts_with($previousPicture, 'profile-pictures/')) {
+            $files->delete('public', $previousPicture);
+        }
 
         $sessionUser = array_merge($sessionUser, $updateData);
         $request->session()->put('login_user', $sessionUser);
@@ -55,9 +73,7 @@ class ProfileController extends Controller
         $user = DB::table('login_user')->where('id', $userId)->first();
         abort_unless($user, 403);
 
-        $matches = str_starts_with((string) $user->password, '$')
-            ? Hash::check($validated['current_password'], $user->password)
-            : hash_equals((string) $user->password, $validated['current_password']);
+        $matches = PasswordVerifier::check($validated['current_password'], $user->password);
         if (! $matches) {
             return back()->withErrors([
                 'current_password' => 'The current password is incorrect.',

@@ -100,6 +100,10 @@
             <label>Month<input type="month" name="month" aria-label="Filter snapshots by month" value="{{ $filters['month'] ?? '' }}"></label>
         </form>
 
+        @if (session('error'))
+            <p class="r401-snapshot-delete-error" role="alert">{{ session('error') }}</p>
+        @endif
+
         @if ($snapshots->isEmpty())
             <p class="r401-snapshot-empty">No saved monthly session snapshots match these filters. A snapshot is created when a monthly session is finalized.</p>
         @else
@@ -111,7 +115,7 @@
                     <tbody>
                         @foreach ($snapshots as $snapshot)
                             <tr>
-                                <td>{{ $snapshot->file_name }}</td>
+                                <td>{{ $snapshot->file_name }}@if (! ($snapshot->file_available ?? true)) <span class="r401-snapshot-delete-error" title="The saved file for this snapshot is not on this server.">File missing</span>@endif</td>
                                 <td>{{ $snapshot->created_at->timezone('Asia/Manila')->format('d M Y, h:i A') }}</td>
                                 <td>
                                     <div class="r401-snapshot-actions">

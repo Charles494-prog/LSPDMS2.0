@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\SessionUser;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cookie;
@@ -22,6 +23,10 @@ class EnsureUserIsLoggedIn
                 $request->session()->regenerateToken();
                 Cookie::queue(Cookie::forget('remember_token'));
 
+                if ($this->wantsJson($request)) {
+                    return $this->invalidSessionResponse('account_disabled');
+                }
+
                 return redirect('/login')->withErrors([
                     'login' => 'Your account access has been disabled. Please contact the head secretary.',
                 ]);
@@ -34,15 +39,13 @@ class EnsureUserIsLoggedIn
                 $notice = $user->auth_notice === 'password_changed'
                     ? 'password_changed'
                     : 'signed_out_elsewhere';
-                $request->session()->forget('login_user');
-                $request->session()->forget('pending_login_user');
+                // The whole session is stale: destroy it and rotate the CSRF token.
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
                 Cookie::queue(Cookie::forget('remember_token'));
 
-                if ($request->routeIs('session.status') || $request->expectsJson()) {
-                    return response()->json([
-                        'session_invalid' => true,
-                        'reason' => $notice,
-                    ], 401);
+                if ($this->wantsJson($request)) {
+                    return $this->invalidSessionResponse($notice);
                 }
 
                 $message = $notice === 'password_changed'
@@ -52,25 +55,7 @@ class EnsureUserIsLoggedIn
                 return redirect('/login')->with('status', $message);
             }
 
-            $freshUser = [
-                'id' => $user->id,
-                'auth_version' => $currentAuthVersion,
-                'gmail' => $user->gmail,
-                'tungkulin' => $user->tungkulin,
-                'first_name' => $user->first_name,
-                'last_name' => $user->last_name,
-                'gender' => $user->gender,
-                'profile_picture' => $user->profile_picture,
-                'dark_mode' => (bool) $user->dark_mode,
-                'dashboard_allow' => (bool) $user->dashboard_allow,
-                'form_generator_allow' => (bool) $user->form_generator_allow,
-                'Delistment_allow' => (bool) $user->Delistment_allow,
-                'Inquire_Allow' => (bool) $user->Inquire_Allow,
-                'tarheta_status_allow' => (bool) $user->tarheta_status_allow,
-                'filter_bnh_helper_allow' => (bool) $user->filter_bnh_helper_allow,
-                'chatbot_records_allow' => (bool) ($user->chatbot_records_allow ?? false),
-                'is_verified' => (bool) $user->is_verified,
-            ];
+            $freshUser = SessionUser::fromRow($user);
             $request->session()->put('login_user', $freshUser);
             view()->share('authenticatedUser', $freshUser);
 
@@ -84,7 +69,25 @@ class EnsureUserIsLoggedIn
             return $next($request);
         }
 
+        if ($this->wantsJson($request)) {
+            return $this->invalidSessionResponse('logged_out');
+        }
+
         return redirect('/login')->withErrors(['login' => 'Please log in to continue.']);
+    }
+
+    /** Background fetches (session poll, chat, widgets) get JSON instead of a login-page redirect. */
+    private function wantsJson(Request $request): bool
+    {
+        return $request->routeIs('session.status') || $request->expectsJson();
+    }
+
+    private function invalidSessionResponse(string $reason): Response
+    {
+        return response()->json([
+            'session_invalid' => true,
+            'reason' => $reason,
+        ], 401);
     }
 
     private function attemptRememberLogin(Request $request): bool
@@ -112,25 +115,7 @@ class EnsureUserIsLoggedIn
         }
 
         $request->session()->regenerate();
-        $request->session()->put('login_user', [
-            'id' => $user->id,
-            'auth_version' => (int) $user->auth_version,
-            'gmail' => $user->gmail,
-            'tungkulin' => $user->tungkulin,
-            'first_name' => $user->first_name,
-            'last_name' => $user->last_name,
-            'gender' => $user->gender,
-            'profile_picture' => $user->profile_picture,
-            'dark_mode' => (bool) $user->dark_mode,
-            'dashboard_allow' => (bool) $user->dashboard_allow,
-            'form_generator_allow' => (bool) $user->form_generator_allow,
-            'Delistment_allow' => (bool) $user->Delistment_allow,
-            'Inquire_Allow' => (bool) $user->Inquire_Allow,
-            'tarheta_status_allow' => (bool) $user->tarheta_status_allow,
-            'filter_bnh_helper_allow' => (bool) $user->filter_bnh_helper_allow,
-            'chatbot_records_allow' => (bool) ($user->chatbot_records_allow ?? false),
-            'is_verified' => (bool) $user->is_verified,
-        ]);
+        $request->session()->put('login_user', SessionUser::fromRow($user));
 
         return true;
     }

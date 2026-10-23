@@ -51,7 +51,7 @@ class FilterBnhHelperTest extends TestCase
             ->assertOk()
             ->assertSee('Filter &amp; BNH Helper', false)
             ->assertSee('fbnhReload', false)
-            ->assertSee('Reload Data')
+            ->assertSee('Reload data')
             ->assertSee('fbnhAllStatuses', false)
             ->assertSee('value="MK"', false)
             ->assertSee('type="checkbox" value="MK"  disabled', false)

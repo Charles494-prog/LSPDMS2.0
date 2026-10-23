@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Validation\ValidationException;
 
 class RegistrationController extends Controller
 {
@@ -37,21 +39,26 @@ class RegistrationController extends Controller
             'password' => ['required', 'string', Password::min(8)->letters()->numbers()->symbols(), 'confirmed'],
         ]);
 
-        User::query()->create([
-            'first_name' => trim($validated['first_name']),
-            'last_name' => trim($validated['last_name']),
-            'gmail' => $validated['email'],
-            'password' => $validated['password'],
-            'tungkulin' => 'Secretary',
-            'is_verified' => false,
-            'dashboard_allow' => false,
-            'form_generator_allow' => false,
-            'Delistment_allow' => false,
-            'Inquire_Allow' => false,
-            'tarheta_status_allow' => false,
-            'filter_bnh_helper_allow' => false,
-            'chatbot_records_allow' => false,
-        ]);
+        try {
+            User::query()->create([
+                'first_name' => trim($validated['first_name']),
+                'last_name' => trim($validated['last_name']),
+                'gmail' => $validated['email'],
+                'password' => $validated['password'],
+                'tungkulin' => 'Secretary',
+                'is_verified' => false,
+                'dashboard_allow' => false,
+                'form_generator_allow' => false,
+                'Delistment_allow' => false,
+                'Inquire_Allow' => false,
+                'tarheta_status_allow' => false,
+                'filter_bnh_helper_allow' => false,
+                'chatbot_records_allow' => false,
+            ]);
+        } catch (UniqueConstraintViolationException) {
+            // Two registrations for the same email raced past the check above.
+            throw ValidationException::withMessages(['email' => 'An account with this email address already exists.']);
+        }
 
         return redirect()
             ->route('login.form')

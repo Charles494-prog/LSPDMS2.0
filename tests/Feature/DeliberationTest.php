@@ -166,6 +166,7 @@ class DeliberationTest extends TestCase
 
     public function test_monthly_session_is_available_once_per_period_and_changes_period_after_midmonth(): void
     {
+        Storage::fake('local');
         $user = User::query()->create([
             'gmail' => 'period.session@example.test',
             'password' => 'password',
@@ -194,7 +195,16 @@ class DeliberationTest extends TestCase
         $this->withSession($session)->postJson(route('forms.monthly.session.finish'))->assertForbidden();
         $this->withSession($headSession)->postJson(route('forms.monthly.session.finish'))->assertOk();
 
+        // One session per period month: from the 15th the target is the next month,
+        // even though a session was already started this calendar month.
         Carbon::setTestNow(Carbon::parse('2026-10-15 12:00:00', 'Asia/Manila'));
+        $this->withSession($session)
+            ->postJson(route('forms.monthly.session.start'))
+            ->assertOk()
+            ->assertJsonPath('session.period_month', 'November 2026');
+        $this->withSession($headSession)->postJson(route('forms.monthly.session.finish'))->assertOk();
+
+        Carbon::setTestNow(Carbon::parse('2026-11-14 12:00:00', 'Asia/Manila'));
         $this->withSession($session)
             ->postJson(route('forms.monthly.session.start'))
             ->assertUnprocessable()
@@ -1223,7 +1233,8 @@ class DeliberationTest extends TestCase
             'id' => $record->id,
             'status' => 'INACTIVE',
             'monthly_code' => 'UWP: DD',
-            'reason_of_r2_10_endorsement' => 'Earlier note'.PHP_EOL.'Deliberation subtract DD: Moved away',
+            // The subtract code is logged in log_section only; the R2-10 reason is untouched.
+            'reason_of_r2_10_endorsement' => 'Earlier note',
             'log_section' => 'Imported CSV entry, '.$today.': UWP: DD, '.$today.': Moved away,',
         ]);
     }
@@ -1325,6 +1336,7 @@ class DeliberationTest extends TestCase
 
     public function test_add_and_subtract_are_kept_in_records_until_session_finalization(): void
     {
+        Storage::fake('local');
         $user = $this->makeSecretary();
         $purok = $this->makePurok();
         $session = ['login_user' => ['id' => $user->id]];
@@ -1744,6 +1756,7 @@ class DeliberationTest extends TestCase
 
     public function test_finishing_session_archives_record_codes_and_modify_movement_separately(): void
     {
+        Storage::fake('local');
         $user = $this->makeSecretary();
         Purok::query()->create([
             'purok_number' => 1,

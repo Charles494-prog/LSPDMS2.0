@@ -386,9 +386,8 @@
         . '</text></svg>'
     );
 
-    $currentPhoto = !empty($user['profile_picture'])
-        ? asset('storage/' . $user['profile_picture'])
-        : $fallbackAvatar;
+    $currentPhoto = \App\Http\Controllers\ProfilePictureController::urlFor($user['id'] ?? null, $user['profile_picture'] ?? null)
+        ?? $fallbackAvatar;
 
     // Reopen the modal when the profile update failed validation.
     $profileHasErrors = $errors->hasAny(['first_name', 'last_name', 'picture']);

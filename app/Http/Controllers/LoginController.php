@@ -2,19 +2,42 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\LoginVerificationCodeMail;
 use App\Models\GlobalVariable;
+use App\Services\SecurityPolicy;
 use App\Services\SystemSmtpConfiguration;
+use App\Support\PasswordVerifier;
+use App\Support\SessionUser;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
 class LoginController extends Controller
 {
+    /** Seconds before another OTP email can be requested for the same login. */
+    public const RESEND_COOLDOWN_SECONDS = 60;
+
+    public const MAX_CODE_ATTEMPTS = 5;
+
+    public const MAX_CODE_RESENDS = 5;
+
+    private const CODE_LIFETIME_MINUTES = 5;
+
+    /** Attempts per minute for one email address from one IP address. */
+    private const ACCOUNT_ATTEMPTS_PER_MINUTE = 5;
+
+    /** Attempts per minute from one IP address, all accounts together (shared office NAT). */
+    private const IP_ATTEMPTS_PER_MINUTE = 30;
+
+    /** Consecutive failures => lockout seconds, highest threshold first. */
+    private const PROGRESSIVE_LOCKOUTS = [15 => 900, 10 => 300, 5 => 60];
+
     public function showLogin()
     {
         $globalVariables = GlobalVariable::query()->first();
@@ -24,73 +47,56 @@ class LoginController extends Controller
         ]);
     }
 
-    public function login(Request $request)
+    public function login(Request $request, SecurityPolicy $securityPolicy)
     {
         $validator = Validator::make($request->all(), [
             'email' => ['required', 'email'],
             'password' => ['required', 'string'],
         ]);
         if ($validator->fails()) {
-            return redirect()
-                ->route('login.form')
-                ->withInput($request->only('email'))
-                ->withErrors(['login' => 'Invalid username or password.']);
+            return $this->failedLogin($request, 'Invalid username or password.');
         }
         $credentials = $validator->validated();
 
         $email = strtolower(trim($credentials['email']));
+        if (($wait = $this->loginLockoutSeconds($request, $email)) > 0) {
+            return $this->failedLogin($request, "Too many sign-in attempts. Please wait {$wait} seconds and try again.");
+        }
+        $this->hitLoginLimiters($request, $email);
 
         $user = DB::table('login_user')
             ->whereRaw('LOWER(TRIM(gmail)) = ?', [$email])
             ->first();
 
-        $passwordMatches = false;
+        if (! $user || ! PasswordVerifier::checkForLogin($credentials['password'], $user)) {
+            $this->recordLoginFailure($request, $email);
 
-        if ($user) {
-            $storedPassword = (string) $user->password;
-            $isHashedPassword = str_starts_with($storedPassword, '$2y$')
-                || str_starts_with($storedPassword, '$2a$')
-                || str_starts_with($storedPassword, '$2b$')
-                || str_starts_with($storedPassword, '$argon2');
-
-            if ($isHashedPassword) {
-                $passwordMatches = Hash::check($credentials['password'], $user->password);
-            } else {
-                $passwordMatches = hash_equals($storedPassword, $credentials['password']);
-            }
-        }
-
-        if (! $passwordMatches) {
-            return redirect()
-                ->route('login.form')
-                ->withInput($request->only('email'))
-                ->withErrors(['login' => 'Invalid username or password.']);
+            return $this->failedLogin($request, 'Invalid username or password.');
         }
 
         if ((int) $user->is_verified !== 1) {
-            return redirect()
-                ->route('login.form')
-                ->withInput($request->only('email'))
-                ->withErrors(['login' => 'Account has not been granted access by the head secretary.']);
+            return $this->failedLogin($request, 'Account has not been granted access by the head secretary.');
         }
+
+        $this->clearLoginFailures($request, $email);
 
         $globalVariables = GlobalVariable::query()->first();
         if (! (bool) ($globalVariables?->require_otp ?? false)) {
             return $this->completeLogin($request, (int) $user->id, $request->boolean('remember'));
         }
 
+        // OTP is on but email can no longer be delivered: switch the email
+        // features off and let the correct password through, so nobody is locked out.
+        if ($securityPolicy->enforceEmailAvailability('system')) {
+            return $this->completeLogin($request, (int) $user->id, $request->boolean('remember'), true);
+        }
+
         try {
             $code = $this->sendVerificationCode($user->gmail);
         } catch (\Throwable $exception) {
-            Log::error('LSPDMS verification email failed.', [
-                'mailer' => config('mail.default'),
-                'message' => $exception->getMessage(),
-            ]);
+            $securityPolicy->reportDeliveryFailure($exception, 'login_otp');
 
-            return redirect()
-                ->route('login.form')
-                ->withInput($request->only('email'))
-                ->withErrors(['login' => 'Unable to send the verification code. Please check your internet connection and try again.']);
+            return $this->completeLogin($request, (int) $user->id, $request->boolean('remember'), true);
         }
 
         $request->session()->put('pending_login_user', [
@@ -98,8 +104,10 @@ class LoginController extends Controller
             'gmail' => $user->gmail,
             'tungkulin' => $user->tungkulin,
             'code' => Hash::make($code),
-            'expires_at' => now()->addMinutes(5)->timestamp,
+            'expires_at' => now()->addMinutes(self::CODE_LIFETIME_MINUTES)->timestamp,
             'sent_at' => now()->timestamp,
+            'attempts' => 0,
+            'resends' => 0,
             'remember' => $request->boolean('remember'),
         ]);
 
@@ -108,13 +116,17 @@ class LoginController extends Controller
 
     public function showVerificationForm(Request $request)
     {
-        abort_unless($request->session()->has('pending_login_user'), 403);
+        if (! $request->session()->has('pending_login_user')) {
+            return $request->session()->has('login_user')
+                ? redirect('/home')
+                : redirect('/login');
+        }
 
         $pendingUser = $request->session()->get('pending_login_user');
 
         return view('verify-code', [
             'expiresAt' => $pendingUser['expires_at'],
-            'resendAvailableAt' => ($pendingUser['sent_at'] ?? 0) + 60,
+            'resendAvailableAt' => ($pendingUser['sent_at'] ?? 0) + self::RESEND_COOLDOWN_SECONDS,
         ]);
     }
 
@@ -137,7 +149,20 @@ class LoginController extends Controller
         }
 
         if (! Hash::check($request->code, $pendingUser['code'])) {
-            return back()->withErrors(['code' => 'Invalid or expired verification code.']);
+            $pendingUser['attempts'] = (int) ($pendingUser['attempts'] ?? 0) + 1;
+            if ($pendingUser['attempts'] >= self::MAX_CODE_ATTEMPTS) {
+                $request->session()->forget('pending_login_user');
+
+                return redirect('/login')->withErrors([
+                    'login' => 'Too many incorrect verification codes. Please sign in again.',
+                ]);
+            }
+            $request->session()->put('pending_login_user', $pendingUser);
+            $remaining = self::MAX_CODE_ATTEMPTS - $pendingUser['attempts'];
+
+            return back()->withErrors([
+                'code' => "Invalid or expired verification code. {$remaining} attempt(s) left.",
+            ]);
         }
 
         $freshUser = DB::table('login_user')->where('id', $pendingUser['id'])->first();
@@ -150,7 +175,7 @@ class LoginController extends Controller
         return $this->completeLogin($request, (int) $freshUser->id, ! empty($pendingUser['remember']));
     }
 
-    private function completeLogin(Request $request, int $userId, bool $remember)
+    private function completeLogin(Request $request, int $userId, bool $remember, bool $passwordOnlyFallback = false)
     {
         $request->session()->regenerate();
         $freshUser = DB::table('login_user')->where('id', $userId)->first();
@@ -160,25 +185,7 @@ class LoginController extends Controller
             return redirect('/login')->withErrors(['login' => 'Your account access has been disabled. Please contact the head secretary.']);
         }
 
-        $request->session()->put('login_user', [
-            'id' => $freshUser->id,
-            'auth_version' => (int) $freshUser->auth_version,
-            'gmail' => $freshUser->gmail,
-            'tungkulin' => $freshUser->tungkulin,
-            'first_name' => $freshUser->first_name,
-            'last_name' => $freshUser->last_name,
-            'gender' => $freshUser->gender,
-            'profile_picture' => $freshUser->profile_picture,
-            'dark_mode' => (bool) $freshUser->dark_mode,
-            'dashboard_allow' => (bool) $freshUser->dashboard_allow,
-            'form_generator_allow' => (bool) $freshUser->form_generator_allow,
-            'Delistment_allow' => (bool) $freshUser->Delistment_allow,
-            'Inquire_Allow' => (bool) $freshUser->Inquire_Allow,
-            'tarheta_status_allow' => (bool) $freshUser->tarheta_status_allow,
-            'filter_bnh_helper_allow' => (bool) $freshUser->filter_bnh_helper_allow,
-            'chatbot_records_allow' => (bool) ($freshUser->chatbot_records_allow ?? false),
-            'is_verified' => (bool) $freshUser->is_verified,
-        ]);
+        $request->session()->put('login_user', SessionUser::fromRow($freshUser));
 
         $request->session()->forget('pending_login_user');
 
@@ -188,7 +195,9 @@ class LoginController extends Controller
             Cookie::queue(Cookie::forget('remember_token'));
         }
 
-        return redirect('/home')->with('status', 'Login successful.');
+        return redirect('/home')->with('status', $passwordOnlyFallback
+            ? 'Email verification is temporarily unavailable, so you were signed in with your password only.'
+            : 'Login successful.');
     }
 
     private function rememberUser(int $userId): void
@@ -213,7 +222,7 @@ class LoginController extends Controller
         ));
     }
 
-    public function resendCode(Request $request)
+    public function resendCode(Request $request, SecurityPolicy $securityPolicy)
     {
         $pendingUser = $request->session()->get('pending_login_user');
 
@@ -221,24 +230,41 @@ class LoginController extends Controller
             return redirect('/login')->withErrors(['login' => 'Please log in again.']);
         }
 
-        if (($pendingUser['sent_at'] ?? 0) + 60 > now()->timestamp) {
+        if (($pendingUser['sent_at'] ?? 0) + self::RESEND_COOLDOWN_SECONDS > now()->timestamp) {
             return back()->withErrors(['code' => 'Please wait before requesting another code.']);
+        }
+
+        if ((int) ($pendingUser['resends'] ?? 0) >= self::MAX_CODE_RESENDS) {
+            $request->session()->forget('pending_login_user');
+
+            return redirect('/login')->withErrors(['login' => 'Too many verification codes were requested. Please sign in again.']);
+        }
+
+        $freshUser = DB::table('login_user')->where('id', $pendingUser['id'])->first();
+        if (! $freshUser || (int) $freshUser->is_verified !== 1) {
+            $request->session()->forget('pending_login_user');
+
+            return redirect('/login')->withErrors(['login' => 'Your account access has been disabled. Please contact the head secretary.']);
+        }
+
+        $globalVariables = GlobalVariable::query()->first();
+        if (! (bool) ($globalVariables?->require_otp ?? false)) {
+            // OTP was switched off after the code was sent: the password was already checked.
+            return $this->completeLogin($request, (int) $freshUser->id, ! empty($pendingUser['remember']), true);
         }
 
         try {
             $code = $this->sendVerificationCode($pendingUser['gmail']);
         } catch (\Throwable $exception) {
-            Log::error('LSPDMS verification email resend failed.', [
-                'mailer' => config('mail.default'),
-                'message' => $exception->getMessage(),
-            ]);
+            $securityPolicy->reportDeliveryFailure($exception, 'login_otp_resend');
 
-            return back()->withErrors(['code' => 'Unable to send a new verification code.']);
+            return $this->completeLogin($request, (int) $freshUser->id, ! empty($pendingUser['remember']), true);
         }
 
         $pendingUser['code'] = Hash::make($code);
-        $pendingUser['expires_at'] = now()->addMinutes(5)->timestamp;
+        $pendingUser['expires_at'] = now()->addMinutes(self::CODE_LIFETIME_MINUTES)->timestamp;
         $pendingUser['sent_at'] = now()->timestamp;
+        $pendingUser['resends'] = (int) ($pendingUser['resends'] ?? 0) + 1;
         $request->session()->put('pending_login_user', $pendingUser);
 
         return back()->with('status', 'A new verification code was sent.');
@@ -248,12 +274,8 @@ class LoginController extends Controller
     {
         $code = (string) random_int(100000, 999999);
 
-        $html = view('emails.verification-code', ['code' => $code])->render();
-
         app(SystemSmtpConfiguration::class)->apply();
-        Mail::html($html, function ($message) use ($email) {
-            $message->to($email)->subject('LSPDMS verification code');
-        });
+        Mail::to($email)->send(new LoginVerificationCodeMail($code));
 
         return $code;
     }
@@ -271,11 +293,75 @@ class LoginController extends Controller
             ]);
         }
 
-        $request->session()->forget('login_user');
-        $request->session()->regenerate();
+        // Destroy the old session (file included) and rotate the CSRF token.
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
 
         Cookie::queue(Cookie::forget('remember_token'));
 
         return redirect('/login')->with('status', 'You have been logged out.');
+    }
+
+    private function failedLogin(Request $request, string $message)
+    {
+        return redirect()
+            ->route('login.form')
+            ->withInput($request->only('email'))
+            ->withErrors(['login' => $message]);
+    }
+
+    private function accountKey(Request $request, string $email): string
+    {
+        return 'login:account:'.sha1($email.'|'.$request->ip());
+    }
+
+    private function failureKey(Request $request, string $email): string
+    {
+        return 'login:failures:'.sha1($email.'|'.$request->ip());
+    }
+
+    /** Seconds the caller must still wait, 0 when a new attempt is allowed. */
+    private function loginLockoutSeconds(Request $request, string $email): int
+    {
+        $ipKey = 'login:ip:'.$request->ip();
+        $accountKey = $this->accountKey($request, $email);
+        $lockedUntil = (int) Cache::get($this->failureKey($request, $email).':until', 0);
+
+        return max(
+            RateLimiter::tooManyAttempts($ipKey, self::IP_ATTEMPTS_PER_MINUTE) ? RateLimiter::availableIn($ipKey) : 0,
+            RateLimiter::tooManyAttempts($accountKey, self::ACCOUNT_ATTEMPTS_PER_MINUTE) ? RateLimiter::availableIn($accountKey) : 0,
+            $lockedUntil - now()->timestamp,
+            0
+        );
+    }
+
+    private function hitLoginLimiters(Request $request, string $email): void
+    {
+        RateLimiter::hit('login:ip:'.$request->ip(), 60);
+        RateLimiter::hit($this->accountKey($request, $email), 60);
+    }
+
+    /** Consecutive failures lock this email + IP for longer and longer. */
+    private function recordLoginFailure(Request $request, string $email): void
+    {
+        $key = $this->failureKey($request, $email);
+        $failures = (int) Cache::get($key, 0) + 1;
+        Cache::put($key, $failures, now()->addHour());
+
+        foreach (self::PROGRESSIVE_LOCKOUTS as $threshold => $seconds) {
+            if ($failures >= $threshold) {
+                if ($failures % 5 === 0) {
+                    Cache::put($key.':until', now()->timestamp + $seconds, now()->addSeconds($seconds));
+                }
+                break;
+            }
+        }
+    }
+
+    private function clearLoginFailures(Request $request, string $email): void
+    {
+        Cache::forget($this->failureKey($request, $email));
+        Cache::forget($this->failureKey($request, $email).':until');
+        RateLimiter::clear($this->accountKey($request, $email));
     }
 }

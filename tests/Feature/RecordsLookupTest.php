@@ -76,15 +76,15 @@ class RecordsLookupTest extends TestCase
             ->assertSee('records\\/search', false)
             ->assertSee('records\\/smart-helper', false)
             ->assertSee('Smart Helper')
-            ->assertSee('id="smart-helper-toggle"', false)
-            ->assertSee('id="smart-helper-close"', false)
-            ->assertSee('class="smart-helper-panel"', false)
-            ->assertSee('Click Scan to check for duplicate records.')
+            ->assertSee('id="helper-open"', false)
+            ->assertSee('id="helper-toggle" aria-label="Close Smart Helper"', false)
+            ->assertSee('class="helper-panel" id="helper-panel"', false)
+            ->assertSee('Press the button when you are ready.')
             ->assertSee('Delete inactive record')
             ->assertSee('Form Generator > Monthly > Deliberation', false)
             ->assertSee('Record update guide')
             ->assertSee('none of the matching records is Inactive')
-            ->assertSee('id="remind-open">Guidance</button>', false)
+            ->assertSee('id="remind-open" aria-expanded="false" aria-controls="reg-guide">Guidance</button>', false)
             ->assertDontSee('Naintindihan ko')
             ->assertSee('__RECORD_ID__', false)
             ->assertSee('<select id="rm-gender" required>', false)
@@ -97,10 +97,10 @@ class RecordsLookupTest extends TestCase
             ->assertDontSee('rm-clear-monthly-code', false)
             ->assertSee('id="rm-purok-display"', false)
             ->assertSee('id="rm-r210-toggle" class="reg-eye" disabled', false)
-            ->assertSee('maxlength="13" placeholder="13 letters/numbers or RFID"', false)
+            ->assertSee('id="rm-registry" maxlength="13" placeholder="Exactly 13 characters"', false)
             ->assertSee("date_of_birth: ['rm-birthday', 'Birthday']", false)
             ->assertSee('id="reg-save-btn" disabled', false)
-            ->assertSee('Name match only — this is a warning, not a save error.', false)
+            ->assertSee('Name match only. This is a warning, not an error.', false)
             ->assertSee('function normalizedValue(key, value)', false)
             ->assertSee("if (key === 'registry_number') return normalized.toUpperCase();", false)
             ->assertDontSee('PUROK_SPLITS')
@@ -278,6 +278,44 @@ class RecordsLookupTest extends TestCase
             ->assertOk()
             ->assertJsonPath('records_scanned', 4)
             ->assertJsonCount(0, 'data');
+    }
+
+    public function test_smart_helper_length_prefilter_keeps_boundary_matches(): void
+    {
+        // 20 vs 18 letters: distance 2 of 20 = exactly 90%, still reported.
+        Record::query()->create(['full_name' => str_repeat('A', 20), 'registry' => 'BOUNDARY00001']);
+        Record::query()->create(['full_name' => str_repeat('A', 18), 'registry' => 'BOUNDARY00002']);
+        // 11 vs 9 letters: at most 82%, never reported.
+        Record::query()->create(['full_name' => 'BCDEFGHIJKL', 'registry' => 'BOUNDARY00003']);
+        Record::query()->create(['full_name' => 'BCDEFGHIJ', 'registry' => 'BOUNDARY00004']);
+
+        $findings = $this->withSession(['login_user' => ['id' => 1]])
+            ->getJson(route('records.smart-helper'))
+            ->assertOk()
+            ->json('data');
+
+        $similar = array_values(array_filter($findings, fn (array $finding): bool => $finding['type'] === 'similar_name'));
+        $this->assertCount(1, $similar);
+        $this->assertSame(90, $similar[0]['similarity']);
+    }
+
+    public function test_registry_conflict_is_rejected_inside_the_update_transaction(): void
+    {
+        Record::query()->create(['full_name' => 'Holder', 'registry' => 'TAKEN00000001', 'status' => 'MS']);
+        $editing = Record::query()->create(['full_name' => 'Editor', 'registry' => 'OWN0000000001', 'status' => 'MS']);
+        Record::query()->create(['full_name' => 'Card One', 'registry' => 'RFID', 'status' => 'MS']);
+
+        $this->withSession(['login_user' => ['id' => 1]])
+            ->putJson(route('records.update', $editing), ['registry_number' => 'taken00000001'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('registry_number');
+        $this->assertSame('OWN0000000001', $editing->fresh()->registry);
+
+        // RFID is a shared sentinel, never a conflict.
+        $this->withSession(['login_user' => ['id' => 1]])
+            ->putJson(route('records.update', $editing), ['registry_number' => 'RFID'])
+            ->assertOk();
+        $this->assertSame('RFID', $editing->fresh()->registry);
     }
 
     public function test_inactive_duplicate_record_can_be_deleted_permanently(): void

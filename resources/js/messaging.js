@@ -82,11 +82,12 @@ if (root) {
                 ...options.headers,
             },
         });
-        if (response.redirected) {
-            window.location.assign('/login');
+        const data = response.status === 204 ? null : await response.json().catch(() => ({}));
+        if (response.redirected || (response.status === 401 && data?.session_invalid)) {
+            // The chat runs inside an iframe: send the whole window to the login page.
+            (window.top || window).location.assign('/login');
             throw new Error('Your session has expired. Please sign in again.');
         }
-        const data = response.status === 204 ? null : await response.json().catch(() => ({}));
         if (!response.ok) {
             const firstError = data.errors ? Object.values(data.errors).flat()[0] : null;
             throw new Error(firstError || data.message || 'Unable to complete that request.');
@@ -251,6 +252,13 @@ if (root) {
             image.src = localImage || message.attachment_url;
             image.alt = message.attachment_name || 'Message attachment';
             image.loading = 'lazy';
+            // The saved image file can be missing on this PC (for example after a restore).
+            image.addEventListener('error', () => {
+                const unavailable = document.createElement('span');
+                unavailable.className = 'message-text';
+                unavailable.textContent = 'Image unavailable';
+                image.replaceWith(unavailable);
+            }, { once: true });
             bubble.append(image);
         }
         const meta = document.createElement('div');

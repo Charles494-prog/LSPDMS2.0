@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends(! empty($authenticatedUser['id'] ?? null) ? 'layouts.app' : 'layouts.guest-error')
 
 @section('title', 'Access denied')
 
@@ -162,7 +162,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m10 7-5 5 5 5M5 12h14"/></svg>
                 Go back
             </button>
-            <a class="ad-btn ad-btn-primary" href="{{ url('/home') }}">
+            <a class="ad-btn ad-btn-primary" href="{{ url(! empty($authenticatedUser['id'] ?? null) ? '/home' : '/login') }}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11 12 4l8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1v-8Z"/></svg>
                 Back to Home
             </a>

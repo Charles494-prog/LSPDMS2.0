@@ -15,7 +15,7 @@ class RegistrationTest extends TestCase
     {
         $this->get(route('register'))
             ->assertOk()
-            ->assertSee('Create your LSPDMS account')
+            ->assertSee('Create your account')
             ->assertSee('Head Secretary must grant access')
             ->assertSee('At least one special character');
 

@@ -7,15 +7,19 @@ use App\Models\MonthlyRecordSnapshot;
 use App\Models\MonthlySessionActivity;
 use App\Models\MonthlySessionMovement;
 use App\Models\Purok;
+use App\Models\R210EndorsementReason;
 use App\Models\R401Snapshot;
 use App\Models\Record;
+use App\Services\FileStore;
 use App\Services\MonthlySessionSnapshotExporter;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -33,9 +37,21 @@ class DeliberationController extends Controller
 
     public function startSession(Request $request): JsonResponse
     {
-        $session = DB::transaction(fn (): MonthlyMovementSession => $this->activeMonthlySession($request, true));
+        try {
+            $session = DB::transaction(fn (): MonthlyMovementSession => $this->activeMonthlySession($request, true));
+        } catch (UniqueConstraintViolationException) {
+            // Another request created the active session between our checks and the insert.
+            throw ValidationException::withMessages([
+                'session' => ['Another monthly session was started at the same time. Refresh the page to see the active session.'],
+            ]);
+        }
 
-        return response()->json(['session' => $this->sessionPayload($session)]);
+        return response()->json([
+            'session' => $this->sessionPayload($session),
+            'warning' => $session->wasRecentlyCreated
+                ? $this->skippedPeriodWarning(Carbon::parse($session->period_month))
+                : null,
+        ]);
     }
 
     public function sessionStatus(Request $request): JsonResponse
@@ -152,6 +168,14 @@ class DeliberationController extends Controller
                     'movement' => ['This member changed after the logged movement. Review the record before undoing it.'],
                 ]);
             }
+            if ($movement->action === 'status') {
+                // Undoing MS -> UWP (or back) would itself be an MS/UWP swap.
+                $this->ensureEndorsedRecordStaysOffMsUwpSwap(
+                    $record,
+                    (string) ($movement->next_values['status'] ?? ''),
+                    (string) ($movement->previous_values['status'] ?? '')
+                );
+            }
             if ($movement->action === 'add') {
                 $record->status = 'INACTIVE';
                 $record->date_of_entry = null;
@@ -162,6 +186,7 @@ class DeliberationController extends Controller
             } else {
                 $record->forceFill($movement->previous_values);
             }
+            R210EndorsementReason::revertMovement($record->id, $movement->id);
             $record->save();
             $movement->delete();
         });
@@ -225,16 +250,25 @@ class DeliberationController extends Controller
         return response()->json(['message' => 'Activity undone and removed from the monthly session log.']);
     }
 
-    public function finishSession(Request $request, MonthlySessionSnapshotExporter $snapshotExporter): JsonResponse
-    {
+    public function finishSession(
+        Request $request,
+        MonthlySessionSnapshotExporter $snapshotExporter,
+        FileStore $fileStore
+    ): JsonResponse {
         $snapshotPath = null;
         $previewPath = null;
         try {
-            $result = DB::transaction(function () use ($request, $snapshotExporter, &$snapshotPath, &$previewPath): array {
+            $result = DB::transaction(function () use ($request, $snapshotExporter, $fileStore, &$snapshotPath, &$previewPath): array {
             $session = MonthlyMovementSession::query()
                 ->where('active_key', 'active')
                 ->lockForUpdate()
-                ->firstOrFail();
+                ->first();
+            if (! $session) {
+                // A double-submitted finish lands here after the first request completed.
+                throw new HttpResponseException(response()->json([
+                    'message' => 'This monthly session has already been finished. Refresh the page to see the latest status.',
+                ], 409));
+            }
             $movements = MonthlySessionMovement::query()
                 ->where('session_id', $session->id)
                 ->orderBy('id')
@@ -315,14 +349,26 @@ class DeliberationController extends Controller
             $this->snapshotSession($session, $movements);
             $month = $session->period_month;
             $fileName = 'Monthly_'.$month->format('F_Y').'_RESUMEN_MS_UWP.docx';
-            $snapshotPath = 'monthly-session-snapshots/'.$month->format('Y-m').'/session-'.$session->id.'.docx';
-            $previewPath = 'monthly-session-snapshots/'.$month->format('Y-m').'/session-'.$session->id.'.html';
-            if (! Storage::disk('local')->put($snapshotPath, $snapshot['contents'])) {
-                throw new \RuntimeException('Unable to store the finalized monthly session snapshot.');
+            $directory = 'monthly-session-snapshots/'.$month->format('Y-m').'/';
+            $candidate = $directory.'session-'.$session->id.'.docx';
+            // Never overwrite an earlier snapshot (disk or database copy) that shares this name.
+            for ($attempt = 0; $fileStore->exists('local', $candidate)
+                || $fileStore->exists('local', str_replace('.docx', '.html', $candidate)); $attempt++) {
+                if ($attempt >= 5) {
+                    throw new \RuntimeException('Unable to choose a unique file name for the monthly session snapshot.');
+                }
+                $candidate = $directory.'session-'.$session->id.'-'.Str::lower(Str::random(6)).'.docx';
             }
-            if (! Storage::disk('local')->put($previewPath, $snapshot['preview'])) {
-                throw new \RuntimeException('Unable to store the finalized monthly session preview.');
-            }
+            // The snapshot viewer derives the preview path from file_path by swapping the extension.
+            $snapshotPath = $candidate;
+            $fileStore->put(
+                'local',
+                $snapshotPath,
+                $snapshot['contents'],
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            );
+            $previewPath = str_replace('.docx', '.html', $snapshotPath);
+            $fileStore->put('local', $previewPath, $snapshot['preview'], 'text/html');
             R401Snapshot::query()->create([
                 'session_id' => $session->id,
                 'period_month' => $month->toDateString(),
@@ -337,7 +383,11 @@ class DeliberationController extends Controller
             MonthlySessionActivity::query()
                 ->where('session_id', $session->id)
                 ->whereNotNull('session_movement_id')
-                ->update(['session_movement_id' => null]);
+                ->update([
+                    'session_movement_id' => null,
+                    // Explicit self-assignment keeps changed_at even where the column still auto-updates.
+                    'changed_at' => DB::raw('changed_at'),
+                ]);
             MonthlySessionMovement::query()->where('session_id', $session->id)->delete();
             $clearedMonthlyCodes = $codedRecords->count();
             if ($clearedMonthlyCodes > 0) {
@@ -368,10 +418,10 @@ class DeliberationController extends Controller
             });
         } catch (\Throwable $exception) {
             if ($snapshotPath !== null) {
-                Storage::disk('local')->delete($snapshotPath);
+                $fileStore->delete('local', $snapshotPath);
             }
             if ($previewPath !== null) {
-                Storage::disk('local')->delete($previewPath);
+                $fileStore->delete('local', $previewPath);
             }
             throw $exception;
         }
@@ -425,7 +475,7 @@ class DeliberationController extends Controller
                 ->orWhereRaw('LOWER(registry) LIKE ?', ['%'.$query.'%']))
             ->orderBy('full_name')
             ->limit(10)
-            ->get(['id', 'full_name', 'registry', 'status', 'purok', 'grupo', 'monthly_code']);
+            ->get(['id', 'full_name', 'registry', 'status', 'purok', 'grupo', 'monthly_code', 'r2_10_endorsement']);
 
         return response()->json([
             'records' => $records->map(function (Record $record): array {
@@ -447,6 +497,7 @@ class DeliberationController extends Controller
                     'name' => $record->full_name,
                     'registry' => $record->registry,
                     'status' => $record->status,
+                    'r2_10_endorsed' => $this->isR210Endorsed($record),
                     'purok' => (string) $record->purok,
                     'purok_name' => $purok?->purok_name ?: 'Purok '.$record->purok,
                     'grupo' => (string) $record->grupo,
@@ -519,6 +570,7 @@ class DeliberationController extends Controller
                         'status' => ['Choose a status different from the member’s current status.'],
                     ]);
                 }
+                $this->ensureEndorsedRecordStaysOffMsUwpSwap($record, $oldStatus, $newStatus);
 
                 $historyCode = $newStatus === 'MK' ? 'E' : 'G';
                 $monthlyCode = $newStatus === 'MK' ? null : $newStatus.': B';
@@ -531,13 +583,6 @@ class DeliberationController extends Controller
                         ]);
                     }
                 }
-                if ($newStatus === 'MK') {
-                    $datedReason = now()->timezone('Asia/Manila')->format('d-m-Y').': ('.$endorsementReason.')';
-                    $existingReason = trim((string) $record->reason_of_r2_10_endorsement);
-                    $record->reason_of_r2_10_endorsement = $existingReason === ''
-                        ? $datedReason
-                        : $existingReason.PHP_EOL.$datedReason;
-                }
                 $record->status = $newStatus;
                 $record->monthly_code = $monthlyCode;
                 $this->appendLogEntry(
@@ -546,7 +591,12 @@ class DeliberationController extends Controller
                         .($monthlyCode === null ? '' : ", {$monthlyCode}"),
                     $validated['description'] ?? null
                 );
-                $record->save();
+                $currentReason = null;
+                if ($newStatus === 'MK') {
+                    // The column holds only the current reason; earlier ones stay in the reason history.
+                    $currentReason = now()->timezone('Asia/Manila')->format('d-m-Y').': ('.$endorsementReason.')';
+                    $record->reason_of_r2_10_endorsement = $currentReason;
+                }
                 $movement = $this->storeSessionMovement(
                     $session,
                     $record,
@@ -557,6 +607,20 @@ class DeliberationController extends Controller
                     $request,
                     $oldStatus.': '.$historyCode
                 );
+                if ($currentReason !== null) {
+                    // Linked to the movement so undoing it removes this reason again.
+                    R210EndorsementReason::recordCurrent(
+                        $record,
+                        'MK',
+                        $currentReason,
+                        R210EndorsementReason::SOURCE_MONTHLY_MODIFY_MK,
+                        $this->changedBy($request),
+                        now(),
+                        $session->id,
+                        $movement->id
+                    );
+                }
+                $record->save();
                 $this->storeSessionActivity(
                     $session,
                     $movement,
@@ -730,6 +794,7 @@ class DeliberationController extends Controller
             'is_married',
             'status',
             'monthly_code',
+            'r2_10_endorsement',
         ]);
         $records = $candidates
             ->map(function (Record $record) use ($search): array {
@@ -791,6 +856,7 @@ class DeliberationController extends Controller
                     'id' => $record->id,
                     'full_name' => $record->full_name,
                     'registry' => $record->registry,
+                    'r2_10_endorsed' => $this->isR210Endorsed($record),
                     'gender' => match (mb_strtoupper(trim((string) $record->gender))) {
                         'L', 'MALE' => 'Male',
                         'B', 'FEMALE' => 'Female',
@@ -880,6 +946,7 @@ class DeliberationController extends Controller
                 'evangelist',
                 'status',
                 'monthly_code',
+                'r2_10_endorsement',
             ]);
         $puroksByNumber = Purok::query()
             ->whereIn('purok_number', $records->pluck('purok')->filter())
@@ -898,6 +965,7 @@ class DeliberationController extends Controller
                     'id' => $record->id,
                     'full_name' => $record->full_name,
                     'registry' => $record->registry,
+                    'r2_10_endorsed' => $this->isR210Endorsed($record),
                     'gender' => match (mb_strtoupper(trim((string) $record->gender))) {
                         'L', 'MALE' => 'Male',
                         'B', 'FEMALE' => 'Female',
@@ -943,17 +1011,16 @@ class DeliberationController extends Controller
             if (! in_array($status, ['MS', 'UWP'], true)) {
                 return response()->json(['message' => 'Only MS or UWP records can be marked inactive.'], 422);
             }
+            if ($this->isR210Endorsed($record)) {
+                return response()->json(['message' => self::ENDORSED_SUBTRACT_MESSAGE], 422);
+            }
 
             $session = $this->requireActiveMonthlySession($request);
             $previousValues = $this->movementState($record);
             $description = $this->normalizeDescription($validated['description'] ?? null);
-            $entry = 'Deliberation subtract '.$validated['code'].($description === '' ? '' : ': '.$description);
-            $existingReason = trim((string) $record->reason_of_r2_10_endorsement);
+            // The subtract code and description are kept in log_section; the R2-10 reason is left alone.
             $record->monthly_code = $status.': '.$validated['code'];
             $record->status = 'INACTIVE';
-            $record->reason_of_r2_10_endorsement = $existingReason === ''
-                ? $entry
-                : $existingReason.PHP_EOL.$entry;
             $this->appendLogEntry($record, $record->monthly_code, null, 'd-m-Y');
             if ($description !== '') {
                 $this->appendLogEntry($record, $description, null, 'd-m-Y');
@@ -1222,6 +1289,35 @@ class DeliberationController extends Controller
         return trim(preg_replace('/[\r\n]+/', ' ', (string) $description) ?? '');
     }
 
+    public const ENDORSED_SUBTRACT_MESSAGE = "You can't subtract this record and make it INACTIVE since it's already R2-10 endorsed.";
+
+    public static function endorsedSwapMessage(string $fromStatus, string $toStatus): string
+    {
+        return "You can't change {$fromStatus} to {$toStatus} since it's already R2-10 endorsed. It can only move to MK.";
+    }
+
+    private function isR210Endorsed(Record $record): bool
+    {
+        return mb_strtoupper(trim((string) $record->r2_10_endorsement)) === 'ENDORSED';
+    }
+
+    /**
+     * R2-10 endorsed members may leave MS or UWP only for MK in Monthly Session.
+     */
+    private function ensureEndorsedRecordStaysOffMsUwpSwap(Record $record, string $fromStatus, string $toStatus): void
+    {
+        $fromStatus = mb_strtoupper(trim($fromStatus));
+        $toStatus = mb_strtoupper(trim($toStatus));
+        if ($this->isR210Endorsed($record)
+            && $fromStatus !== $toStatus
+            && in_array($fromStatus, ['MS', 'UWP'], true)
+            && in_array($toStatus, ['MS', 'UWP'], true)) {
+            throw ValidationException::withMessages([
+                'status' => [self::endorsedSwapMessage($fromStatus, $toStatus)],
+            ]);
+        }
+    }
+
     private function ensureNoMonthlyCode(Record $record): void
     {
         if (trim((string) $record->monthly_code) !== '') {
@@ -1253,19 +1349,15 @@ class DeliberationController extends Controller
             return $session;
         }
 
-        $now = Carbon::now('Asia/Manila');
-        $periodMonth = $now->copy()->startOfMonth();
-        if ($now->day >= 15) {
-            $periodMonth->addMonthNoOverflow();
-        }
-        if ($this->monthlySessionAlreadyStartedThisMonth($now)) {
+        $periodMonth = $this->targetPeriodMonth();
+        $existing = MonthlyMovementSession::query()
+            ->whereDate('period_month', $periodMonth)
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->first();
+        if ($existing) {
             throw ValidationException::withMessages([
-                'session' => ['A monthly session has already been started this calendar month. Monthly sessions are limited to once per month.'],
-            ]);
-        }
-        if (MonthlyMovementSession::query()->whereDate('period_month', $periodMonth)->lockForUpdate()->exists()) {
-            throw ValidationException::withMessages([
-                'session' => ["A monthly session for {$periodMonth->format('F Y')} already exists. Monthly sessions are limited to once per month."],
+                'session' => [$this->periodTakenMessage($existing)],
             ]);
         }
 
@@ -1274,37 +1366,89 @@ class DeliberationController extends Controller
             'status' => 'active',
             'period_month' => $periodMonth->toDateString(),
             'started_by' => $this->changedBy($request),
-            'started_at' => $now,
+            'started_at' => now(),
         ]);
+    }
+
+    /**
+     * The period a session started right now belongs to: from the 15th (Manila
+     * time) onward the session is for the following month.
+     */
+    private function targetPeriodMonth(): Carbon
+    {
+        $now = Carbon::now('Asia/Manila');
+        $periodMonth = $now->copy()->startOfMonth();
+        if ($now->day >= 15) {
+            $periodMonth->addMonthNoOverflow();
+        }
+
+        return $periodMonth;
     }
 
     private function sessionStartAvailability(): array
     {
-        $now = Carbon::now('Asia/Manila');
-        $targetMonth = $now->copy()->startOfMonth();
-        if ($now->day >= 15) {
-            $targetMonth->addMonthNoOverflow();
+        $targetMonth = $this->targetPeriodMonth();
+        $existing = MonthlyMovementSession::query()
+            ->whereDate('period_month', $targetMonth)
+            ->orderBy('id')
+            ->first();
+        if ($existing) {
+            return [
+                'allowed' => false,
+                'target_month' => null,
+                'existing_period' => $existing->period_month?->format('F Y'),
+                'warning' => null,
+                'message' => $this->periodTakenMessage($existing),
+            ];
         }
-        $existingPeriod = $this->monthlySessionAlreadyStartedThisMonth($now)
-            || MonthlyMovementSession::query()->whereDate('period_month', $targetMonth)->exists();
+
+        $warning = $this->skippedPeriodWarning($targetMonth);
 
         return [
-            'allowed' => ! $existingPeriod,
-            'target_month' => ! $existingPeriod ? $targetMonth->format('F Y') : null,
-            'message' => $existingPeriod
-                ? "A monthly session for {$targetMonth->format('F Y')} already exists. Sessions are available once per month."
-                : "Monthly Session available right now for {$targetMonth->format('F Y')}!",
+            'allowed' => true,
+            'target_month' => $targetMonth->format('F Y'),
+            'existing_period' => null,
+            'warning' => $warning,
+            'message' => "Monthly Session available right now for {$targetMonth->format('F Y')}!"
+                .($warning === null ? '' : ' '.$warning),
         ];
     }
 
-    private function monthlySessionAlreadyStartedThisMonth(Carbon $date): bool
+    private function periodTakenMessage(MonthlyMovementSession $existing): string
     {
-        return MonthlyMovementSession::query()
-            ->whereBetween('started_at', [
-                $date->copy()->startOfMonth()->utc(),
-                $date->copy()->endOfMonth()->utc(),
-            ])
-            ->exists();
+        $period = $existing->period_month?->format('F Y') ?? 'this period';
+        $state = $existing->active_key === 'active' ? 'is already active' : 'already exists';
+
+        return "A Monthly Session for {$period} {$state}. Only one session is allowed per period month.";
+    }
+
+    /**
+     * Warn when starting $targetMonth would leave earlier months without a
+     * session (for example the last session was October and the target is
+     * December). Nothing is created automatically.
+     */
+    private function skippedPeriodWarning(Carbon $targetMonth): ?string
+    {
+        $latest = MonthlyMovementSession::query()
+            ->whereDate('period_month', '<', $targetMonth->toDateString())
+            ->max('period_month');
+        if ($latest === null) {
+            return null;
+        }
+
+        $skipped = [];
+        $cursor = Carbon::parse($latest)->startOfMonth()->addMonthNoOverflow();
+        while ($cursor->lt($targetMonth->copy()->startOfMonth()) && count($skipped) < 24) {
+            $skipped[] = $cursor->format('F Y');
+            $cursor->addMonthNoOverflow();
+        }
+        if ($skipped === []) {
+            return null;
+        }
+
+        return 'Warning: no Monthly Session exists for '.implode(', ', $skipped)
+            .'. Starting now creates the '.$targetMonth->format('F Y').' session and skips '
+            .(count($skipped) === 1 ? 'that month' : 'those months').'.';
     }
 
     private function requireActiveMonthlySession(Request $request): MonthlyMovementSession

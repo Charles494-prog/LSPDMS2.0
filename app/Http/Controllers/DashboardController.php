@@ -7,6 +7,7 @@ use App\Models\MonthlyRecordSnapshot;
 use App\Models\Purok;
 use App\Models\Record;
 use App\Services\R210Eligibility;
+use App\Support\Role;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
@@ -15,8 +16,7 @@ class DashboardController extends Controller
     public function index(Request $request, R210Eligibility $eligibility)
     {
         $user = $request->session()->get('login_user');
-        $role = mb_strtolower(trim(preg_replace('/\s+/', ' ', (string) ($user['tungkulin'] ?? '')) ?? ''));
-        $canEditRegistry = in_array($role, ['head secretary', 'secretary head'], true)
+        $canEditRegistry = Role::isHeadSecretary($user['tungkulin'] ?? '')
             || (bool) ($user['Inquire_Allow'] ?? false);
         $records = Record::query()
             ->select([
@@ -177,12 +177,14 @@ class DashboardController extends Controller
             ->orderBy('month')
             ->orderBy('purok_number')
             ->get(['month', 'purok_number', 'ms_count', 'uwp_count', 'mk_count', 'movement_counts']);
+        // Only months that have a snapshot are charted; months without one are
+        // skipped (never shown as 0).
         $monthKeys = $monthlySnapshots
             ->map(fn (MonthlyRecordSnapshot $snapshot): string => $snapshot->month->format('Y-m'))
             ->unique()
             ->values();
         $monthLabels = $monthKeys
-            ->map(fn (string $monthKey): string => Carbon::createFromFormat('Y-m', $monthKey)->format('M Y'))
+            ->map(fn (string $monthKey): string => Carbon::createFromFormat('Y-m-d', $monthKey.'-01')->format('M Y'))
             ->all();
         $monthlyCounts = [];
         $monthlyPurokCounts = [];

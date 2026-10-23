@@ -838,7 +838,7 @@
         document.getElementById('subtractRecordId').value = record.id;
         subtractRecordForm.hidden = false;
         const normalizedStatus = (record.status || '').trim().toUpperCase();
-        const allowed = ['MS', 'UWP'].includes(normalizedStatus) && !record.monthly_code;
+        const allowed = ['MS', 'UWP'].includes(normalizedStatus) && !record.monthly_code && !record.r2_10_endorsed;
         selectedSubtractAllowed = allowed;
         updateSubtractAction();
         if (record.monthly_code) {
@@ -849,6 +849,9 @@
             subtractMessage.className = 'delib-status error';
         } else if (normalizedStatus === 'MK') {
             subtractMessage.textContent = 'MK is not removable.';
+            subtractMessage.className = 'delib-status error';
+        } else if (record.r2_10_endorsed) {
+            subtractMessage.textContent = "You can't subtract this record and make it INACTIVE since it's already R2-10 endorsed.";
             subtractMessage.className = 'delib-status error';
         } else if (!allowed) {
             subtractMessage.textContent = 'Only MS or UWP records can be marked inactive.';

@@ -38,8 +38,8 @@ class TarhetaStatusTest extends TestCase
             ->assertSee('Tarheta Status Checker')
             ->assertSee('name="csrf-token"', false)
             ->assertSee('tarheta-choice')
-            ->assertSee('Show already-matched records')
-            ->assertSee('Monitor filing status')
+            ->assertSee('<input type="radio" name="view" value="matched"><span>Matched</span>', false)
+            ->assertSee('<input id="monitorFiling" type="checkbox" checked><span>Filing status is the same as the record status</span>', false)
             ->assertSee('Filing status')
             ->assertSee('Filing number')
             ->assertSee('filing-number-input')
@@ -108,7 +108,7 @@ class TarhetaStatusTest extends TestCase
         $this->withSession(['login_user' => ['id' => $user->id]])
             ->get(route('tarheta-status'))
             ->assertOk()
-            ->assertSee('3</strong> evaluated records', false)
+            ->assertSee('of <span id="tarhetaTotal">3</span> matched', false)
             ->assertSee('id="tarhetaMatched">2', false)
             ->assertSee('id="tarhetaTotal">3', false)
             ->assertSee('66.7%')
@@ -130,7 +130,7 @@ class TarhetaStatusTest extends TestCase
         $this->withSession(['login_user' => ['id' => $user->id]])
             ->get(route('tarheta-status'))
             ->assertOk()
-            ->assertSee('data-status="INACTIVE" data-tarheta-status="INACTIVE" data-filing-status="MS" data-matched="0"', false)
+            ->assertSee('data-status="INACTIVE" data-tarheta-status="INACTIVE" data-filing-status="MS" data-filing-number="0007" data-matched="0"', false)
             ->assertSee('value="0007"', false);
 
         $this->withSession(['login_user' => ['id' => $user->id]])

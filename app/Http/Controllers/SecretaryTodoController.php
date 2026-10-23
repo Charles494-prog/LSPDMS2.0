@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\SecretaryTodo;
 use App\Models\User;
+use App\Support\Role;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -84,8 +85,7 @@ class SecretaryTodoController extends Controller
             ->whereKey($request->session()->get('login_user.id'))
             ->where('is_verified', true)
             ->firstOrFail();
-        $role = mb_strtolower(trim(preg_replace('/\s+/', ' ', (string) $user->tungkulin) ?? ''));
-        abort_unless(in_array($role, ['secretary', 'head secretary', 'secretary head'], true), 403);
+        abort_unless(Role::isSecretary($user->tungkulin) || Role::isHeadSecretary($user->tungkulin), 403);
 
         return $user;
     }

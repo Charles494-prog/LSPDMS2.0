@@ -122,7 +122,7 @@
 
     $purokLabels = [];
     foreach ($puroks as $p) {
-        $purokLabels[(string) $p->purok_number] = $p->purok_name ?: 'Purok '.$p->purok_number;
+        $purokLabels[(string) ($p->selection_token ?? $p->purok_number)] = $p->purok_name ?: 'Purok '.$p->purok_number;
     }
     $purokChipValue = null;
     if ($hasPurok) {
@@ -162,6 +162,9 @@
     @if ($errors->any())
         <div class="r402-error" role="alert">{{ $errors->first() }}</div>
     @endif
+    @foreach ($reportWarnings ?? [] as $reportWarning)
+        <p class="r402-note" role="status" data-r402-warning>{{ $reportWarning }}</p>
+    @endforeach
 
     <form class="r402-tools" id="r402Filters" method="GET" action="{{ route('forms.weekly.r4-02') }}">
         <input type="hidden" name="purok" id="r402PurokInput" value="{{ $selectedPurokRaw }}">
@@ -188,7 +191,7 @@
                     @foreach ($puroks as $purok)
                         @php($optionLabel = $purok->purok_name ?: 'Purok '.$purok->purok_number)
                         <li data-label="{{ $optionLabel }}">
-                            <button type="button" class="r402-filter-row r402-filter-option" role="checkbox" aria-checked="false" data-purok="{{ $purok->purok_number }}">
+                            <button type="button" class="r402-filter-row r402-filter-option" role="checkbox" aria-checked="false" data-purok="{{ $purok->selection_token ?? $purok->purok_number }}">
                                 <span>{{ $optionLabel }}</span>
                                 <svg class="r402-filter-check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3.5 8.5 3 3 6-7"/></svg>
                             </button>

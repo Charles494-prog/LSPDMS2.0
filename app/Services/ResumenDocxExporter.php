@@ -24,11 +24,7 @@ class ResumenDocxExporter
             throw new RuntimeException('The editable Resumen Word template is missing.');
         }
 
-        $outputDirectory = storage_path('app/monthly-forms');
-        if (! is_dir($outputDirectory) && ! mkdir($outputDirectory, 0775, true) && ! is_dir($outputDirectory)) {
-            throw new RuntimeException('Unable to create the monthly form output directory.');
-        }
-        $outputPath = $outputDirectory.'/RESUMEN-'.bin2hex(random_bytes(12)).'.docx';
+        $outputPath = ExportTempFiles::path('RESUMEN');
 
         try {
             $template = new PharData($templatePath);

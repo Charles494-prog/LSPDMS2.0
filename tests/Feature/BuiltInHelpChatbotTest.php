@@ -21,13 +21,15 @@ class BuiltInHelpChatbotTest extends TestCase
             ->assertOk()
             ->assertSee('LSPBot')
             ->assertSee('data-bot-avatar=', false)
-            ->assertSee('Hi! I’m LSPBot! Your LSPDMS Guide and AI Assistant!');
+            ->assertSee('Hi! I am LSPBot!')
+            ->assertSee('Your LSPDMS Guide and AI Assistant');
 
         $this->withSession(['login_user' => ['id' => $user->id]])
             ->get(route('messages.assistant', ['widget' => 1]))
             ->assertOk()
-            ->assertSee('Built-in LSPDMS guide — no external AI service.')
-            ->assertSee('Hi! I’m LSPBot! Your LSPDMS Guide and AI Assistant!')
+            ->assertSee('Your LSPDMS Guide and AI Assistant')
+            ->assertSee('Hi! I am LSPBot!')
+            ->assertSee('I don&rsquo;t change records', false)
             ->assertDontSee('GEMINI_API_KEY');
     }
 
@@ -40,7 +42,7 @@ class BuiltInHelpChatbotTest extends TestCase
             ->postJson(route('messages.assistant.reply'), ['message' => 'Where can I mark someone as delisted?'])
             ->assertOk()
             ->assertJsonPath('link.url', route('de-listment'))
-            ->assertJsonPath('link.label', 'Open De-Listment and R2-10');
+            ->assertJsonPath('link.label', 'Open Viewing delisted records');
 
         $user->forceFill(['Delistment_allow' => false])->save();
         $this->withSession(['login_user' => ['id' => $user->id]])
@@ -60,7 +62,7 @@ class BuiltInHelpChatbotTest extends TestCase
             ->postJson(route('messages.assistant.reply'), ['message' => 'Where can I print R4-01?'])
             ->assertOk()
             ->assertJsonPath('link.url', route('form-generator'))
-            ->assertJsonPath('link.label', 'Open Generating and printing forms');
+            ->assertJsonPath('link.label', 'Open Form Generator');
 
         $user->forceFill(['Inquire_Allow' => true])->save();
         $this->withSession(['login_user' => ['id' => $user->id]])
@@ -94,8 +96,8 @@ class BuiltInHelpChatbotTest extends TestCase
             ->postJson(route('messages.assistant.reply'), ['message' => 'Tell me something'])
             ->assertOk()
             ->assertJsonPath('reply', fn (string $reply): bool => str_contains($reply, 'De-Listment')
-                && str_contains($reply, 'form printing')
-                && str_contains($reply, 'I cannot edit or change records'));
+                && str_contains($reply, 'Form Generator')
+                && str_contains($reply, 'Please clarify your question'));
     }
 
     public function test_record_count_queries_require_the_chatbot_lookup_permission(): void
@@ -122,12 +124,12 @@ class BuiltInHelpChatbotTest extends TestCase
         $this->withSession(['login_user' => ['id' => $user->id]])
             ->postJson(route('messages.assistant.reply'), ['message' => 'How many MS are there?'])
             ->assertOk()
-            ->assertJsonPath('reply', 'There are 2 MS record(s).');
+            ->assertJsonPath('reply', 'There are 2 MS records.');
 
         $this->withSession(['login_user' => ['id' => $user->id]])
             ->postJson(route('messages.assistant.reply'), ['message' => 'How many active records are there?'])
             ->assertOk()
-            ->assertJsonPath('reply', 'There are 3 active record(s).');
+            ->assertJsonPath('reply', 'There are 3 active records.');
     }
 
     public function test_r210_aggregate_lookups_require_delistment_permission_and_exclude_already_endorsed_records(): void
@@ -147,7 +149,7 @@ class BuiltInHelpChatbotTest extends TestCase
         $this->withSession(['login_user' => ['id' => $user->id]])
             ->postJson(route('messages.assistant.reply'), ['message' => 'How many MK are not yet endorsed to R2-10?'])
             ->assertOk()
-            ->assertJsonPath('reply', 'There are 2 MK record(s) that are not yet endorsed for R2-10.');
+            ->assertJsonPath('reply', 'There are 2 MK records that are not yet endorsed for R2-10.');
     }
 
     public function test_chatbot_counts_eligible_r210_records_not_yet_endorsed_using_shared_eligibility_rules(): void
@@ -192,7 +194,7 @@ class BuiltInHelpChatbotTest extends TestCase
                 'message' => 'How many MS do we have that are eligible in R2-10 but not yet endorsed?',
             ])
             ->assertOk()
-            ->assertJsonPath('reply', 'There are 2 MS record(s) eligible for R2-10 that are not yet endorsed.');
+            ->assertJsonPath('reply', 'There are 2 MS records eligible for R2-10 that are not yet endorsed.');
     }
 
     public function test_chatbot_counts_status_and_kapisanan_together(): void
@@ -208,7 +210,7 @@ class BuiltInHelpChatbotTest extends TestCase
         $this->withSession(['login_user' => ['id' => $user->id]])
             ->postJson(route('messages.assistant.reply'), ['message' => 'How many MS are Binhi?'])
             ->assertOk()
-            ->assertJsonPath('reply', 'There are 2 MS Binhi record(s).');
+            ->assertJsonPath('reply', 'There are 2 MS Binhi records.');
     }
 
     public function test_name_lookup_returns_only_bounded_record_details_without_registry_numbers(): void
@@ -270,7 +272,41 @@ class BuiltInHelpChatbotTest extends TestCase
         $this->withSession(['login_user' => ['id' => $user->id]])
             ->postJson(route('messages.assistant.reply'), ['message' => 'How many MK are there?'])
             ->assertOk()
-            ->assertJsonPath('reply', 'There are 1 MK record(s).');
+            ->assertJsonPath('reply', 'There is 1 MK record.');
+    }
+
+    public function test_chatbot_explains_the_r2_10_endorsed_monthly_session_rules(): void
+    {
+        $user = $this->makeUser();
+        $user->forceFill(['form_generator_allow' => true])->save();
+
+        foreach ([
+            'Why can’t I change MS to UWP?',
+            'Bakit hindi ko mapalitan ng UWP ang MS?',
+            'can i change uwp to ms if it is endorsed',
+        ] as $question) {
+            $this->withSession(['login_user' => ['id' => $user->id]])
+                ->postJson(route('messages.assistant.reply'), ['message' => $question])
+                ->assertOk()
+                ->assertJsonPath('reply', fn (string $reply): bool => str_contains($reply, 'R2-10 endorsed')
+                    && (str_contains($reply, 'MK') || str_contains($reply, 'MS to UWP')))
+                ->assertJsonPath('link.url', route('forms.monthly.modify'));
+        }
+
+        foreach (['Can I subtract an R2-10 endorsed member?', 'Bakit hindi ma-subtract ang endorsed?', 'why cant i make an endorsed record inactive'] as $question) {
+            $this->withSession(['login_user' => ['id' => $user->id]])
+                ->postJson(route('messages.assistant.reply'), ['message' => $question])
+                ->assertOk()
+                ->assertJsonPath('reply', fn (string $reply): bool => str_contains($reply, 'INACTIVE') && str_contains($reply, 'R2-10 endorsed'))
+                ->assertJsonPath('link.url', route('forms.monthly.deliberation'));
+        }
+
+        // The existing De-Listment answers still win for De-Listment questions.
+        $user->forceFill(['Delistment_allow' => true])->save();
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->postJson(route('messages.assistant.reply'), ['message' => 'How do I endorse R2-10?'])
+            ->assertOk()
+            ->assertJsonPath('link.url', route('de-listment'));
     }
 
     private function makeUser(): User

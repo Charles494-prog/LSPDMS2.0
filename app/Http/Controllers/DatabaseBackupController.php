@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\DatabaseBackupService;
 use DirectoryIterator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -9,38 +10,34 @@ use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
- * Database backups: list, download, rename, add a manual backup, and
- * automatically delete backups older than one year.
+ * Database backups: list, download, rename and add a manual backup. Backups
+ * are never deleted automatically (no retention policy has been approved).
  *
  * Each backup has a source:
  *   import - the safety backup made right before a database import
  *            (recognised by the "before-import-" file name prefix)
- *   auto   - the monthly automatic backup (any other file not added by hand)
+ *   auto   - the monthly automatic backup (lspdms:backup:create), or any
+ *            other file not added by hand
  *   manual - an export a Head Secretary added from the Database backups page
  *
  * A small index file (.backup-index.json) in the same folder remembers the
- * source of manual backups and of any backup that has been renamed.
+ * source, size and SHA-256 of each backup the application wrote or accepted.
  */
 class DatabaseBackupController extends Controller
 {
     private const EXTENSIONS = ['sql', 'gz', 'zip'];
 
-    private const RETENTION_DAYS = 365;
-
     /** Tables a manually added backup must contain. */
     private const REQUIRED_TABLES = ['login_user', 'messages'];
 
-    private const INDEX_FILE = '.backup-index.json';
+    public function __construct(private readonly DatabaseBackupService $backups) {}
 
     public static function backupDirectory(): string
     {
-        return storage_path('app/private/database-backups'); // same folder the import writes its safety backup to
+        return app(DatabaseBackupService::class)->backupDirectory();
     }
 
-    /**
-     * Name for a new backup: 2026-10-23_15-42-10_LSPDMS.sql
-     * Call this from your import code too so automatic backups use the same pattern.
-     */
+    /** Name for a new backup: 2026-10-23_15-42-10_LSPDMS.sql */
     public static function generateName(): string
     {
         $directory = self::backupDirectory();
@@ -63,21 +60,6 @@ class DatabaseBackupController extends Controller
         return $directory;
     }
 
-    /** @return array{files: array<string, array{source: string, created_at: string}>} */
-    private function readIndex(): array
-    {
-        $path = self::backupDirectory().DIRECTORY_SEPARATOR.self::INDEX_FILE;
-        $decoded = is_file($path) ? json_decode((string) file_get_contents($path), true) : null;
-
-        return ['files' => is_array($decoded['files'] ?? null) ? $decoded['files'] : []];
-    }
-
-    private function writeIndex(array $index): void
-    {
-        $path = $this->ensureDirectory().DIRECTORY_SEPARATOR.self::INDEX_FILE;
-        file_put_contents($path, json_encode($index, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), LOCK_EX);
-    }
-
     private function classify(string $name, ?array $entry): string
     {
         $source = $entry['source'] ?? null;
@@ -88,15 +70,15 @@ class DatabaseBackupController extends Controller
         return str_starts_with($name, 'before-import-') ? 'import' : 'auto';
     }
 
-    /** @return array<int, array{name: string, size: int, created_at: string, source: string}> newest first */
-    private function files(): array
+    /** @return array<int, array{name: string, size: int, created_at: string, source: string, verified: ?bool}> newest first */
+    private function files(bool $withIntegrity = false): array
     {
         $directory = self::backupDirectory();
         if (! is_dir($directory)) {
             return [];
         }
 
-        $index = $this->readIndex()['files'];
+        $index = $this->backups->readIndex()['files'];
         $items = [];
         foreach (new DirectoryIterator($directory) as $file) {
             if (! $file->isFile() || $file->isLink()) {
@@ -111,6 +93,7 @@ class DatabaseBackupController extends Controller
                 'size' => $file->getSize(),
                 'created_at' => $entry['created_at'] ?? date(DATE_ATOM, $file->getMTime()),
                 'source' => $this->classify($file->getFilename(), $entry),
+                'verified' => $withIntegrity ? $this->backups->backupIntact($file->getFilename()) : null,
             ];
         }
 
@@ -119,71 +102,27 @@ class DatabaseBackupController extends Controller
         return $items;
     }
 
-    /**
-     * Deletes backups older than the retention period. The newest backup is
-     * never deleted, so there is always at least one copy.
-     */
-    private function prune(): int
-    {
-        $files = $this->files();
-        $cutoff = now()->subDays(self::RETENTION_DAYS)->getTimestamp();
-        $index = $this->readIndex();
-        $deleted = 0;
-
-        foreach (array_slice($files, 1) as $file) {
-            if (strtotime($file['created_at']) >= $cutoff) {
-                continue;
-            }
-            $path = self::backupDirectory().DIRECTORY_SEPARATOR.$file['name'];
-            if (is_file($path) && @unlink($path)) {
-                unset($index['files'][$file['name']]);
-                $deleted++;
-            }
-        }
-
-        if ($deleted > 0) {
-            $this->writeIndex($index);
-        }
-
-        return $deleted;
-    }
-
-    /** @return array<int, string> lower-case table names found in an SQL export */
-    private function tablesIn(string $path): array
-    {
-        $handle = fopen($path, 'rb');
-        if ($handle === false) {
-            return [];
-        }
-
-        $tables = [];
-        $pattern = '/^\s*(?:CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?|INSERT\s+(?:IGNORE\s+)?INTO|REPLACE\s+INTO)\s+(?:[`"]?[A-Za-z0-9_$]+[`"]?\.)?[`"]?([A-Za-z0-9_$]+)[`"]?/i';
-        while (($line = fgets($handle, 65536)) !== false) {
-            if (preg_match($pattern, $line, $match)) {
-                $tables[strtolower($match[1])] = true;
-            }
-        }
-        fclose($handle);
-
-        return array_keys($tables);
-    }
-
     public function index(): JsonResponse
     {
-        $pruned = $this->prune();
-
         return response()->json([
-            'data' => $this->files(),
-            'pruned' => $pruned,
-            'retention_days' => self::RETENTION_DAYS,
+            'data' => $this->files(true),
+            'pruned' => 0,
+            'retention_days' => null,
         ])->header('Cache-Control', 'no-store');
     }
 
-    public function download(string $file): BinaryFileResponse
+    public function download(Request $request, string $file): BinaryFileResponse|JsonResponse
     {
         // Only files that appear in the listing can be downloaded (blocks path traversal).
         $match = collect($this->files())->firstWhere('name', $file);
         abort_if($match === null, 404);
+
+        if ($this->backups->backupIntact($match['name']) === false) {
+            return response()->json([
+                'message' => 'This backup changed after it was saved (its SHA-256 no longer matches), so it was not downloaded.',
+            ], 409);
+        }
+        $this->backups->audit('backup_download', 1, $this->actor($request));
 
         return response()->download(
             self::backupDirectory().DIRECTORY_SEPARATOR.$match['name'],
@@ -202,9 +141,13 @@ class DatabaseBackupController extends Controller
             throw ValidationException::withMessages(['file' => 'Choose an .sql export file.']);
         }
 
-        $tables = $this->tablesIn($upload->getRealPath());
-        if ($tables === []) {
-            throw ValidationException::withMessages(['file' => 'This file does not look like a database export: no tables were found.']);
+        // The same parser the import uses, so a stored backup is known to be importable.
+        try {
+            $tables = $this->backups->inspectImport($upload->getRealPath())['tables'];
+        } catch (ValidationException $exception) {
+            throw ValidationException::withMessages([
+                'file' => 'This file is not a valid LSPDMS SQL export: '.collect($exception->errors())->flatten()->first(),
+            ]);
         }
 
         $missing = array_values(array_diff(self::REQUIRED_TABLES, $tables));
@@ -218,14 +161,13 @@ class DatabaseBackupController extends Controller
         $path = $directory.DIRECTORY_SEPARATOR.$name;
         touch($path);
 
-        $created = date(DATE_ATOM, filemtime($path));
-        $index = $this->readIndex();
-        $index['files'][$name] = ['source' => 'manual', 'created_at' => $created];
-        $this->writeIndex($index);
+        $this->backups->recordBackup($name, 'manual');
+        $this->backups->audit('backup_store', 1, $this->actor($request));
+        $entry = $this->backups->readIndex()['files'][$name];
 
         return response()->json([
             'message' => 'Manual backup saved.',
-            'data' => ['name' => $name, 'size' => filesize($path), 'created_at' => $created, 'source' => 'manual'],
+            'data' => ['name' => $name, 'size' => filesize($path), 'created_at' => $entry['created_at'], 'source' => 'manual', 'verified' => true],
         ], 201);
     }
 
@@ -260,14 +202,24 @@ class DatabaseBackupController extends Controller
             }
         }
 
-        $index = $this->readIndex();
+        $index = $this->backups->readIndex();
+        $previous = $index['files'][$match['name']] ?? [];
         unset($index['files'][$match['name']]);
-        $index['files'][$newName] = ['source' => $match['source'], 'created_at' => $match['created_at']];
-        $this->writeIndex($index);
+        // Keep the recorded size and SHA-256: renaming does not change the contents.
+        $index['files'][$newName] = array_merge($previous, ['source' => $match['source'], 'created_at' => $match['created_at']]);
+        $this->backups->writeIndex($index);
+        $this->backups->audit('backup_rename', 1, $this->actor($request));
 
         return response()->json([
             'message' => 'Backup renamed.',
             'data' => ['name' => $newName, 'size' => $match['size'], 'created_at' => $match['created_at'], 'source' => $match['source']],
         ]);
+    }
+
+    private function actor(Request $request): ?string
+    {
+        $gmail = trim((string) $request->session()->get('login_user.gmail', ''));
+
+        return $gmail !== '' ? $gmail : null;
     }
 }

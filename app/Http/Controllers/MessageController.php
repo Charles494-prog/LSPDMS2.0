@@ -8,12 +8,13 @@ use App\Events\UserTyping;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\User;
+use App\Services\FileStore;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use RuntimeException;
 use Throwable;
 
 class MessageController extends Controller
@@ -126,11 +127,18 @@ class MessageController extends Controller
         $unread = $conversation->messages()->where('sender_id', '!=', $user->id)
             ->whereNull('read_at')->where('expires_at', '>', now());
         $unreadIds = $unread->pluck('id');
-        $unread->update([
-            'delivered_at' => DB::raw('COALESCE(delivered_at, NOW())'),
-            'read_at' => now(),
-            'updated_at' => now(),
-        ]);
+        if ($unreadIds->isNotEmpty()) {
+            // Bound timestamps instead of SQL NOW(), so this works on every database driver.
+            $now = now();
+            DB::transaction(function () use ($unreadIds, $now): void {
+                Message::query()->whereKey($unreadIds)->whereNull('delivered_at')
+                    ->update(['delivered_at' => $now]);
+                Message::query()->whereKey($unreadIds)->update([
+                    'read_at' => $now,
+                    'updated_at' => $now,
+                ]);
+            });
+        }
 
         if ($unreadIds->isNotEmpty()) {
             foreach ($messages->whereIn('id', $unreadIds) as $message) {
@@ -168,8 +176,10 @@ class MessageController extends Controller
                 ]);
 
                 if ($attachment) {
-                    $path = $attachment->store('messages/'.$conversation->id, 'local');
-                    if ($path === false) {
+                    // Kept on the local disk and in stored_files so SQL exports carry the image.
+                    try {
+                        $path = app(FileStore::class)->putUploadedFile('local', 'messages/'.$conversation->id, $attachment);
+                    } catch (RuntimeException) {
                         throw ValidationException::withMessages(['attachment' => 'The image could not be saved. Please try again.']);
                     }
                     $storedPath = $path;
@@ -186,7 +196,7 @@ class MessageController extends Controller
             });
         } catch (Throwable $exception) {
             if ($storedPath !== null) {
-                Storage::disk('local')->delete($storedPath);
+                app(FileStore::class)->delete('local', $storedPath);
             }
             throw $exception;
         }
@@ -226,14 +236,23 @@ class MessageController extends Controller
     {
         $this->authorizeMessageParticipant($request, $message);
         abort_if(! $message->attachment_path, 404);
-        abort_unless(Storage::disk('local')->exists($message->attachment_path), 404);
 
-        return Storage::disk('local')->response(
+        $response = app(FileStore::class)->response(
+            'local',
             $message->attachment_path,
             $message->attachment_name ?? 'attachment',
-            ['Content-Type' => $message->attachment_mime ?? 'application/octet-stream'],
+            $message->attachment_mime,
             'inline',
         );
+        if ($response === null) {
+            $notice = 'This image is no longer available on this server.';
+
+            return $request->expectsJson()
+                ? response()->json(['message' => $notice], 404)
+                : response($notice, 404, ['Content-Type' => 'text/plain; charset=UTF-8']);
+        }
+
+        return $response;
     }
 
     public function typing(Request $request, Conversation $conversation): JsonResponse
@@ -281,11 +300,8 @@ class MessageController extends Controller
     {
         $name = trim($user->full_name);
 
-        $avatarUrl = null;
-        if ($user->profile_picture) {
-            $segments = array_map('rawurlencode', explode('/', ltrim((string) $user->profile_picture, '/')));
-            $avatarUrl = asset('storage/'.implode('/', $segments));
-        }
+        // Served by ProfilePictureController, which falls back to the database copy.
+        $avatarUrl = $user->is_verified ? ProfilePictureController::urlFor($user->id, $user->profile_picture) : null;
 
         return [
             'id' => $user->id,

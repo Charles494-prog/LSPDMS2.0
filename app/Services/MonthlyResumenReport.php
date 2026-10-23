@@ -15,6 +15,16 @@ class MonthlyResumenReport
 {
     private const CODES = ['A', 'B', 'C+', 'C-', 'D', 'DD', 'E', 'G', 'H'];
 
+    /**
+     * Where the opening (A) counts came from: 'previous_snapshot',
+     * 'current_snapshot', 'live_records' or 'missing' (no snapshot and no
+     * session for that month, so the counts are unknown rather than zero).
+     */
+    private string $baselineSource = 'missing';
+
+    /** @var Collection<int, Record>|null */
+    private ?Collection $records = null;
+
     public function generate(
         Carbon $month,
         bool $includeCompletedSessionMovements = false,
@@ -22,6 +32,9 @@ class MonthlyResumenReport
     ): array
     {
         $month = $month->copy()->startOfMonth();
+        $this->baselineSource = 'missing';
+        // Loaded once per report; the baseline and the segment weights both use it.
+        $this->records = Record::query()->get(['purok', 'grupo', 'status']);
         $previousMonth = $month->copy()->subMonthNoOverflow();
         $previousSnapshots = MonthlyRecordSnapshot::query()
             ->whereDate('month', $previousMonth->toDateString())
@@ -53,7 +66,7 @@ class MonthlyResumenReport
         $exactMovementCounts = $sessionCompleted && $includeCompletedSessionMovements
             ? $this->completedSessionSegmentMovements($session, $purokDetails)
             : $this->activeSessionSegmentMovements($session, $purokDetails);
-        $records = Record::query()->get(['purok', 'grupo', 'status']);
+        $records = $this->records;
         $purokNumbers = $purokDetails->pluck('purok_number')
             ->merge($previousSnapshots->pluck('purok_number'))
             ->merge($monthSnapshots->pluck('purok_number'))
@@ -179,6 +192,8 @@ class MonthlyResumenReport
             'month' => $month,
             'rows' => $rows,
             'totals' => $totals,
+            'baseline_source' => $this->baselineSource,
+            'baseline_missing' => $this->baselineSource === 'missing',
         ];
     }
 
@@ -416,19 +431,26 @@ class MonthlyResumenReport
         Carbon $month
     ): array {
         if ($previousSnapshots->isNotEmpty()) {
+            $this->baselineSource = 'previous_snapshot';
+
             return $this->snapshotBaselineCounts($previousSnapshots, false);
         }
 
         if ($monthSnapshots->isNotEmpty()) {
+            $this->baselineSource = 'current_snapshot';
+
             return $this->snapshotBaselineCounts($monthSnapshots, true);
         }
 
-        if ($session === null && ! $month->isSameMonth(now())) {
+        if ($session === null && ! $month->isSameMonth(now('Asia/Manila'))) {
+            $this->baselineSource = 'missing';
+
             return [];
         }
 
+        $this->baselineSource = 'live_records';
         $counts = [];
-        foreach (Record::query()->get(['purok', 'status']) as $record) {
+        foreach ($this->records ?? Record::query()->get(['purok', 'status']) as $record) {
             $number = $this->purokNumber((string) $record->purok);
             $status = mb_strtoupper(trim((string) $record->status));
             if ($number > 0 && in_array($status, ['MS', 'UWP'], true)) {
@@ -467,17 +489,26 @@ class MonthlyResumenReport
         bool $includeCompletedSessionMovements
     ): array {
         if (! $includeCompletedSessionMovements) {
-            return $monthSnapshots->isNotEmpty()
-                ? $this->snapshotBaselineCounts($monthSnapshots, false)
-                : $this->baselineCounts($previousSnapshots, $monthSnapshots, null, $month);
+            if ($monthSnapshots->isNotEmpty()) {
+                $this->baselineSource = 'current_snapshot';
+
+                return $this->snapshotBaselineCounts($monthSnapshots, false);
+            }
+
+            return $this->baselineCounts($previousSnapshots, $monthSnapshots, null, $month);
         }
         if ($previousSnapshots->isNotEmpty()) {
+            $this->baselineSource = 'previous_snapshot';
+
             return $this->snapshotBaselineCounts($previousSnapshots, false);
         }
+        if ($monthSnapshots->isNotEmpty()) {
+            $this->baselineSource = 'current_snapshot';
 
-        return $monthSnapshots->isNotEmpty()
-            ? $this->snapshotBaselineCounts($monthSnapshots, true)
-            : $this->baselineCounts($previousSnapshots, $monthSnapshots, null, $month);
+            return $this->snapshotBaselineCounts($monthSnapshots, true);
+        }
+
+        return $this->baselineCounts($previousSnapshots, $monthSnapshots, null, $month);
     }
 
     private function snapshotBaselineCounts(Collection $snapshots, bool $subtractMovements): array

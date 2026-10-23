@@ -88,8 +88,8 @@ class SuperadminDashboardTest extends TestCase
         $this->withSession(['login_user' => ['id' => $headSecretary->id]])
             ->get(route('superadmin-dashboard'))
             ->assertOk()
-            ->assertSee('Record Activity')
-            ->assertSee('Record Activity Log')
+            ->assertSee('Secretary activity')
+            ->assertSee('Record changes with the acting account, date and changed values.')
             ->assertSee('formalcharlesandreigalvan@gmail.com')
             ->assertSee('Juan Dela Cruz')
             ->assertSee('Transferred Juan Dela Cruz from UWP to MS.');
@@ -420,7 +420,7 @@ class SuperadminDashboardTest extends TestCase
             ->assertSee('Minimum years since date of entry')
             ->assertSee('Baptism cutoff date')
             ->assertDontSee('delistEntryCheck')
-            ->assertSee('<select id="gvEntryYears" required>', false)
+            ->assertSee('<select id="gvEntryYears" required', false)
             ->assertSee('type="text" class="signatory-input manggagawa-input"', false)
             ->assertDontSee('<select class="signatory-input manggagawa-input">', false)
             ->assertSee('label for="gvHeadLsp">Head LSP</label>', false);

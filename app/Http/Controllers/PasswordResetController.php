@@ -2,13 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\PasswordResetLinkMail;
 use App\Models\GlobalVariable;
+use App\Services\SecurityPolicy;
 use App\Services\SystemSmtpConfiguration;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
@@ -49,11 +50,10 @@ class PasswordResetController extends Controller
             return redirect()->route('password.request', ['sent' => 1]);
         }
 
-        $error = $this->sendResetLink($email);
-        if ($error !== null) {
-            return redirect()->route('password.request', ['sent' => 1])->withErrors(['email' => $error]);
-        }
+        // Same response for every email (known, unknown, or a failed send), so
+        // the page never reveals which addresses have accounts.
         RateLimiter::hit($this->rateLimitKey($email), self::RESEND_COOLDOWN_SECONDS);
+        $this->sendResetLink($email);
 
         return redirect()->route('password.request', ['sent' => 1]);
     }
@@ -70,11 +70,8 @@ class PasswordResetController extends Controller
             return redirect()->route('password.request', ['sent' => 1]);
         }
 
-        $error = $this->sendResetLink($email);
-        if ($error !== null) {
-            return redirect()->route('password.request', ['sent' => 1])->withErrors(['email' => $error]);
-        }
         RateLimiter::hit($this->rateLimitKey($email), self::RESEND_COOLDOWN_SECONDS);
+        $this->sendResetLink($email);
 
         return redirect()->route('password.request', ['sent' => 1]);
     }
@@ -133,7 +130,12 @@ class PasswordResetController extends Controller
         return view('password-link-expired');
     }
 
-    private function sendResetLink(string $email): ?string
+    /**
+     * Email a reset link when $email belongs to an approved account. Failures
+     * are logged and switch the email features off; the caller shows the same
+     * page either way.
+     */
+    private function sendResetLink(string $email): void
     {
         $user = DB::table('login_user')
             ->whereRaw('LOWER(TRIM(gmail)) = ?', [$email])
@@ -141,7 +143,7 @@ class PasswordResetController extends Controller
             ->first();
 
         if (! $user) {
-            return null;
+            return;
         }
 
         $token = Str::random(64);
@@ -157,24 +159,11 @@ class PasswordResetController extends Controller
 
         try {
             app(SystemSmtpConfiguration::class)->apply();
-            Mail::html(
-                view('emails.password-reset', [
-                    'url' => $url,
-                    'expiresIn' => (int) config('auth.passwords.users.expire', 60),
-                ])->render(),
-                fn ($message) => $message->to($user->gmail)->subject('Reset your LSPDMS password')
-            );
+            Mail::to($user->gmail)->send(new PasswordResetLinkMail($url, (int) config('auth.passwords.users.expire', 60)));
         } catch (\Throwable $exception) {
-            Log::error('LSPDMS password reset email failed.', [
-                'mailer' => config('mail.default'),
-                'message' => $exception->getMessage(),
-            ]);
             DB::table('password_reset_tokens')->where('email', $email)->delete();
-
-            return 'Unable to send a password reset email right now. Please try again later.';
+            app(SecurityPolicy::class)->reportDeliveryFailure($exception, 'password_reset');
         }
-
-        return null;
     }
 
     private function rateLimitKey(string $email): string
@@ -203,6 +192,11 @@ class PasswordResetController extends Controller
 
     private function ensureEnabled(): void
     {
-        abort_unless((bool) (GlobalVariable::query()->first()?->allow_forgot_password ?? false), 404);
+        $enabled = (bool) (GlobalVariable::query()->first()?->allow_forgot_password ?? false);
+        // Without a verified sender the feature is switched off instead of failing silently.
+        if ($enabled && app(SecurityPolicy::class)->enforceEmailAvailability()) {
+            $enabled = false;
+        }
+        abort_unless($enabled, 404);
     }
 }

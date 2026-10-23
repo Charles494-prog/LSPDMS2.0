@@ -5,10 +5,12 @@ namespace App\Http\Controllers;
 use App\Models\DelistmentHistory;
 use App\Models\GlobalVariable;
 use App\Models\Purok;
+use App\Models\R210EndorsementReason;
 use App\Models\Record;
 use App\Models\User;
 use App\Services\DelistmentDocxExporter;
 use App\Services\R210Eligibility;
+use Carbon\CarbonInterface;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -103,7 +105,7 @@ class DelistmentController extends Controller
     {
         $validated = $request->validate([
             'full_name' => ['required', 'string', 'max:150'],
-            'registry' => ['required', 'string', 'max:100'],
+            'registry' => ['nullable', 'string', 'max:13'],
             'is_rfid' => ['sometimes', 'boolean'],
             'gender' => ['required', 'in:Male,Female'],
             'purok_id' => ['required', 'integer', 'exists:puroks,id'],
@@ -116,32 +118,49 @@ class DelistmentController extends Controller
             'is_married' => ['sometimes', 'boolean'],
         ]);
 
-        $registry = mb_strtoupper(trim($validated['registry']));
+        $typedRegistry = mb_strtoupper(trim((string) ($validated['registry'] ?? '')));
         $name = mb_strtoupper(trim($validated['full_name']));
         $isRfid = (bool) ($validated['is_rfid'] ?? false);
-        if (! $isRfid && preg_match('/^[A-Z0-9]{13}$/', $registry) !== 1) {
+        if ($isRfid && $typedRegistry !== '' && $typedRegistry !== 'RFID') {
+            // Never silently discard what was typed: RFID members are stored as the RFID sentinel.
+            throw ValidationException::withMessages([
+                'registry' => 'The RFID option is selected. Enter RFID in the Registry / RFID field, or clear the RFID option to save a 13-character registry number.',
+            ]);
+        }
+        if (! $isRfid && preg_match('/^[A-Z0-9]{13}$/', $typedRegistry) !== 1) {
             throw ValidationException::withMessages([
                 'registry' => 'Enter exactly 13 letters or numbers, or select the RFID option.',
             ]);
         }
+        $registry = $isRfid ? 'RFID' : $typedRegistry;
 
-        return DB::transaction(function () use ($validated, $registry, $name): JsonResponse {
-            $duplicate = Record::query()
-                ->where(function ($query) use ($registry, $name): void {
-                    $query->whereRaw('UPPER(TRIM(registry)) = ?', [$registry])
-                        ->orWhereRaw('UPPER(TRIM(full_name)) = ?', [$name]);
+        return DB::transaction(function () use ($validated, $registry, $name, $isRfid): JsonResponse {
+            // RFID is shared by many members, so it is never a registry conflict.
+            $duplicates = Record::query()
+                ->where(function ($query) use ($registry, $name, $isRfid): void {
+                    $query->whereRaw('UPPER(TRIM(full_name)) = ?', [$name]);
+                    if (! $isRfid) {
+                        $query->orWhereRaw('UPPER(TRIM(registry)) = ?', [$registry]);
+                    }
                 })
+                ->orderBy('id')
                 ->lockForUpdate()
-                ->first();
-            if ($duplicate && mb_strtoupper(trim((string) $duplicate->registry)) === $registry) {
-                throw ValidationException::withMessages([
-                    'registry' => 'A record with this registry or RFID already exists.',
-                ]);
+                ->get(['id', 'full_name', 'registry']);
+            $registryConflict = ! $isRfid && $duplicates->contains(
+                fn (Record $duplicate): bool => mb_strtoupper(trim((string) $duplicate->registry)) === $registry
+            );
+            $nameConflict = $duplicates->contains(
+                fn (Record $duplicate): bool => mb_strtoupper(trim((string) $duplicate->full_name)) === $name
+            );
+            $errors = [];
+            if ($registryConflict) {
+                $errors['registry'] = 'A record with this registry number already exists.';
             }
-            if ($duplicate) {
-                throw ValidationException::withMessages([
-                    'full_name' => 'A record with this name already exists. Check for an existing record before adding another.',
-                ]);
+            if ($nameConflict) {
+                $errors['full_name'] = 'A record with this name already exists. Check for an existing record before adding another.';
+            }
+            if ($errors !== []) {
+                throw ValidationException::withMessages($errors);
             }
 
             $purok = Purok::query()->findOrFail($validated['purok_id']);
@@ -322,12 +341,19 @@ class DelistmentController extends Controller
                 ], 422);
             }
             $reason = $oneYearConfirmed ? '1 year MS or UWP' : 'due to '.$note;
-            $auditEntry = $author.' ('.Carbon::now()->format('Y-m-d H:i:s').'): '.$reason.'.';
-            $existingReason = trim((string) $record->reason_of_r2_10_endorsement);
+            $endorsedAt = now();
+            $auditEntry = $author.' ('.$endorsedAt->format('Y-m-d H:i:s').'): '.$reason.'.';
+            // Endorsement never changes the status; it only records the current reason.
+            // Earlier reasons move to the history table instead of being concatenated.
+            R210EndorsementReason::recordCurrent(
+                $record,
+                $status,
+                $auditEntry,
+                R210EndorsementReason::SOURCE_DELISTMENT_ENDORSE,
+                $author,
+                $endorsedAt
+            );
             $record->r2_10_endorsement = 'ENDORSED';
-            $record->reason_of_r2_10_endorsement = $existingReason === ''
-                ? $auditEntry
-                : $existingReason.PHP_EOL.$auditEntry;
             $record->save();
 
             return response()->json([
@@ -365,7 +391,8 @@ class DelistmentController extends Controller
                 return response()->json(['message' => 'The signed-in account email is unavailable. Please sign in again.'], 422);
             }
 
-            $now = Carbon::now('Asia/Manila');
+            // Stored like every other timestamp (app timezone); the log entry shows Manila dates.
+            $now = now();
             $reason = trim(preg_replace('/[\r\n]+/', ' ', $validated['reason']) ?? '');
             DelistmentHistory::query()->create([
                 'record_id' => $record->id,
@@ -376,7 +403,7 @@ class DelistmentController extends Controller
             ]);
 
             $record->status = 'INACTIVE';
-            $this->appendDelistmentLog($record, $now, $reason);
+            $this->appendDelistmentLog($record, $now->copy()->timezone('Asia/Manila'), $reason);
             $record->save();
 
             return response()->json([
@@ -433,7 +460,7 @@ class DelistmentController extends Controller
         ]);
     }
 
-    private function appendDelistmentLog(Record $record, Carbon $date, string $reason): void
+    private function appendDelistmentLog(Record $record, CarbonInterface $date, string $reason): void
     {
         $existing = (string) $record->log_section;
         $entry = $date->format('d/m/Y').': Delisted on '.$date->format('F d, Y').': '.$reason.',';

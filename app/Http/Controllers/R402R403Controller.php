@@ -6,6 +6,7 @@ use App\Models\MonthlyMovementSession;
 use App\Models\Purok;
 use App\Models\R402GeneratedForm;
 use App\Models\R402Hakbang;
+use App\Services\PurokSelection;
 use App\Services\R401ReportBuilder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -20,29 +21,38 @@ class R402R403Controller extends Controller
     public function r402(Request $request): View
     {
         $filters = $request->validate([
-            'purok' => ['nullable', 'integer', 'exists:puroks,purok_number'],
+            'purok' => ['nullable', 'string', 'max:'.PurokSelection::MAX_LENGTH],
             'kalagayan' => ['nullable', Rule::in(['MS', 'UWP'])],
         ]);
+        // Tokens: "all", "N" (every segment of purok number N) or "N:ID" (one segment, e.g. Purok 2a), comma separated.
+        $selection = isset($filters['purok']) ? PurokSelection::fromRequestValue($filters['purok']) : null;
         $selectedPurok = isset($filters['purok']) ? (string) $filters['purok'] : null;
         $selectedStatus = $filters['kalagayan'] ?? null;
         $rows = [];
+        $purokGroups = [];
+        $warnings = [];
 
-        if ($selectedPurok !== null && $selectedStatus !== null) {
-            $session = MonthlyMovementSession::query()
-                ->whereNotNull('period_month')
-                ->orderByDesc('period_month')
-                ->orderByDesc('id')
-                ->first();
-            $rows = $this->r401ReportBuilder
-                ->build($selectedPurok, $selectedStatus, $session)['rows'];
+        if ($selection !== null && $selectedStatus !== null) {
+            $report = $this->r401ReportBuilder->build($selection, $selectedStatus, $this->reportSession());
+            $rows = $report['rows'];
+            // One group per Purok segment, numbered from 1, each posting its own segment token to storeR402().
+            $purokGroups = array_map(fn (array $segment): array => [
+                'number' => $segment['token'],
+                'name' => $segment['purok_name'],
+                'rows' => $segment['rows'],
+            ], $report['segments']);
+            $warnings = $this->r401ReportBuilder->outsideRangeWarnings($report['outside_range']);
         }
+        $puroks = Purok::selectionOptions();
 
         return view('forms.weekly-r4-02', [
-            'puroks' => Purok::query()->orderBy('purok_number')->get(['purok_number', 'purok_name']),
+            'puroks' => $puroks,
             'selectedPurok' => $selectedPurok,
             'selectedStatus' => $selectedStatus,
-            'purokNames' => Purok::query()->pluck('purok_name', 'purok_number'),
+            'purokNames' => $puroks->pluck('purok_name', 'selection_token'),
             'rows' => $rows,
+            'purokGroups' => $purokGroups,
+            'reportWarnings' => $warnings,
             'hakbangs' => $selectedStatus
                 ? R402Hakbang::query()->where('status', $selectedStatus)->orderBy('code')->get()
                 : collect(),
@@ -57,7 +67,8 @@ class R402R403Controller extends Controller
     public function storeR402(Request $request)
     {
         $validated = $request->validate([
-            'purok' => ['required', 'integer', 'exists:puroks,purok_number'],
+            // Validated (type, length, existence, segment match) by PurokSelection::fromRequestValue() below.
+            'purok' => ['required'],
             'kalagayan' => ['required', Rule::in(['MS', 'UWP'])],
             'selection' => ['required', 'string', 'max:5000'],
             'split_codes' => ['sometimes', 'boolean'],
@@ -72,13 +83,22 @@ class R402R403Controller extends Controller
             'date_of_ulat' => ['nullable', 'date'],
         ]);
 
-        $session = MonthlyMovementSession::query()
-            ->whereNotNull('period_month')
-            ->orderByDesc('period_month')
-            ->orderByDesc('id')
-            ->first();
-        $rows = $this->r401ReportBuilder
-            ->build((string) $validated['purok'], $validated['kalagayan'], $session)['rows'];
+        // A saved R4-02 belongs to exactly one Purok segment, so the posted token must resolve to one segment.
+        $selection = PurokSelection::fromRequestValue($validated['purok']);
+        $segmentIds = $selection->coveredSegmentIds();
+        if (count($segmentIds) !== 1) {
+            throw ValidationException::withMessages([
+                'purok' => 'Select a single Purok segment (for example Purok 2a or Purok 2b) before saving an R4-02.',
+            ]);
+        }
+        $segmentId = $segmentIds[0];
+        $purokNumber = (int) Purok::query()->whereKey($segmentId)->value('purok_number');
+
+        // Rebuild exactly the list the generator displayed for this segment so row numbers map to the same people.
+        $segment = collect($this->r401ReportBuilder
+            ->build($selection, $validated['kalagayan'], $this->reportSession())['segments'])
+            ->firstWhere('purok_id', $segmentId);
+        $rows = $segment['rows'] ?? [];
         if ($rows === []) {
             throw ValidationException::withMessages([
                 'selection' => 'There are no R4-01 rows for the selected Purok and Kalagayan.',
@@ -105,9 +125,10 @@ class R402R403Controller extends Controller
             $sessionUser['last_name'] ?? null,
         ]))) ?: (string) ($sessionUser['gmail'] ?? $sessionUser['name'] ?? 'Secretary');
 
-        $form = DB::transaction(function () use ($validated, $selectedNumbers, $rows, $assignments, $creator): R402GeneratedForm {
+        $form = DB::transaction(function () use ($validated, $selectedNumbers, $rows, $assignments, $creator, $segmentId, $purokNumber): R402GeneratedForm {
             $form = R402GeneratedForm::query()->create([
-                'purok_number' => $validated['purok'],
+                'purok_number' => $purokNumber,
+                'purok_id' => $segmentId,
                 'kalagayan' => $validated['kalagayan'],
                 'date_of_dalaw' => $validated['date_of_dalaw'] ?? null,
                 'date_of_ulat' => $validated['date_of_ulat'] ?? null,
@@ -142,12 +163,25 @@ class R402R403Controller extends Controller
     public function printR402(R402GeneratedForm $generatedForm): View
     {
         $generatedForm->load('formRecords');
+        // Forms saved per segment name that segment; older forms only know the purok number.
+        $purok = $generatedForm->purok_id !== null
+            ? Purok::query()->find($generatedForm->purok_id)
+            : null;
+        $purok ??= Purok::query()
+            ->where('purok_number', $generatedForm->purok_number)
+            ->orderBy('grupo_start')
+            ->orderBy('id')
+            ->first();
+        $segmentCount = $purok === null
+            ? 0
+            : Purok::query()->where('purok_number', $purok->purok_number)->count();
 
         return view('forms.weekly-r4-02-print', [
             'generatedForm' => $generatedForm,
-            'purok' => Purok::query()
-                ->where('purok_number', $generatedForm->purok_number)
-                ->first(),
+            'purok' => $purok,
+            'purokToken' => $generatedForm->purok_id !== null && $purok !== null
+                ? PurokSelection::tokenFor((int) $purok->purok_number, (int) $purok->id, $segmentCount)
+                : (string) $generatedForm->purok_number,
         ]);
     }
 
@@ -186,14 +220,48 @@ class R402R403Controller extends Controller
 
     private function groupFormsByPurok($forms)
     {
-        $names = Purok::query()->pluck('purok_name', 'purok_number');
+        $puroks = Purok::query()
+            ->orderBy('purok_number')
+            ->orderBy('grupo_start')
+            ->orderBy('id')
+            ->get(['id', 'purok_number', 'purok_name', 'grupo_start']);
+        $segmentsById = $puroks->keyBy('id');
+        // Legacy forms without purok_id are grouped by number and named after every segment of that number.
+        $names = $puroks->groupBy('purok_number')->map(
+            fn ($segments): string => $segments->pluck('purok_name')->filter()->implode(' / ')
+        );
 
-        return $forms->groupBy('purok_number')->map(fn ($purokForms, $number): array => [
-            'number' => (int) $number,
-            'name' => $names[$number] ?: 'Purok '.$number,
-            'forms' => $purokForms,
-            'record_count' => $purokForms->sum(fn (R402GeneratedForm $form): int => $form->formRecords->count()),
-        ])->values();
+        return $forms
+            ->groupBy(fn (R402GeneratedForm $form): string => $form->purok_id !== null && $segmentsById->has($form->purok_id)
+                ? 'segment:'.$form->purok_id
+                : 'number:'.$form->purok_number)
+            ->map(function ($purokForms, string $key) use ($segmentsById, $names): array {
+                $form = $purokForms->first();
+                $number = (int) $form->purok_number;
+                $segment = str_starts_with($key, 'segment:') ? $segmentsById->get($form->purok_id) : null;
+
+                return [
+                    'number' => $number,
+                    'purok_id' => $segment?->id,
+                    'name' => $segment !== null
+                        ? ($segment->purok_name ?: 'Purok '.$number)
+                        : (($names[$number] ?? null) ?: 'Purok '.$number),
+                    'forms' => $purokForms,
+                    'record_count' => $purokForms->sum(fn (R402GeneratedForm $form): int => $form->formRecords->count()),
+                    'sort' => [$number, $segment !== null ? (int) $segment->grupo_start : PHP_INT_MAX, (int) ($segment?->id ?? 0)],
+                ];
+            })
+            ->sort(fn (array $left, array $right): int => $left['sort'] <=> $right['sort'])
+            ->values();
+    }
+
+    private function reportSession(): ?MonthlyMovementSession
+    {
+        return MonthlyMovementSession::query()
+            ->whereNotNull('period_month')
+            ->orderByDesc('period_month')
+            ->orderByDesc('id')
+            ->first();
     }
 
     private function parseRowNumbers(string $input): array

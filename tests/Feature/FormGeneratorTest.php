@@ -7,6 +7,7 @@ use App\Models\MonthlyRecordSnapshot;
 use App\Models\R401Snapshot;
 use App\Models\Record;
 use App\Models\User;
+use App\Services\ExportTempFiles;
 use App\Services\MonthlyResumenReport;
 use App\Services\R401DocxExporter;
 use App\Services\ResumenDocxExporter;
@@ -43,7 +44,7 @@ class FormGeneratorTest extends TestCase
             ->assertDontSee('data-panel="deliberation"', false)
             ->assertSee('Deliberation')
             ->assertSee(route('forms.monthly.modify'), false)
-            ->assertSee('Resumen Generator &amp; R4-01 Generator', false)
+            ->assertSee('Resumen &amp; R4-01 Generator', false)
             ->assertSee('Resumen &amp; R4-01 Snapshots', false)
             ->assertDontSee('id="resumen-generator-heading"', false)
             ->assertDontSee('id="r401-generator-heading"', false)
@@ -76,8 +77,8 @@ class FormGeneratorTest extends TestCase
             ], false)
             ->assertSee(route('forms.monthly.generators'), false)
             ->assertSee('id="r401Filters"', false)
-            ->assertSee('<option value="all" selected', false)
-            ->assertSee('<option value="MS" selected', false)
+            ->assertSee('id="r401PurokInput" value="all"', false)
+            ->assertSee('id="r401KalagayanInput" value="MS"', false)
             ->assertDontSee('Report month')
             ->assertDontSee('Generate preview')
             ->assertSee('Monthly Forms</a>', false);
@@ -223,7 +224,9 @@ class FormGeneratorTest extends TestCase
             ->assertDontSee('Different Purok Member')
             ->assertSee('forms/monthly/r4-01/download?purok=1&amp;kalagayan=MS', false);
 
-        $outputDirectory = storage_path('app/monthly-forms');
+        // Exporter temp files go to the system temp directory while running tests (never storage/app).
+        $outputDirectory = ExportTempFiles::directory();
+        $this->assertStringStartsWith(rtrim(sys_get_temp_dir(), '\/'), $outputDirectory);
         $existingDocs = glob($outputDirectory.'/R4-01*.docx') ?: [];
         $this->withSession($session)
             ->get(route('forms.monthly.r4-01.download', [

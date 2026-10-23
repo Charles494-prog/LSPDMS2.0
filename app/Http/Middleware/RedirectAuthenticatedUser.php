@@ -32,7 +32,9 @@ class RedirectAuthenticatedUser
         $sessionAuthVersion = (int) ($sessionUser['auth_version'] ?? 0);
         if ($sessionAuthVersion !== 0 && $sessionAuthVersion !== (int) $user->auth_version
             || $sessionAuthVersion === 0 && (int) $user->auth_version > 1) {
-            $request->session()->forget(['login_user', 'pending_login_user']);
+            // The session belongs to a signed-out login: destroy it before showing the guest page.
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
             Cookie::queue(Cookie::forget('remember_token'));
             $message = $user->auth_notice === 'password_changed'
                 ? 'Change of Password Detected, Please Login Again.'

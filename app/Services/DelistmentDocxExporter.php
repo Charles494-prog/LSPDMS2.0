@@ -11,12 +11,7 @@ class DelistmentDocxExporter
 {
     public function generate(string $title, array $members, bool $history = false): string
     {
-        $outputDirectory = storage_path('app/monthly-forms');
-        if (! is_dir($outputDirectory) && ! mkdir($outputDirectory, 0775, true) && ! is_dir($outputDirectory)) {
-            throw new RuntimeException('Unable to create the document output directory.');
-        }
-
-        $outputPath = $outputDirectory.'/R2-10-'.bin2hex(random_bytes(12)).'.docx';
+        $outputPath = ExportTempFiles::path('R2-10');
         try {
             $archive = new PharData($outputPath, 0, null, Phar::ZIP);
             $archive->addFromString('[Content_Types].xml', $this->contentTypes());

@@ -2,17 +2,17 @@
 
 namespace App\Services;
 
+use App\Models\GlobalVariable;
 use App\Models\MonthlyMovementSession;
 use App\Models\MonthlySessionMovement;
 use App\Models\Purok;
 use App\Models\Record;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class R401ReportBuilder
 {
-    public function build(string $purok, string $status, ?MonthlyMovementSession $session = null): array
+    public function build(string|PurokSelection $purok, string $status, ?MonthlyMovementSession $session = null): array
     {
         $candidateRows = Record::query()
             ->orderBy('full_name')
@@ -142,6 +142,7 @@ class R401ReportBuilder
             $candidateRows = $candidateRows->concat($movementRows);
         }
 
+        $selection = $purok instanceof PurokSelection ? $purok : PurokSelection::fromLegacyString($purok);
         $candidateRows = $candidateRows
             ->unique(fn (array $row): string => implode('|', [
                 (string) ($row['record_id'] ?? $row['name'].'|'.$row['registry']),
@@ -150,9 +151,7 @@ class R401ReportBuilder
                 $this->numericSortKey($row['purok']),
                 preg_replace('/\D+/', '', $row['grupo']) ?? '',
             ]))
-            ->when($purok !== 'all', fn (Collection $rows): Collection => $rows->filter(
-                fn (array $row): bool => $this->numericSortKey($row['purok']) === (int) $purok
-            ))
+            ->filter(fn (array $row): bool => $selection->includesNumber($this->numericSortKey($row['purok'])))
             ->groupBy(fn (array $row): string => (string) $this->numericSortKey($row['purok']))
             ->sortBy(fn ($group, string $key): int => $this->numericSortKey($key));
 
@@ -160,32 +159,45 @@ class R401ReportBuilder
             ->with('secretaryUser:id,first_name,last_name')
             ->orderBy('purok_number')
             ->orderBy('grupo_start')
+            ->orderBy('id')
             ->get(['id', 'purok_number', 'purok_name', 'secretary', 'manggagawa', 'ministerial_id', 'grupo_start', 'grupo_end', 'full_purok']);
         $reportRows = [];
         $reportPages = [];
+        $segments = [];
+        $outsideRange = [];
 
         foreach ($candidateRows as $purokNumber => $purokRecords) {
             $number = (int) $purokNumber;
             $splitPuroks = $purokDetails->where('purok_number', $number)->values();
-            $assignedRecords = $splitPuroks->mapWithKeys(function (Purok $splitPurok) use ($purokRecords): array {
-                $min = $splitPurok->full_purok ? 1 : (int) $splitPurok->grupo_start;
-                $max = $splitPurok->full_purok ? 24 : (int) $splitPurok->grupo_end;
-
-                return [
-                    $splitPurok->id => $purokRecords->filter(
-                        fn (array $row): bool => (int) $row['grupo'] >= $min && (int) $row['grupo'] <= $max
-                    ),
-                ];
-            });
+            $assignedRecords = $splitPuroks->mapWithKeys(fn (Purok $splitPurok): array => [
+                $splitPurok->id => $purokRecords->filter(
+                    fn (array $row): bool => $this->grupoInSegment($row['grupo'], $splitPurok)
+                ),
+            ]);
             if ($splitPuroks->isEmpty()) {
                 $assignedRecords->put(null, $purokRecords);
+            } else {
+                // Rows whose grupo is outside every configured segment are not printed; count them so the page can warn.
+                $unassignedCount = $purokRecords->reject(fn (array $row): bool => $splitPuroks->contains(
+                    fn (Purok $splitPurok): bool => $this->grupoInSegment($row['grupo'], $splitPurok)
+                ))->count();
+                if ($unassignedCount > 0) {
+                    $outsideRange[] = [
+                        'purok_number' => $number,
+                        'count' => $unassignedCount,
+                        'segment_names' => $splitPuroks->map(
+                            fn (Purok $splitPurok): string => $splitPurok->purok_name ?: 'Purok '.$number
+                        )->all(),
+                    ];
+                }
             }
 
             foreach ($assignedRecords as $splitPurokId => $splitRecords) {
-                if ($splitRecords->isEmpty()) {
+                $segmentId = $splitPurokId === null || $splitPurokId === '' ? null : (int) $splitPurokId;
+                if ($splitRecords->isEmpty() || ! $selection->includesSegment($number, $segmentId)) {
                     continue;
                 }
-                $splitPurok = $splitPuroks->firstWhere('id', $splitPurokId);
+                $splitPurok = $segmentId === null ? null : $splitPuroks->firstWhere('id', $segmentId);
                 $rows = $splitRecords
                     ->sort(function (array $left, array $right): int {
                         $codeOrder = ($left['code'] === 'A' ? 0 : 1) <=> ($right['code'] === 'A' ? 0 : 1);
@@ -208,10 +220,20 @@ class R401ReportBuilder
                         'date_of_baptism' => $row['date_of_baptism'],
                         'doctrinator' => $row['doctrinator'],
                     ])->all();
+                $token = PurokSelection::tokenFor($number, $segmentId, $splitPuroks->count());
+                $segments[] = [
+                    'purok_id' => $segmentId,
+                    'purok_number' => $number,
+                    'purok_name' => $splitPurok?->purok_name ?: 'Purok '.$purokNumber,
+                    'token' => $token,
+                    'rows' => $rows,
+                ];
                 $reportRows = [...$reportRows, ...$rows];
                 foreach (array_chunk($rows, 20) as $pageIndex => $pageRows) {
                     $reportPages[] = [
                         'purok_number' => $purokNumber,
+                        'purok_id' => $segmentId,
+                        'purok_token' => $token,
                         'purok_name' => $splitPurok?->purok_name ?? 'Purok '.$purokNumber,
                         'maysakop_name' => trim((string) ($splitPurok?->manggagawa ?? '')),
                         'secretary_name' => trim((string) ($splitPurok?->secretaryUser?->full_name ?? '')),
@@ -223,7 +245,72 @@ class R401ReportBuilder
             }
         }
 
-        return ['rows' => $reportRows, 'pages' => $reportPages];
+        return [
+            'rows' => $reportRows,
+            'pages' => $reportPages,
+            'segments' => $segments,
+            'outside_range' => $outsideRange,
+        ];
+    }
+
+    /**
+     * The global Kalihim for a Kalagayan (UWP prefers kalihim_uwp, everything else kalihim_ms).
+     */
+    public function globalKalihimName(?GlobalVariable $globalVariables, ?string $status): string
+    {
+        return trim((string) ($status === 'UWP'
+            ? ($globalVariables?->kalihim_uwp ?: $globalVariables?->kalihim_ms)
+            : ($globalVariables?->kalihim_ms ?: $globalVariables?->kalihim_uwp)));
+    }
+
+    /**
+     * Fill each page's Kalihim signatory. With "Use Each Purok's Assigned Secretary" on, a segment's own
+     * secretary is used and a segment without one falls back to the global Kalihim instead of printing blank.
+     *
+     * @param  list<array<string, mixed>>  $pages
+     * @return list<array<string, mixed>>
+     */
+    public function withKalihimNames(array $pages, ?GlobalVariable $globalVariables, ?string $status): array
+    {
+        $usePurokSecretary = (bool) ($globalVariables?->r401_use_purok_secretary ?? false);
+        $globalKalihimName = $this->globalKalihimName($globalVariables, $status);
+
+        return array_map(function (array $page) use ($usePurokSecretary, $globalKalihimName): array {
+            $secretaryName = trim((string) ($page['secretary_name'] ?? ''));
+            $page['kalihim_name'] = $usePurokSecretary && $secretaryName !== ''
+                ? $secretaryName
+                : $globalKalihimName;
+
+            return $page;
+        }, $pages);
+    }
+
+    /**
+     * Non-blocking warnings for rows left out because their grupo is outside every configured segment range.
+     *
+     * @param  list<array{purok_number: int, count: int, segment_names: list<string>}>  $outsideRange
+     * @return list<string>
+     */
+    public function outsideRangeWarnings(array $outsideRange): array
+    {
+        return array_map(fn (array $item): string => sprintf(
+            '%d %s in Purok %d %s a grupo outside the %s grupo %s and %s not shown.',
+            $item['count'],
+            $item['count'] === 1 ? 'record' : 'records',
+            $item['purok_number'],
+            $item['count'] === 1 ? 'has' : 'have',
+            implode(' / ', $item['segment_names']),
+            count($item['segment_names']) === 1 ? 'range' : 'ranges',
+            $item['count'] === 1 ? 'is' : 'are',
+        ), $outsideRange);
+    }
+
+    private function grupoInSegment(string $grupo, Purok $segment): bool
+    {
+        $min = $segment->full_purok ? 1 : (int) $segment->grupo_start;
+        $max = $segment->full_purok ? 24 : (int) $segment->grupo_end;
+
+        return (int) $grupo >= $min && (int) $grupo <= $max;
     }
 
     private function monthlyCodeParts(string $monthlyCode, string $fallbackStatus = ''): array

@@ -8,6 +8,12 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Guarded: a database restored from an older SQL export can already have
+        // these tables while its migrations table does not list this migration.
+        if (Schema::hasTable('r4_02_generated_forms')) {
+            return;
+        }
+
         Schema::create('r4_02_generated_forms', function (Blueprint $table): void {
             $table->id();
             $table->unsignedInteger('purok_number')->index();

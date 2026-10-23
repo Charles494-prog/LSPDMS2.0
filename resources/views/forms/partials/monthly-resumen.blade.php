@@ -41,6 +41,9 @@
     @unless($pdf ?? false)
     <div class="resumen-tools">
         <p class="resumen-note">The starting count (A) is the previous month’s closing MS/UWP total. Additions (B, C+) are added; C-, D, DD, E, G, and H are deducted to calculate this month’s total.</p>
+        @if ($report['baseline_missing'] ?? false)
+            <p class="resumen-note" role="status">No snapshot exists for this month or the month before it, so the starting counts (A) are unknown, not zero.</p>
+        @endif
         <a class="resumen-download" href="{{ route('forms.monthly.resumen.download') }}">Download DOCX</a>
     </div>
     @endunless

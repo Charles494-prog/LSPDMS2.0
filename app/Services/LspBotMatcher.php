@@ -213,7 +213,7 @@ class LspBotMatcher
   public function answerFor(array $entry, string $message = ''): string
 {
     $tagalog = $message !== '' && preg_match(
-        '/\b(saan|paano|pano|bakit|kailan|kelan|ano|anong|ako|ko|mo|po|opo|naman|puwede|pwede|ayaw|kulang|gusto|mga|salamat|walang|nakapag|ulit|daw|ang|ng|magpalit|makikita|makakabasa)\b/iu',
+        '/\b(saan|paano|pano|bakit|kailan|kelan|ano|anong|ako|ko|mo|po|opo|naman|puwede|pwede|ayaw|kulang|gusto|mga|salamat|walang|nakapag|ulit|daw|ang|ng|magpalit|makikita|makakabasa|kumusta|kamusta|musta|ka|na|pagod|gabi|galing|pasensya|sige|tulog|nakakapagod|sino|gumawa)\b/iu',
         $message
     ) === 1;
 

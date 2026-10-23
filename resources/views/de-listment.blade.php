@@ -450,7 +450,7 @@
         --delist-border: var(--border);
         --delist-surface: var(--surface);
         --tone-pending: color-mix(in srgb, var(--text) 25%, var(--bg));
-        --k-ms: #15803d; --k-uwp: #c2410c; --k-mk: #a16207;
+        --k-ms: #2a78d6; --k-uwp: #eb6834; --k-mk: #1baf7a;
         max-width: 1180px;
         margin: 0 auto;
         color: var(--delist-ink);
@@ -460,7 +460,7 @@
     .modal, .modal *, .toast { border-radius: 0; box-shadow: none; background-image: none; }
 
     /* Heading */
-    html[data-theme="dark"] .delist-page { --k-ms: #4ade80; --k-uwp: #fb923c; --k-mk: #facc15; }
+    html[data-theme="dark"] .delist-page { --k-ms: #3987e5; --k-uwp: #d95926; --k-mk: #199e70; }
 
     .delist-heading,
     .panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1.25rem; }
@@ -585,9 +585,10 @@
     .badge-not-eligible { color: var(--delist-muted); }
 
     .kalagayan-badge { display: inline-flex; min-width: 3.3rem; justify-content: center; padding: .28rem .55rem; border: 1px solid; font-size: .72rem; font-weight: 700; }
-    .k-MS { border-color: var(--k-ms); background: color-mix(in srgb, var(--k-ms) 12%, transparent); color: var(--k-ms); }
-    .k-UWP { border-color: var(--k-uwp); background: color-mix(in srgb, var(--k-uwp) 12%, transparent); color: var(--k-uwp); }
-    .k-MK { border-color: var(--k-mk); background: color-mix(in srgb, var(--k-mk) 14%, transparent); color: var(--k-mk); }
+    /* Badge identity comes from the tint and border; the text stays in ink so it is always legible. */
+    .k-MS { border-color: var(--k-ms); background: color-mix(in srgb, var(--k-ms) 14%, transparent); color: var(--text); }
+    .k-UWP { border-color: var(--k-uwp); background: color-mix(in srgb, var(--k-uwp) 14%, transparent); color: var(--text); }
+    .k-MK { border-color: var(--k-mk); background: color-mix(in srgb, var(--k-mk) 16%, transparent); color: var(--text); }
 
     .status-btn {
         display: inline-flex; align-items: center; gap: .5rem; min-width: 172px; padding: .4rem .75rem;
@@ -842,15 +843,24 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     // Kalagayan color coding (bars + labels).
     const isDark = () => document.documentElement.dataset.theme === 'dark';
-    const kBar = { MS: '#16a34a', UWP: '#f97316', MK: '#eab308' };
-    const kInk = k => (isDark()
-        ? { MS: '#4ade80', UWP: '#fb923c', MK: '#facc15' }
-        : { MS: '#15803d', UWP: '#c2410c', MK: '#a16207' })[k];
-    const kOnBar = k => (k === 'MK' ? '#1a1a1a' : '#ffffff');
+    // Validated categorical slots (blue / orange / aqua), with their own dark-theme steps.
+    const kPalette = () => (isDark()
+        ? { MS: '#3987e5', UWP: '#d95926', MK: '#199e70' }
+        : { MS: '#2a78d6', UWP: '#eb6834', MK: '#1baf7a' });
+    const kBar = new Proxy({}, { get: (_target, k) => kPalette()[k] });
+    // Text never wears the series colour; identity comes from the dot beside it.
+    const kInk = () => bodyInk();
+    const kOnBar = () => '#ffffff';
     const hexA = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16}, ${(n >> 8) & 255}, ${n & 255}, ${a})`; };
     const kColor = k => kBar[k];
     const reportedColors = () => kalagayanTypes.map(k => kBar[k]);
-    const pendingColors = () => kalagayanTypes.map(k => hexA(kBar[k], .28));
+    // "Not yet done" is a lighter step of the same hue (a track, not a different colour).
+    const pendingColors = () => kalagayanTypes.map(k => hexA(kBar[k], isDark() ? .3 : .22));
+    // Eligibility colours: blue = eligible (light step while not yet endorsed), neutral = not eligible,
+    // the reserved "serious" status colour = needs review, aqua = MK.
+    const eligibilityColors = () => (isDark()
+        ? { eligible: '#3987e5', eligiblePending: '#1c5cab', notEligible: '#4a4a48', review: '#ec835a', mk: '#199e70' }
+        : { eligible: '#2a78d6', eligiblePending: '#9ec5f4', notEligible: '#c9c8c2', review: '#ec835a', mk: '#1baf7a' });
     const bodyInk = () => getComputedStyle(document.body).color;
     let total = members.length;
 
@@ -1092,18 +1102,28 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    const categories = detailed => detailed
-        ? [
-            { key: 'not-eligible-no-endorsement', label: 'Not eligible · No endorsement', color: tone(12), matches: m => !m.eligible && !m.endorsed && m.kalagayan !== 'MK' },
-            { key: 'not-eligible-endorsed', label: 'Not eligible · Endorsed (review required)', color: tone(30), matches: m => !m.eligible && m.endorsed && m.kalagayan !== 'MK' },
-            { key: 'eligible-no-endorsement', label: 'Eligible · No endorsement', color: tone(50), matches: m => m.eligible && !m.endorsed && m.kalagayan !== 'MK' },
-            { key: 'eligible-endorsed', label: 'Eligible · Endorsed', color: tone(100), matches: m => m.eligible && m.endorsed && m.kalagayan !== 'MK' },
-            { key: 'mk', label: 'MK', color: tone(76), matches: m => m.kalagayan === 'MK' },
-        ]
-        : [
-            { key: 'eligible', label: 'Eligible', color: tone(100), matches: m => m.eligible },
-            { key: 'not-eligible', label: 'Not eligible', color: tone(30), matches: m => !m.eligible },
-        ];
+    const categories = detailed => {
+        const c = eligibilityColors();
+
+        return detailed
+            ? [
+                { key: 'eligible-endorsed', label: 'Eligible · Endorsed', color: c.eligible, matches: m => m.eligible && m.endorsed && m.kalagayan !== 'MK' },
+                { key: 'eligible-no-endorsement', label: 'Eligible · No endorsement', color: c.eligiblePending, matches: m => m.eligible && !m.endorsed && m.kalagayan !== 'MK' },
+                { key: 'mk', label: 'MK', color: c.mk, matches: m => m.kalagayan === 'MK' },
+                { key: 'not-eligible-endorsed', label: 'Not eligible · Endorsed (review required)', color: c.review, matches: m => !m.eligible && m.endorsed && m.kalagayan !== 'MK' },
+                { key: 'not-eligible-no-endorsement', label: 'Not eligible · No endorsement', color: c.notEligible, matches: m => !m.eligible && !m.endorsed && m.kalagayan !== 'MK' },
+            ]
+            : [
+                { key: 'eligible', label: 'Eligible', color: c.eligible, matches: m => m.eligible },
+                { key: 'not-eligible', label: 'Not eligible', color: c.notEligible, matches: m => !m.eligible },
+            ];
+    };
+    // Tooltips read as a small card on the page surface.
+    const cardTooltip = () => ({
+        padding: 12, boxPadding: 6, cornerRadius: 10, usePointStyle: true, caretSize: 0,
+        backgroundColor: surface(), borderColor: css('--border') || '#e5e5e5', borderWidth: 1,
+        titleColor: bodyInk(), bodyColor: bodyInk(), titleFont: { weight: '600' },
+    });
 
     // Eligible share in the middle of the donut.
     const centerText = {
@@ -1143,6 +1163,7 @@ document.addEventListener('DOMContentLoaded', () => {
             eligibilityChart.data.datasets[0].data = cats.map(c => c.count);
             eligibilityChart.data.datasets[0].backgroundColor = cats.map(c => c.color);
             eligibilityChart.data.datasets[0].borderColor = surface();
+            Object.assign(eligibilityChart.options.plugins.tooltip, cardTooltip());
             eligibilityChart.update('none');
             return;
         }
@@ -1150,10 +1171,10 @@ document.addEventListener('DOMContentLoaded', () => {
             type: 'doughnut',
             data: {
                 labels: cats.map(c => c.label),
-                datasets: [{ data: cats.map(c => c.count), backgroundColor: cats.map(c => c.color), borderWidth: 2, borderColor: surface(), hoverOffset: 6 }],
+                datasets: [{ data: cats.map(c => c.count), backgroundColor: cats.map(c => c.color), borderWidth: 2, borderColor: surface(), borderRadius: 4, hoverOffset: 4, spacing: 1 }],
             },
             options: {
-                cutout: '68%',
+                cutout: '74%',
                 responsive: true,
                 maintainAspectRatio: false,
                 animation: reduceMotion ? false : { animateRotate: true, animateScale: true, duration: 1000, easing: 'easeOutQuart' },
@@ -1165,7 +1186,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 },
                 plugins: {
                     legend: { display: false },
-                    tooltip: { cornerRadius: 0, callbacks: { label: ctx => ` ${ctx.label}: ${ctx.parsed} (${total ? Math.round(ctx.parsed / total * 100) : 0}%)` } },
+                    tooltip: { ...cardTooltip(), callbacks: { label: ctx => ` ${ctx.label}: ${ctx.parsed} (${total ? Math.round(ctx.parsed / total * 100) : 0}%)` } },
                 },
             },
             plugins: [centerText],
@@ -1236,7 +1257,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.font = '700 13px ' + font;
                 ctx.fillStyle = kInk(kalagayanTypes[idx]);
                 ctx.textAlign = 'right';
-                ctx.fillText(kalagayanTypes[idx], chartArea.left - 12, bar.y);
+                ctx.fillText(kalagayanTypes[idx], chartArea.left - 14, bar.y);
+                const width = ctx.measureText(kalagayanTypes[idx]).width;
+                ctx.fillStyle = kColor(kalagayanTypes[idx]);
+                ctx.beginPath();
+                ctx.arc(chartArea.left - 22 - width, bar.y, 4, 0, Math.PI * 2);
+                ctx.fill();
             });
             chart.data.datasets.forEach((ds, i) => {
                 const meta = chart.getDatasetMeta(i);
@@ -1268,30 +1294,31 @@ document.addEventListener('DOMContentLoaded', () => {
     let progressChart = null;
     if (chartsOK) {
         try {
-            const segment = color => ({
-                backgroundColor: color, borderColor: surface(), borderWidth: 2,
-                borderRadius: 0, borderSkipped: false, barThickness: 28,
+            // 2px surface gap between segments; only the data end of the bar is rounded.
+            const segment = (color, end) => ({
+                backgroundColor: color, borderColor: surface(), borderWidth: { left: 0, right: 2, top: 0, bottom: 0 },
+                borderRadius: end ? { topRight: 4, bottomRight: 4 } : 0, borderSkipped: false, barThickness: 22,
             });
             progressChart = new Chart(document.getElementById('progress-chart'), {
                 type: 'bar',
                 data: {
                     labels: kalagayanTypes,
                     datasets: [
-                        { label: 'Created & reported', data: [], ...segment(reportedColors()) },
-                        { label: 'Not yet done', data: [], ...segment(pendingColors()) },
+                        { label: 'Created & reported', data: [], ...segment(reportedColors(), false) },
+                        { label: 'Not yet done', data: [], ...segment(pendingColors(), true) },
                     ],
                 },
                 options: {
                     indexAxis: 'y',
                     responsive: true,
                     maintainAspectRatio: false,
-                    layout: { padding: { left: 48, right: 44 } },
+                    layout: { padding: { left: 64, right: 44 } },
                     animation: reduceMotion ? false : { duration: 900, easing: 'easeOutQuart', delay: ctx => ctx.type === 'data' ? ctx.dataIndex * 120 : 0 },
                     scales: {
                         x: { stacked: true, display: false, min: 0 },
                         y: { stacked: true, display: false },
                     },
-                    plugins: { legend: { display: false }, tooltip: { cornerRadius: 0 } },
+                    plugins: { legend: { display: false }, tooltip: cardTooltip() },
                     onClick: (event, _active, chart) => {
                         const [hit] = chart.getElementsAtEventForMode(event, 'nearest', { intersect: true }, true);
                         if (!hit) return;
@@ -1321,6 +1348,7 @@ document.addEventListener('DOMContentLoaded', () => {
         progressChart.data.datasets[0].backgroundColor = reportedColors();
         progressChart.data.datasets[1].backgroundColor = pendingColors();
         progressChart.data.datasets.forEach(d => { d.borderColor = surface(); });
+        Object.assign(progressChart.options.plugins.tooltip, cardTooltip());
         progressChart.options.scales.x.max = Math.max(1, ...kalagayanTypes.map((k, i) => done[i] + pending[i]));
         progressChart.update();
         progressChart.canvas.setAttribute('aria-label',

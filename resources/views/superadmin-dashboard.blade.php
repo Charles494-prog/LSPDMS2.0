@@ -1182,7 +1182,7 @@
             <div class="sa-card-head">
                 <div>
                     <h2>Saved backups</h2>
-                    <p>Stored privately on the server and not publicly accessible. Backups older than 1 year are deleted automatically (the newest backup is always kept).</p>
+                    <p>Stored privately on the server and not publicly accessible. Backups are kept until you remove them; nothing is deleted automatically.</p>
                 </div>
                 <button type="button" class="sa-btn sa-btn-ghost" id="refreshBackupsBtn">Refresh</button>
             </div>
@@ -1331,7 +1331,7 @@
                         <span>When enabled, every account must verify an emailed code after entering a password.</span>
                     </div>
                     <label class="sa-toggle">
-                        <input type="checkbox" id="requireOtpSetting" @checked($globalVariables?->require_otp ?? true)>
+                        <input type="checkbox" id="requireOtpSetting" @checked($globalVariables?->require_otp ?? false)>
                         <span class="sa-toggle-track"></span>
                     </label>
                 </div>
@@ -1341,7 +1341,7 @@
                         <span>When disabled, the forgot-password link and password reset endpoints are unavailable.</span>
                     </div>
                     <label class="sa-toggle">
-                        <input type="checkbox" id="allowForgotPasswordSetting" @checked($globalVariables?->allow_forgot_password ?? true)>
+                        <input type="checkbox" id="allowForgotPasswordSetting" @checked($globalVariables?->allow_forgot_password ?? false)>
                         <span class="sa-toggle-track"></span>
                     </label>
                 </div>

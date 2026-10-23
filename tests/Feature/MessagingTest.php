@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Broadcasting\ConversationChannel;
 use App\Events\MessageSent;
+use App\Http\Controllers\ProfilePictureController;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\User;
@@ -73,7 +74,8 @@ class MessagingTest extends TestCase
         $photoPath = $this->pngUpload('profile.png')->store('profile-pictures', 'public');
         $recipient->forceFill(['profile_picture' => $photoPath])->save();
         $this->conversation($sender, $recipient);
-        $photoUrl = '/storage/'.$photoPath;
+        // Served by the authenticated avatar route (no public/storage symlink needed).
+        $photoUrl = ProfilePictureController::urlFor($recipient->id, $photoPath);
 
         $this->withSession(['login_user' => ['id' => $sender->id]])
             ->getJson(route('messages.accounts').'?q=recipient')
@@ -84,6 +86,13 @@ class MessagingTest extends TestCase
             ->getJson(route('messages.conversations'))
             ->assertOk()
             ->assertJsonPath('0.user.avatar_url', $photoUrl);
+
+        $this->withSession(['login_user' => ['id' => $sender->id]])
+            ->get($photoUrl)
+            ->assertOk()
+            ->assertHeader('content-type', 'image/png');
+        $this->flushSession();
+        $this->get($photoUrl)->assertRedirect('/login');
     }
 
     public function test_existing_conversation_shows_suspended_account_status_without_allowing_access(): void
@@ -264,7 +273,15 @@ class MessagingTest extends TestCase
             ->get(route('messages.attachment', $imageMessage))
             ->assertOk()
             ->assertHeader('content-type', 'image/png')
-            ->assertHeader('content-disposition', 'inline; filename=private.png');
+            ->assertHeader('content-disposition', 'inline; filename="private.png"');
+
+        // The image survives losing the disk copy: it is served from the database copy.
+        Storage::disk('local')->delete($imageMessage->attachment_path);
+        $this->withSession(['login_user' => ['id' => $recipient->id]])
+            ->get(route('messages.attachment', $imageMessage))
+            ->assertOk()
+            ->assertHeader('content-type', 'image/png');
+        Storage::disk('local')->assertExists($imageMessage->attachment_path);
     }
 
     public function test_upload_rejects_non_image_files_and_cleanup_removes_expired_messages_and_files(): void

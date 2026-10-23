@@ -2,6 +2,11 @@
 
 namespace App\Services;
 
+use App\Exceptions\DatabaseBackupFailed;
+use App\Exceptions\DatabaseMaintenanceInProgress;
+use App\Support\Role;
+use Illuminate\Contracts\Cache\Lock;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
@@ -10,7 +15,58 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 class DatabaseBackupService
 {
-    private const EXCLUDED_TABLES = ['system_smtp_settings'];
+    /**
+     * Never written to an export or safety backup, and never replaced by an
+     * import (their INSERT statements in older files are skipped): migration
+     * state, secrets, session/cache/queue data, and the protected IT recovery
+     * tables.
+     */
+    public const NEVER_EXPORTED_TABLES = [
+        // Must always describe this machine's schema. An import only replaces
+        // rows (no table definitions run), so restoring an older migrations
+        // list would make "php artisan migrate" re-run applied migrations.
+        'migrations',
+        'system_smtp_settings',
+        'sessions',
+        'cache',
+        'cache_locks',
+        'jobs',
+        'job_batches',
+        'failed_jobs',
+        'password_reset_tokens',
+        'it_recovery_accounts',
+        'it_recovery_audit_logs',
+    ];
+
+    /** Columns exported as NULL: they let a browser sign in without a password. */
+    public const REDACTED_COLUMNS = [
+        'login_user' => ['remember_token', 'remember_token_expires_at'],
+    ];
+
+    /** Columns never written to an XLSX export. */
+    public const XLSX_HIDDEN_COLUMNS = [
+        'login_user' => ['password', 'remember_token', 'remember_token_expires_at'],
+    ];
+
+    /**
+     * Database file copies belong to the table that references them, so an
+     * export without (for example) messages carries no chat images, and an
+     * import only replaces the file copies of the tables it contains.
+     */
+    public const FILE_OWNERS = [
+        'login_user' => ['disk' => 'public', 'prefix' => 'profile-pictures/'],
+        'messages' => ['disk' => 'local', 'prefix' => 'messages/'],
+        'r4_01_snapshots' => ['disk' => 'local', 'prefix' => 'monthly-session-snapshots/'],
+    ];
+
+    private const FILE_TABLES = ['stored_files', 'stored_file_chunks'];
+
+    private const LOCK_NAME = 'lspdms:database-maintenance';
+
+    private const LOCK_SECONDS = 900;
+
+    /** Extra free space kept on top of the size checks (bytes). */
+    private const SPACE_MARGIN = 52428800;
 
     public function tableNames(): array
     {
@@ -29,7 +85,7 @@ class DatabaseBackupService
             })
             ->map(fn (array|object $table): string => is_array($table) ? $table['name'] : $table->name)
             ->reject(fn (string $name): bool => str_starts_with($name, 'sqlite_')
-                || in_array($name, self::EXCLUDED_TABLES, true))
+                || in_array($name, self::NEVER_EXPORTED_TABLES, true))
             ->unique()
             ->sort()
             ->values()
@@ -45,28 +101,28 @@ class DatabaseBackupService
 
         fwrite($stream, "-- LSPDMS-SQL-EXPORT-V1\n-- ENGINE: {$driver}\n\n");
         $tables = array_values(array_diff($this->tableNames(), $excludedTables));
+        $grammar = DB::connection()->getQueryGrammar();
         foreach ($tables as $table) {
             $createStatement = $this->createTableStatement($table, $driver);
             fwrite($stream, $this->singleLine($createStatement).";\n");
             $exportColumns = $this->exportColumns($table);
+            $redacted = self::REDACTED_COLUMNS[$table] ?? [];
+            $wrappedColumns = array_map(fn (string $column): string => $grammar->wrap($column), $exportColumns);
+            $prefix = 'INSERT INTO '.$grammar->wrapTable($table).' ('.implode(', ', $wrappedColumns).') VALUES (';
 
-            foreach (DB::table($table)->select($exportColumns)->cursor() as $row) {
+            $query = DB::table($table)->select($exportColumns);
+            if (in_array($table, self::FILE_TABLES, true)) {
+                $this->limitToExportedOwners($query, $tables);
+            }
+            foreach ($query->orderBy($exportColumns[0])->cursor() as $row) {
                 $row = (array) $row;
                 $values = [];
                 foreach ($exportColumns as $column) {
-                    $value = $row[$column] ?? null;
+                    $value = in_array($column, $redacted, true) ? null : ($row[$column] ?? null);
                     $values[] = $this->sqlValue($value, $driver);
                 }
 
-                $wrappedColumns = array_map(
-                    fn (string $column): string => DB::connection()->getQueryGrammar()->wrap($column),
-                    $exportColumns
-                );
-                fwrite(
-                    $stream,
-                    'INSERT INTO '.DB::connection()->getQueryGrammar()->wrapTable($table)
-                    .' ('.implode(', ', $wrappedColumns).') VALUES ('.implode(', ', $values).");\n"
-                );
+                fwrite($stream, $prefix.implode(', ', $values).");\n");
             }
             fwrite($stream, "\n");
         }
@@ -74,23 +130,43 @@ class DatabaseBackupService
 
     public function exportColumns(string $table): array
     {
-        return array_values(array_diff(
-            Schema::getColumnListing($table),
-            ['head_secretary_slot']
-        ));
-    }
-
-    public function createSafetyBackup(): string
-    {
-        $directory = storage_path('app/private/database-backups');
-        if (! is_dir($directory) && ! mkdir($directory, 0770, true) && ! is_dir($directory)) {
-            throw new RuntimeException('Unable to create the private database backup directory.');
+        $hidden = ['head_secretary_slot'];
+        if (in_array($table, self::FILE_TABLES, true)) {
+            // Re-keyed by (disk, path) on import, so row ids never collide.
+            $hidden[] = 'id';
         }
 
-        $path = $directory.DIRECTORY_SEPARATOR.'before-import-'.now()->format('Ymd-His').'-'.bin2hex(random_bytes(4)).'.sql';
-        $stream = fopen($path, 'xb');
+        return array_values(array_diff(Schema::getColumnListing($table), $hidden));
+    }
+
+    /** Columns an XLSX export may show for $table (never passwords or tokens). */
+    public function xlsxColumns(string $table): array
+    {
+        return array_values(array_diff($this->exportColumns($table), self::XLSX_HIDDEN_COLUMNS[$table] ?? []));
+    }
+
+    /**
+     * Write a backup into the private backup folder and prove it can be read
+     * back by the import parser with the same row counts as the database.
+     */
+    public function createSafetyBackup(?string $name = null, string $source = 'import'): string
+    {
+        $directory = $this->backupDirectory();
+        if (! is_dir($directory) && ! mkdir($directory, 0770, true) && ! is_dir($directory)) {
+            throw new DatabaseBackupFailed('Unable to create the private database backup directory.');
+        }
+
+        $name ??= 'before-import-'.now()->format('Ymd-His').'-'.bin2hex(random_bytes(4)).'.sql';
+        $path = $directory.DIRECTORY_SEPARATOR.$name;
+        // 'x' never overwrites; a name still held by Windows after a delete gets a short suffix.
+        $stream = @fopen($path, 'xb');
+        for ($attempt = 0; $stream === false && $attempt < 3; $attempt++) {
+            $name = pathinfo($name, PATHINFO_FILENAME).'-'.bin2hex(random_bytes(2)).'.sql';
+            $path = $directory.DIRECTORY_SEPARATOR.$name;
+            $stream = @fopen($path, 'xb');
+        }
         if ($stream === false) {
-            throw new RuntimeException('Unable to create a safety backup before importing.');
+            throw new DatabaseBackupFailed('Unable to create the backup file in the private backups folder.');
         }
 
         try {
@@ -100,13 +176,45 @@ class DatabaseBackupService
             @unlink($path);
             throw $exception;
         }
-
         fclose($stream);
+
+        try {
+            $this->assertBackupUsable($path);
+        } catch (\Throwable $exception) {
+            @unlink($path);
+            throw $exception instanceof DatabaseBackupFailed
+                ? $exception
+                : new DatabaseBackupFailed('The safety backup could not be verified, so nothing was imported.');
+        }
+        $this->recordBackup($name, $source);
 
         return $path;
     }
 
-    public function inspectImport(UploadedFile $file): array
+    /**
+     * A backup is usable when the import parser accepts it and every table
+     * it holds has exactly as many rows as the live database.
+     */
+    public function assertBackupUsable(string $path): void
+    {
+        try {
+            $inspection = $this->inspectImport($path);
+        } catch (ValidationException) {
+            throw new DatabaseBackupFailed('The safety backup could not be read back, so nothing was imported.');
+        }
+
+        foreach ($inspection['row_counts'] as $table => $count) {
+            $query = DB::table($table);
+            if (in_array($table, self::FILE_TABLES, true)) {
+                $this->limitToExportedOwners($query, $inspection['tables']);
+            }
+            if ($query->count() !== $count) {
+                throw new DatabaseBackupFailed("The safety backup is incomplete for table {$table}, so nothing was imported.");
+            }
+        }
+    }
+
+    public function inspectImport(UploadedFile|string $file): array
     {
         $driver = DB::connection()->getDriverName();
         if (! in_array($driver, ['mysql', 'sqlite'], true)) {
@@ -115,7 +223,7 @@ class DatabaseBackupService
             ]);
         }
 
-        $stream = fopen($file->getRealPath(), 'rb');
+        $stream = @fopen($this->filePath($file), 'rb');
         if ($stream === false) {
             throw ValidationException::withMessages(['sql_file' => 'The SQL file could not be read.']);
         }
@@ -132,6 +240,8 @@ class DatabaseBackupService
 
         $createStatements = [];
         $tables = [];
+        $rowCounts = [];
+        $ignored = [];
 
         try {
             while (($line = fgets($stream)) !== false) {
@@ -142,7 +252,12 @@ class DatabaseBackupService
 
                 if (preg_match('/^CREATE TABLE\s+(?:`([^`]+)`|"([^"]+)"|([A-Za-z0-9_]+))\s+/i', $statement, $matches)) {
                     $table = $this->matchedIdentifier($matches);
-                    $this->assertImportableTable($table);
+                    $this->assertValidTableName($table);
+                    if (in_array($table, self::NEVER_EXPORTED_TABLES, true)) {
+                        $ignored[$table] = true;
+
+                        continue;
+                    }
                     if (isset($createStatements[$table])) {
                         throw ValidationException::withMessages(['sql_file' => "The SQL backup contains duplicate table definitions for {$table}."]);
                     }
@@ -151,14 +266,21 @@ class DatabaseBackupService
                     }
                     $createStatements[$table] = $statement;
                     $tables[$table] = true;
+                    $rowCounts[$table] = 0;
 
                     continue;
                 }
 
                 $table = $this->insertTable($statement, $driver);
                 if ($table !== null) {
-                    $this->assertImportableTable($table);
+                    $this->assertValidTableName($table);
+                    if (in_array($table, self::NEVER_EXPORTED_TABLES, true)) {
+                        $ignored[$table] = true;
+
+                        continue;
+                    }
                     $tables[$table] = true;
+                    $rowCounts[$table] = ($rowCounts[$table] ?? 0) + 1;
 
                     continue;
                 }
@@ -187,41 +309,237 @@ class DatabaseBackupService
 
         return [
             'tables' => $tableNames,
+            'row_counts' => $rowCounts,
+            'ignored_tables' => array_keys($ignored),
             'omitted_tables' => array_values(array_diff($this->tableNames(), $tableNames)),
         ];
     }
 
-    public function import(UploadedFile $file): string
+    /**
+     * Replace the tables in $file with its rows.
+     *
+     * Order: lock -> free-space check -> verified safety backup -> one
+     * transaction that deletes and re-inserts the rows and checks that a
+     * verified Head Secretary still exists -> audit row -> restore file copies
+     * to disk. Only rows change (no table definitions run), so a failure rolls
+     * the data back; the safety backup is the fallback either way.
+     *
+     * @return array{backup_path: string, tables: array<int, string>, ignored_tables: array<int, string>, inserted_rows: int, restored_files: int}
+     */
+    public function import(UploadedFile|string $file, ?string $actor = null): array
     {
-        $inspection = $this->inspectImport($file);
-        $backupPath = $this->createSafetyBackup();
-        $driver = DB::connection()->getDriverName();
+        return $this->withMaintenanceLock(function () use ($file, $actor): array {
+            $path = $this->filePath($file);
+            $inspection = $this->inspectImport($path);
+            $this->assertEnoughSpace((int) @filesize($path));
+            $backupPath = $this->createSafetyBackup();
+            $driver = DB::connection()->getDriverName();
+            $inserted = 0;
 
-        if ($driver === 'mysql') {
-            DB::statement('SET FOREIGN_KEY_CHECKS=0');
-        } else {
-            DB::statement('PRAGMA foreign_keys = OFF');
+            if ($driver === 'mysql') {
+                DB::statement('SET FOREIGN_KEY_CHECKS=0');
+            } else {
+                // foreign_keys is ignored inside an open transaction; deferring works there too.
+                DB::statement('PRAGMA foreign_keys = OFF');
+                DB::statement('PRAGMA defer_foreign_keys = ON');
+            }
+
+            try {
+                DB::transaction(function () use ($inspection, $path, $driver, &$inserted): void {
+                    foreach ($inspection['tables'] as $table) {
+                        $query = DB::table($table);
+                        if (in_array($table, self::FILE_TABLES, true)) {
+                            $this->limitToExportedOwners($query, $inspection['tables']);
+                        }
+                        $query->delete();
+                    }
+
+                    $this->forEachInsert($path, $driver, static function (string $statement) use (&$inserted): void {
+                        DB::unprepared($statement);
+                        $inserted++;
+                    });
+
+                    if (! $this->hasVerifiedHeadSecretary()) {
+                        throw ValidationException::withMessages([
+                            'sql_file' => 'This backup has no approved Head Secretary account, so importing it would lock everyone out. Nothing was changed.',
+                        ]);
+                    }
+                });
+            } finally {
+                if ($driver === 'mysql') {
+                    DB::statement('SET FOREIGN_KEY_CHECKS=1');
+                } else {
+                    DB::statement('PRAGMA defer_foreign_keys = OFF');
+                    DB::statement('PRAGMA foreign_keys = ON');
+                }
+            }
+
+            // Written after the commit: the import may have replaced this table.
+            $this->audit('database_import', $inserted, $actor);
+            $restored = 0;
+            try {
+                $restored = app(FileStore::class)->rehydrateMissing();
+            } catch (\Throwable) {
+                // Files are restored on first use anyway (FileStore::get).
+            }
+
+            return [
+                'backup_path' => $backupPath,
+                'tables' => $inspection['tables'],
+                'ignored_tables' => $inspection['ignored_tables'],
+                'inserted_rows' => $inserted,
+                'restored_files' => $restored,
+            ];
+        });
+    }
+
+    /**
+     * Run $callback while no other import or backup runs.
+     *
+     * @template T
+     *
+     * @param  callable(): T  $callback
+     * @return T
+     */
+    public function withMaintenanceLock(callable $callback): mixed
+    {
+        /** @var Lock $lock */
+        $lock = Cache::lock(self::LOCK_NAME, self::LOCK_SECONDS);
+        if (! $lock->get()) {
+            throw new DatabaseMaintenanceInProgress;
         }
 
         try {
-            DB::transaction(function () use ($inspection, $file, $driver): void {
-                foreach ($inspection['tables'] as $table) {
-                    DB::table($table)->delete();
-                }
-
-                $this->forEachInsert($file, $driver, static function (string $statement): void {
-                    DB::unprepared($statement);
-                });
-            });
+            return $callback();
         } finally {
-            if ($driver === 'mysql') {
-                DB::statement('SET FOREIGN_KEY_CHECKS=1');
-            } else {
-                DB::statement('PRAGMA foreign_keys = ON');
-            }
+            $lock->release();
+        }
+    }
+
+    public function audit(string $action, int $affected, ?string $actor): void
+    {
+        DB::table('system_maintenance_audits')->insert([
+            'action' => mb_substr($action, 0, 50),
+            'affected_count' => max(0, $affected),
+            'changed_by' => $actor,
+            'changed_at' => now(),
+        ]);
+    }
+
+    /** Private folder for backups; tests use a temp folder so they never touch real backups. */
+    public function backupDirectory(): string
+    {
+        return app()->runningUnitTests()
+            ? rtrim(sys_get_temp_dir(), '\\/').DIRECTORY_SEPARATOR.'lspdms-database-backups-tests'
+            : storage_path('app/private/database-backups');
+    }
+
+    /** @return array{files: array<string, array<string, mixed>>} */
+    public function readIndex(): array
+    {
+        $path = $this->backupDirectory().DIRECTORY_SEPARATOR.'.backup-index.json';
+        $decoded = is_file($path) ? json_decode((string) file_get_contents($path), true) : null;
+
+        return ['files' => is_array($decoded['files'] ?? null) ? $decoded['files'] : []];
+    }
+
+    public function writeIndex(array $index): void
+    {
+        $directory = $this->backupDirectory();
+        if (! is_dir($directory)) {
+            mkdir($directory, 0750, true);
+        }
+        file_put_contents(
+            $directory.DIRECTORY_SEPARATOR.'.backup-index.json',
+            json_encode($index, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES),
+            LOCK_EX
+        );
+    }
+
+    /**
+     * Remember a backup's source, size and SHA-256 so later downloads can be
+     * checked for damage or tampering.
+     */
+    public function recordBackup(string $name, string $source): void
+    {
+        $path = $this->backupDirectory().DIRECTORY_SEPARATOR.$name;
+        $index = $this->readIndex();
+        $index['files'][$name] = [
+            'source' => $source,
+            'created_at' => date(DATE_ATOM, (int) filemtime($path)),
+            'size' => (int) filesize($path),
+            'sha256' => (string) hash_file('sha256', $path),
+        ];
+        $this->writeIndex($index);
+    }
+
+    /**
+     * true = matches the recorded SHA-256, false = changed since it was
+     * recorded, null = no hash recorded (older backups).
+     */
+    public function backupIntact(string $name): ?bool
+    {
+        $entry = $this->readIndex()['files'][$name] ?? null;
+        $expected = is_array($entry) ? ($entry['sha256'] ?? null) : null;
+        if (! is_string($expected) || $expected === '') {
+            return null;
         }
 
-        return $backupPath;
+        $actual = @hash_file('sha256', $this->backupDirectory().DIRECTORY_SEPARATOR.$name);
+
+        return is_string($actual) && hash_equals($expected, $actual);
+    }
+
+    /** Bytes free on the storage volume (a seam for tests). */
+    public function freeDiskBytes(): ?float
+    {
+        $free = @disk_free_space(storage_path());
+
+        return $free === false ? null : (float) $free;
+    }
+
+    private function assertEnoughSpace(int $uploadBytes): void
+    {
+        $free = $this->freeDiskBytes();
+        $needed = 3 * max(0, $uploadBytes) + self::SPACE_MARGIN;
+        if ($free !== null && $free < $needed) {
+            throw ValidationException::withMessages([
+                'sql_file' => 'There is not enough free disk space for the safety backup and the import. Free up space and try again.',
+            ]);
+        }
+    }
+
+    private function hasVerifiedHeadSecretary(): bool
+    {
+        return DB::table('login_user')
+            ->where('is_verified', true)
+            ->pluck('tungkulin')
+            ->contains(fn (?string $role): bool => Role::isHeadSecretary($role));
+    }
+
+    /** Keep only file copies whose owning table is part of $tables. */
+    private function limitToExportedOwners($query, array $tables): void
+    {
+        $query->where(function ($query) use ($tables): void {
+            $owned = false;
+            foreach (self::FILE_OWNERS as $owner => $location) {
+                if (! in_array($owner, $tables, true)) {
+                    continue;
+                }
+                $owned = true;
+                $query->orWhere(fn ($query) => $query
+                    ->where('disk', $location['disk'])
+                    ->where('path', 'like', $location['prefix'].'%'));
+            }
+            if (! $owned) {
+                $query->whereRaw('1 = 0');
+            }
+        });
+    }
+
+    private function filePath(UploadedFile|string $file): string
+    {
+        return $file instanceof UploadedFile ? (string) $file->getRealPath() : $file;
     }
 
     private function createTableStatement(string $table, string $driver): string
@@ -323,9 +641,9 @@ class DatabaseBackupService
         return $this->matchedIdentifier($matches);
     }
 
-    private function forEachInsert(UploadedFile $file, string $driver, callable $callback): void
+    private function forEachInsert(string $path, string $driver, callable $callback): void
     {
-        $stream = fopen($file->getRealPath(), 'rb');
+        $stream = @fopen($path, 'rb');
         if ($stream === false) {
             throw new RuntimeException('The SQL upload could not be read during import.');
         }
@@ -340,10 +658,14 @@ class DatabaseBackupService
                 }
 
                 if (str_starts_with(strtoupper($statement), 'INSERT INTO ')) {
-                    if ($this->insertTable($statement, $driver) === null) {
+                    $table = $this->insertTable($statement, $driver);
+                    if ($table === null) {
                         throw ValidationException::withMessages([
                             'sql_file' => 'The SQL backup contains an invalid insert statement.',
                         ]);
+                    }
+                    if (in_array($table, self::NEVER_EXPORTED_TABLES, true)) {
+                        continue;
                     }
                     $callback($statement);
                 }
@@ -353,9 +675,9 @@ class DatabaseBackupService
         }
     }
 
-    private function assertImportableTable(string $table): void
+    private function assertValidTableName(string $table): void
     {
-        if (in_array($table, self::EXCLUDED_TABLES, true) || ! preg_match('/^[A-Za-z0-9_]+$/', $table)) {
+        if (! preg_match('/^[A-Za-z0-9_]+$/', $table)) {
             throw ValidationException::withMessages([
                 'sql_file' => 'The SQL backup contains an unsupported table name.',
             ]);

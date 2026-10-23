@@ -54,4 +54,9 @@ class Record extends Model
     {
         return $this->hasMany(MonthlyRecordMovementHistory::class);
     }
+
+    public function r210EndorsementReasons(): HasMany
+    {
+        return $this->hasMany(R210EndorsementReason::class);
+    }
 }
