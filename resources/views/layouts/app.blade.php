@@ -11,6 +11,10 @@
         'search-edit' => '<circle cx="8.5" cy="8.5" r="5.5"/><path d="M12.5 12.5 17 17"/><path d="M12 15.5l2-2 1.5 1.5-2 2H12v-1.5z"/>',
         'filter' => '<path d="M3 4h14l-5.5 6.5v5l-3 1.5v-6.5L3 4z"/>',
         'card' => '<rect x="2.5" y="4.5" width="15" height="11" rx="2"/><path d="M6 9h4M6 12h2.5"/><circle cx="14" cy="10" r="1.6"/>',
+        'notes' => '<path d="M5 2.5h10a1.5 1.5 0 0 1 1.5 1.5v13l-3-1.5-3 1.5-3-1.5-3 1.5V4A1.5 1.5 0 0 1 5 2.5z"/><path d="M7 7h6M7 10h6M7 13h3"/>',
+        'checklist' => '<rect x="3.5" y="2.5" width="13" height="15" rx="1.5"/><path d="M7 7h6M7 10.5h6M7 14h3"/><path d="m12.5 14 1 1 2-2.2"/>',
+        'chevron' => '<path d="M7.5 5 12.5 10l-5 5"/>',
+        'tasks' => '<path d="M7 5h10M7 10h10M7 15h6"/><path d="m2.5 5 1 1 1.5-1.8M2.5 10l1 1 1.5-1.8M2.5 15l1 1 1.5-1.8"/>',
     ];
     $role = mb_strtolower(trim(preg_replace('/\s+/', ' ', (string) ($authenticatedUser['tungkulin'] ?? '')) ?? ''));
     $isHeadSecretary = in_array($role, ['head secretary', 'secretary head'], true);
@@ -28,11 +32,66 @@
             ['de-listment', 'De-Listment', 'user-x', 'de-listment', 'Delistment_allow'],
         ]],
         ['label' => 'Tools', 'items' => [
-            ['form-generator', 'Form Generator', 'file', 'form-generator', 'form_generator_allow'],
+            ['note-checker', 'Note Checker', 'notes', 'note-checker', 'note_checker_allow'],
             ['tarheta-status', 'Tarheta Status Checker', 'card', 'tarheta-status*', 'tarheta_status_allow'],
             ['filter-bnh-helper', 'Filter & BNH Helper', 'filter', 'filter-bnh-helper*', 'filter_bnh_helper_allow'],
         ]],
     ];
+
+    // Tasks (assigned by the Head Secretary) is for secretaries and the Head Secretary; no extra permission.
+    $canUseTasks = $isHeadSecretary || $role === 'secretary';
+    if ($canUseTasks) {
+        $navGroups[0]['items'][] = ['tasks', 'Tasks', 'tasks', 'tasks', null];
+    }
+
+    // Form Generator submenus (all need form_generator_allow). Each child: [label, url, active?, breadcrumb trail].
+    $isDeliberation = request()->routeIs('forms.monthly.deliberation');
+    $isSubtract = $isDeliberation && request()->query('mode') === 'subtract';
+    $formsHub = route('form-generator');
+    $formMenus = [
+        ['key' => 'generate', 'label' => 'Generate Forms', 'icon' => 'file', 'url' => $formsHub.'#generate-forms', 'sections' => [
+            ['label' => 'Weekly', 'url' => $formsHub.'#generate-weekly', 'items' => [
+                ['R4-02 Generator', route('forms.weekly.r4-02'), request()->routeIs('forms.weekly.r4-02*')],
+                ['R4-03 Generator', route('forms.weekly.r4-03'), request()->routeIs('forms.weekly.r4-03*')],
+            ]],
+            ['label' => 'Monthly', 'url' => $formsHub.'#generate-monthly', 'items' => [
+                ['Resumen & R4-01 (This Month)', route('forms.monthly.generators'), request()->routeIs('forms.monthly.generators', 'forms.monthly.resumen*', 'forms.monthly.r4-01', 'forms.monthly.r4-01.download')],
+                ['R4-01 Snapshots', route('forms.monthly.r4-01.snapshots'), request()->routeIs('forms.monthly.r4-01.snapshots*')],
+            ]],
+        ]],
+        ['key' => 'deliberation', 'label' => 'Deliberation Form', 'icon' => 'checklist', 'url' => $formsHub.'#deliberation', 'sections' => [
+            ['label' => null, 'url' => null, 'items' => [
+                ['Add', route('forms.monthly.deliberation'), $isDeliberation && ! $isSubtract, 'add'],
+                ['Subtract', route('forms.monthly.deliberation', ['mode' => 'subtract']), $isSubtract, 'subtract'],
+                ['Modify', route('forms.monthly.modify'), request()->routeIs('forms.monthly.modify*')],
+            ]],
+        ]],
+    ];
+
+    // Breadcrumb: Form Generator › menu › section › page, built from the menus above.
+    $breadcrumbs = [];
+    if (request()->routeIs('form-generator')) {
+        $breadcrumbs = [['Form Generator', null]];
+    } elseif (request()->routeIs('forms.monthly.session*')) {
+        $breadcrumbs = [['Form Generator', $formsHub], ['Deliberation Form', $formsHub.'#deliberation'], ['Monthly Session', null]];
+    } else {
+        foreach ($formMenus as $menu) {
+            foreach ($menu['sections'] as $section) {
+                foreach ($section['items'] as $item) {
+                    if ($item[2]) {
+                        $breadcrumbs = array_values(array_filter([
+                            ['Form Generator', $formsHub],
+                            [$menu['label'], $menu['url']],
+                            $section['label'] ? [$section['label'], $section['url']] : null,
+                            [$item[0], null],
+                        ]));
+                    }
+                }
+            }
+        }
+    }
+    $formMenuOpen = fn (array $menu): bool => collect($menu['sections'])->flatMap(fn ($section) => $section['items'])->contains(fn ($item) => $item[2])
+        || (request()->routeIs('forms.monthly.session*') && $menu['key'] === 'deliberation');
 
     $displayName = trim(($authenticatedUser['first_name'] ?? '') . ' ' . ($authenticatedUser['last_name'] ?? ''));
     $displayName = $displayName !== '' ? $displayName : ($authenticatedUser['gmail'] ?? 'User');
@@ -184,6 +243,50 @@
             .sidebar a:focus-visible, .collapse-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
             .sidebar-admin { border-top: 1px solid var(--sidebar-border); padding: 0.35rem 0.5rem 0.75rem; }
 
+            /* Count bubble on a sidebar link (Tasks) */
+            .nav-badge { display: grid; place-items: center; min-width: 20px; height: 20px; margin-left: auto; padding: 0 6px; border-radius: 999px; background: #e41e3f; color: #fff; font-size: .68rem; font-weight: 800; line-height: 1; }
+            .nav-badge[hidden] { display: none; }
+            html.sb-collapsed .nav-badge { position: absolute; top: 3px; right: 6px; min-width: 16px; height: 16px; padding: 0 4px; font-size: .6rem; }
+
+            /* Expandable menus (Form Generator): parent link + chevron, children slide open */
+            .nav-tree-row { position: relative; display: flex; align-items: center; }
+            .nav-tree-row > a { flex: 1; min-width: 0; padding-right: 2.25rem; }
+            .sidebar a.active-parent { color: var(--sidebar-text-active); }
+            .nav-tree-toggle {
+                position: absolute; right: 4px; top: 4px;
+                display: grid; place-items: center; width: 28px; height: 28px; padding: 0;
+                border: 0; border-radius: 6px; background: transparent; color: var(--sidebar-text); cursor: pointer;
+            }
+            .nav-tree-toggle:hover { background: var(--sidebar-active-bg); color: var(--sidebar-text-active); }
+            .nav-tree-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+            .nav-tree-toggle svg { width: 14px; height: 14px; transition: transform .2s ease; }
+            .nav-tree.open .nav-tree-toggle svg { transform: rotate(90deg); }
+            .nav-tree-children { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .22s ease; }
+            .nav-tree.open .nav-tree-children { grid-template-rows: 1fr; }
+            .nav-tree-inner { overflow: hidden; min-height: 0; margin-left: 1.3rem; padding-left: .6rem; border-left: 1px solid var(--sidebar-border); }
+            .nav-tree:not(.open) .nav-tree-inner { visibility: hidden; }
+            .nav-tree-section { padding: .45rem .5rem .2rem; color: var(--sidebar-label); font-size: .68rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+            .sidebar a.nav-child { height: 30px; padding: 0 .6rem; font-size: .82rem; }
+            .sidebar a.nav-child.active::before { left: calc(-.6rem - 1px); top: 6px; bottom: 6px; }
+            html.sb-collapsed .nav-tree-toggle, html.sb-collapsed .nav-tree-children { display: none; }
+            html.sb-collapsed .nav-tree-row > a { padding-right: 0; }
+
+            /* Breadcrumb trail in the top bar */
+            .breadcrumbs { min-width: 0; overflow: hidden; }
+            .breadcrumbs ol { display: flex; align-items: center; min-width: 0; margin: 0; padding: 0; list-style: none; font-size: .88rem; white-space: nowrap; }
+            .breadcrumbs li { display: flex; align-items: center; min-width: 0; }
+            .breadcrumbs li + li::before { content: "/"; margin: 0 .5rem; color: var(--border); font-weight: 400; }
+            html[data-theme="dark"] .breadcrumbs li + li::before { color: var(--text-muted); opacity: .5; }
+            .breadcrumbs a { color: var(--text-muted); text-decoration: none; transition: color .15s ease; }
+            .breadcrumbs a:hover { color: var(--text); }
+            .breadcrumbs a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+            .breadcrumbs [aria-current="page"] { overflow: hidden; text-overflow: ellipsis; color: var(--text); font-weight: 600; }
+            @media (max-width: 720px) {
+                /* Phones: only the page itself and its parent */
+                .breadcrumbs li:not(:nth-last-child(-n+2)) { display: none; }
+                .breadcrumbs li:nth-last-child(2)::before { display: none; }
+            }
+
             /* ---------- Main area ---------- */
             .main { margin-left: var(--sidebar-width); flex: 1; min-width: 0; display: flex; flex-direction: column; transition: margin-left 0.2s ease; }
             .has-messages-page { height: 100vh; overflow: hidden; }
@@ -304,7 +407,7 @@
                 html.sb-collapsed .sidebar a .label { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
             }
 
-            /* ---------- Chat widget (unchanged) ---------- */
+            /* ---------- Chat widget: floating button + window (chats, to-do, tasks) ---------- */
             .chat-widget {
                 position: fixed;
                 right: 24px;
@@ -317,85 +420,102 @@
             }
             .chat-window {
                 display: flex;
-                width: min(390px, calc(100vw - 32px));
-                height: min(560px, calc(100dvh - 112px));
-                min-height: min(360px, calc(100dvh - 112px));
+                width: min(420px, calc(100vw - 32px));
+                height: min(620px, calc(100dvh - 112px));
+                min-height: min(380px, calc(100dvh - 112px));
                 flex-direction: column;
                 overflow: hidden;
                 border: 1px solid var(--border);
-                border-radius: 16px;
+                border-radius: 18px;
                 background: var(--surface);
-                box-shadow: 0 18px 55px rgba(15, 23, 42, 0.25);
+                box-shadow: 0 24px 70px -18px rgba(15, 23, 42, 0.45), 0 2px 8px rgba(15, 23, 42, 0.08);
+                transform-origin: bottom right;
+                animation: chat-window-in .26s cubic-bezier(.22, .9, .32, 1);
             }
+            @keyframes chat-window-in { from { opacity: 0; transform: translateY(12px) scale(.96); } }
             .chat-window[hidden] { display: none; }
             .chat-window-header {
                 display: flex;
                 flex: none;
                 align-items: center;
-                justify-content: space-between;
-                min-height: 52px;
-                padding: 0.5rem 0.75rem 0.5rem 1rem;
+                gap: 0.25rem;
+                min-height: 56px;
+                padding: 0.5rem 0.6rem 0.5rem 1rem;
                 border-bottom: 1px solid var(--border);
                 color: var(--text);
-                font-size: 0.9rem;
-                font-weight: 700;
             }
-            .chat-window-minimize {
+            .chat-window-title { display: grid; flex: 1; min-width: 0; line-height: 1.2; }
+            .chat-window-title strong { font-size: 1rem; font-weight: 750; letter-spacing: -0.01em; }
+            .chat-window-title span { color: var(--text-muted); font-size: 0.74rem; }
+            .chat-window-btn {
                 display: grid;
                 width: 34px;
                 height: 34px;
                 place-items: center;
+                padding: 0;
                 border: 0;
                 border-radius: 50%;
                 background: transparent;
                 color: var(--text-muted);
                 cursor: pointer;
-                font: inherit;
-                font-size: 1.3rem;
             }
-            .chat-window-minimize:hover { background: var(--bg); color: var(--text); }
+            .chat-window-btn svg { width: 18px; height: 18px; }
+            .chat-window-btn:hover { background: var(--hover); color: var(--text); }
+            .chat-window-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
             .chat-window iframe { width: 100%; height: 0; min-height: 0; flex: 1; border: 0; background: var(--bg); }
             .chat-head-launcher {
+                position: relative;
                 display: grid;
-                width: 60px;
-                height: 60px;
+                width: 58px;
+                height: 58px;
                 place-items: center;
-                border: 2px solid var(--surface);
+                padding: 0;
+                border: 0;
                 border-radius: 50%;
-                background: var(--accent);
-                box-shadow: 0 2px 8px rgba(10, 107, 214, 0.22);
+                background: linear-gradient(145deg, #3291ff 0%, #0060d1 100%);
+                box-shadow: 0 10px 24px -8px rgba(0, 96, 209, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.25);
                 color: #fff;
                 cursor: pointer;
-                transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+                transition: transform 0.2s cubic-bezier(.22, .9, .32, 1), box-shadow 0.2s ease;
             }
-            .chat-head-launcher:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 14px 32px rgba(10, 107, 214, 0.42);
+            .chat-head-launcher:hover { transform: translateY(-2px) scale(1.04); box-shadow: 0 16px 32px -10px rgba(0, 96, 209, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.25); }
+            .chat-head-launcher:active { transform: scale(.96); }
+            .chat-head-launcher:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 3px; }
+            .chat-head-launcher svg { position: absolute; width: 28px; height: 28px; transition: opacity .2s ease, transform .25s cubic-bezier(.22, .9, .32, 1); }
+            .chat-head-launcher .chat-icon-close { opacity: 0; transform: rotate(-90deg) scale(.6); }
+            .chat-head-launcher[aria-expanded="true"] .chat-icon-open { opacity: 0; transform: rotate(90deg) scale(.6); }
+            .chat-head-launcher[aria-expanded="true"] .chat-icon-close { opacity: 1; transform: none; }
+            /* A soft ring pulses while there is something unread */
+            .chat-head-launcher:has(.chat-unread-badge:not([hidden]))::before {
+                content: "";
+                position: absolute;
+                inset: 0;
+                border-radius: 50%;
+                box-shadow: 0 0 0 0 rgba(50, 145, 255, .55);
+                animation: chat-ring 2.2s ease-out infinite;
             }
-            .chat-head-launcher svg {
-                width: 30px;
-                height: 30px;
-            }
-            .chat-head-launcher[aria-expanded="true"] { opacity: 0.86; }
+            @keyframes chat-ring { to { box-shadow: 0 0 0 16px rgba(50, 145, 255, 0); } }
             .chat-unread-badge {
                 position: absolute;
-                top: -3px;
-                right: -3px;
+                top: -4px;
+                right: -4px;
                 display: grid;
-                min-width: 23px;
-                height: 23px;
+                min-width: 22px;
+                height: 22px;
                 place-items: center;
                 padding: 0 5px;
                 border: 2px solid var(--bg);
                 border-radius: 999px;
-                background: #e02424;
+                background: #e41e3f;
                 color: #fff;
                 font-size: 0.68rem;
                 font-weight: 800;
                 line-height: 1;
-                box-shadow: 0 2px 6px rgba(127, 29, 29, 0.35);
             }
             .chat-unread-badge[hidden] { display: none; }
+            @media (prefers-reduced-motion: reduce) {
+                .chat-window, .chat-head-launcher::before { animation: none !important; }
+            }
             .has-smart-helper .chat-widget { bottom: 94px; }
             .has-smart-helper .chat-window { height: min(560px, calc(100dvh - 190px)); }
 
@@ -469,7 +589,46 @@
                                    @if ($isActive) aria-current="page" @endif>
                                     <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{!! $icons[$icon] !!}</svg>
                                     <span class="label">{{ $label }}</span>
+                                    @if ($routeName === 'tasks')
+                                        <span class="nav-badge" id="tasksNavBadge" aria-label="New tasks" hidden></span>
+                                    @endif
                                 </a>
+                            @endforeach
+                        </div>
+                    @endif
+                    @if ($group['label'] === 'Records' && $can('form_generator_allow'))
+                        {{-- Form Generator: two expandable menus; the parent link opens that section of the hub. --}}
+                        <div class="nav-group" data-nav-group data-feature="form_generator_allow">
+                            <div class="sidebar-section-label">Form Generator</div>
+                            @foreach ($formMenus as $menu)
+                                @php $open = $formMenuOpen($menu); @endphp
+                                <div class="nav-tree {{ $open ? 'open' : '' }}" data-nav-tree="{{ $menu['key'] }}">
+                                    <div class="nav-tree-row">
+                                        <a href="{{ $menu['url'] }}" class="{{ $open ? 'active-parent' : '' }}" title="{{ $menu['label'] }}">
+                                            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{!! $icons[$menu['icon']] !!}</svg>
+                                            <span class="label">{{ $menu['label'] }}</span>
+                                        </a>
+                                        <button type="button" class="nav-tree-toggle" aria-expanded="{{ $open ? 'true' : 'false' }}" aria-controls="nav-tree-{{ $menu['key'] }}" aria-label="Show {{ $menu['label'] }} pages">
+                                            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{!! $icons['chevron'] !!}</svg>
+                                        </button>
+                                    </div>
+                                    <div class="nav-tree-children" id="nav-tree-{{ $menu['key'] }}">
+                                        <div class="nav-tree-inner">
+                                            @foreach ($menu['sections'] as $section)
+                                                @if ($section['label'])
+                                                    <div class="nav-tree-section">{{ $section['label'] }}</div>
+                                                @endif
+                                                @foreach ($section['items'] as $item)
+                                                    <a href="{{ $item[1] }}" class="nav-child {{ $item[2] ? 'active' : '' }}" title="{{ $item[0] }}"
+                                                       @if (isset($item[3])) data-delib-mode="{{ $item[3] }}" @endif
+                                                       @if ($item[2]) aria-current="page" @endif>
+                                                        <span class="label">{{ $item[0] }}</span>
+                                                    </a>
+                                                @endforeach
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                </div>
                             @endforeach
                         </div>
                     @endif
@@ -493,7 +652,23 @@
                     <button class="menu-toggle" id="menuToggle" type="button" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false">
                         <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14"/></svg>
                     </button>
-                    <span class="topbar-title">@yield('title', 'Dashboard')</span>
+                    @if (count($breadcrumbs))
+                        <nav class="breadcrumbs" aria-label="Breadcrumb">
+                            <ol>
+                                @foreach ($breadcrumbs as [$crumb, $crumbUrl])
+                                    <li @if ($loop->last) data-crumb-current @endif>
+                                        @if ($crumbUrl)
+                                            <a href="{{ $crumbUrl }}">{{ $crumb }}</a>
+                                        @else
+                                            <span aria-current="page">{{ $crumb }}</span>
+                                        @endif
+                                    </li>
+                                @endforeach
+                            </ol>
+                        </nav>
+                    @else
+                        <span class="topbar-title">@yield('title', 'Dashboard')</span>
+                    @endif
                 </div>
 
                 <div class="user-menu">
@@ -553,17 +728,28 @@
                 data-csrf="{{ csrf_token() }}"
                 data-reverb-configured="{{ config('broadcasting.default') === 'reverb' && filled(config('broadcasting.connections.reverb.key')) && filled(config('broadcasting.connections.reverb.secret')) && filled(config('broadcasting.connections.reverb.app_id')) ? 'true' : 'false' }}"
                 aria-label="Direct messages">
-                <div class="chat-window" id="chatWindow" role="dialog" aria-label="Direct messages" hidden>
+                <div class="chat-window" id="chatWindow" role="dialog" aria-label="Messages and to-do" hidden>
                     <header class="chat-window-header">
-                        <span>Chats</span>
-                        <button class="chat-window-minimize" id="chatMinimize" type="button" aria-label="Minimize chat" title="Minimize">&minus;</button>
+                        <div class="chat-window-title">
+                            <strong>Messages</strong>
+                            <span>Chats and your to-do list</span>
+                        </div>
+                        <a class="chat-window-btn" href="{{ route('messages.index') }}" title="Open in full page" aria-label="Open messages in a full page">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4l-8 8"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>
+                        </a>
+                        <button class="chat-window-btn" id="chatMinimize" type="button" aria-label="Minimize chat" title="Minimize">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12"/></svg>
+                        </button>
                     </header>
-                    <iframe title="Direct messages" data-src="{{ route('messages.index', ['widget' => 1]) }}" loading="lazy"></iframe>
+                    <iframe title="Messages and to-do" data-src="{{ route('messages.index', ['widget' => 1]) }}" loading="lazy"></iframe>
                 </div>
                 <button class="chat-head-launcher" id="chatLauncher" type="button" aria-label="Open messages" aria-controls="chatWindow" aria-expanded="false">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <svg class="chat-icon-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H5l1.8-3.2A7.5 7.5 0 1 1 20 11.5Z"/>
                         <path d="M8.5 11.5h7M8.5 14.5h4"/>
+                    </svg>
+                    <svg class="chat-icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M6 9l6 6 6-6"/>
                     </svg>
                     <span class="chat-unread-badge" id="chatUnreadBadge" aria-live="polite" aria-atomic="true" hidden></span>
                 </button>
@@ -745,6 +931,138 @@
         </script>
         <script>
             (() => {
+                // Expandable sidebar menus. The chevron opens/closes; the open state is remembered per menu.
+                document.querySelectorAll('[data-nav-tree]').forEach(tree => {
+                    const toggle = tree.querySelector('.nav-tree-toggle');
+                    const key = `navTree:${tree.dataset.navTree}`;
+                    try {
+                        // A menu holding the current page always starts open; otherwise use the remembered state.
+                        if (!tree.classList.contains('open') && localStorage.getItem(key) === '1') tree.classList.add('open');
+                    } catch (error) { /* storage blocked */ }
+                    toggle.setAttribute('aria-expanded', String(tree.classList.contains('open')));
+                    toggle.addEventListener('click', () => {
+                        const open = tree.classList.toggle('open');
+                        toggle.setAttribute('aria-expanded', String(open));
+                        try { localStorage.setItem(key, open ? '1' : '0'); } catch (error) { /* storage blocked */ }
+                    });
+                });
+
+                // The Deliberation page switches Add / Subtract without reloading; keep the menu and breadcrumb in step.
+                window.addEventListener('deliberation-mode', event => {
+                    const mode = event.detail?.mode === 'subtract' ? 'subtract' : 'add';
+                    document.querySelectorAll('[data-delib-mode]').forEach(link => {
+                        const active = link.dataset.delibMode === mode;
+                        link.classList.toggle('active', active);
+                        if (active) link.setAttribute('aria-current', 'page');
+                        else link.removeAttribute('aria-current');
+                    });
+                    const current = document.querySelector('.breadcrumbs [data-crumb-current] [aria-current]');
+                    if (current) current.textContent = mode === 'subtract' ? 'Subtract' : 'Add';
+                });
+            })();
+        </script>
+        @if ($canUseTasks)
+            <script>
+                (() => {
+                    // New-task reminder: the sidebar badge counts tasks this person has not opened yet, and a
+                    // centered pop-up keeps coming back (every page load, then every 2 minutes) until they open Tasks.
+                    const unseenUrl = @json(route('assigned-tasks.unseen'));
+                    const tasksUrl = @json(route('tasks'));
+                    const onTasksPage = @json(request()->routeIs('tasks'));
+                    const badge = document.getElementById('tasksNavBadge');
+                    const REMIND_EVERY = 120000;
+                    let lastReminder = 0;
+                    let checking = false;
+                    let checkAgain = false;
+
+                    const showBadge = count => {
+                        if (!badge) return;
+                        badge.textContent = count > 99 ? '99+' : String(count);
+                        badge.hidden = !count;
+                        badge.setAttribute('aria-label', count === 1 ? '1 new task' : `${count} new tasks`);
+                    };
+                    const noticeOpen = () => {
+                        const notice = document.getElementById('appNotice');
+                        return notice && !notice.hidden;
+                    };
+                    // Due-soon reminder (critical, red): at most every 30 minutes, shared by all tabs and page loads.
+                    const DUE_EVERY = 30 * 60000;
+                    const DUE_KEY = 'lspdmsTaskDueReminderAt';
+                    const dueReminderAllowed = () => {
+                        try { return Date.now() - Number(localStorage.getItem(DUE_KEY) || 0) >= DUE_EVERY; } catch (error) { return Date.now() - lastReminder >= DUE_EVERY; }
+                    };
+                    const markDueReminded = () => { try { localStorage.setItem(DUE_KEY, String(Date.now())); } catch (error) { /* storage blocked */ } };
+                    const dueText = days => days < 0 ? `Overdue by ${-days} day${days === -1 ? '' : 's'}` : days === 0 ? 'Due today' : days === 1 ? 'Due tomorrow' : `Due in ${days} days`;
+                    function remindDue(tasks) {
+                        markDueReminded();
+                        const first = tasks[0].days_left;
+                        const title = tasks.length > 1
+                            ? `${tasks.length} tasks are due soon!`
+                            : first < 0 ? 'A task is overdue!' : first === 0 ? 'A task is due today!' : 'A task is due soon!';
+                        window.lspdmsNotify?.({
+                            type: 'error',
+                            title,
+                            message: 'Finish it before the due date, or tell the Head Secretary in the comments.',
+                            changes: tasks.slice(0, 5).map(task => ({ label: task.title, to: dueText(task.days_left) })),
+                            action: { label: 'Open Tasks Menu', href: tasksUrl },
+                            dismissLabel: 'Later',
+                        });
+                    }
+
+                    // Don't interrupt someone typing; the reminder waits for the next check.
+                    const typing = () => {
+                        const active = document.activeElement;
+                        return Boolean(active && (active.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName)));
+                    };
+
+                    async function check() {
+                        if (checking) { checkAgain = true; return; }
+                        if (document.hidden || !navigator.onLine) return;
+                        checking = true;
+                        try {
+                            const response = await fetch(unseenUrl, { headers: { Accept: 'application/json' }, cache: 'no-store', credentials: 'same-origin' });
+                            if (!response.ok) return;
+                            const { count, title, message, due_soon: dueSoon = [] } = await response.json();
+                            showBadge(count);
+                            // Never on the Tasks page itself (it shows its own Due soon block), never on top of another message.
+                            if (onTasksPage || noticeOpen() || typing()) return;
+                            if (count && Date.now() - lastReminder >= REMIND_EVERY) {
+                                lastReminder = Date.now();
+                                window.lspdmsNotify?.({
+                                    type: 'info',
+                                    title,
+                                    message,
+                                    action: { label: 'Open Tasks Menu', href: tasksUrl },
+                                    dismissLabel: 'Later',
+                                    onClose: () => { lastReminder = Date.now(); },
+                                });
+                                return;
+                            }
+                            if (dueSoon.length && dueReminderAllowed()) remindDue(dueSoon);
+                        } catch (error) {
+                            // a reminder is best-effort; the next check tries again
+                        } finally {
+                            checking = false;
+                            // A check asked for while one was running (e.g. right after tasks were seen) runs now.
+                            if (checkAgain) { checkAgain = false; check(); }
+                        }
+                    }
+
+                    check();
+                    window.setInterval(check, 30000);
+                    document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
+                    // The Tasks page marks tasks as seen; refresh the badge right away.
+                    window.addEventListener('lspdms:tasks-seen', () => { lastReminder = Date.now(); check(); });
+                    // Live (Reverb): a task was just posted or shared with you -> remind right away, no 2-minute wait.
+                    window.addEventListener('lspdms:task-updated', event => {
+                        if (['created', 'done'].includes(event.detail?.kind)) lastReminder = 0;
+                        check();
+                    });
+                })();
+            </script>
+        @endif
+        <script>
+            (() => {
                 // Logging out in one tab signs out every open tab of this browser at once.
                 const rendered = document.querySelector('meta[name="lspdms-user"]')?.content || '0:0';
                 const goToLogin = () => (window.top || window).location.assign('/login');
@@ -752,14 +1070,16 @@
                 try { authChannel = new BroadcastChannel('lspdms-auth'); } catch (error) { authChannel = null; }
                 authChannel?.addEventListener('message', event => { if (event.data?.type === 'logout') goToLogin(); });
                 window.addEventListener('storage', event => { if (event.key === 'lspdms-logout') goToLogin(); });
+                let loggingOut = false;
                 document.querySelectorAll('form[data-lspdms-logout]').forEach(form => form.addEventListener('submit', () => {
+                    loggingOut = true; // our own logout: never report it as revoked access
                     try { authChannel?.postMessage({ type: 'logout' }); } catch (error) { /* channel closed */ }
                     try { localStorage.setItem('lspdms-logout', String(Date.now())); } catch (error) { /* storage blocked */ }
                 }));
 
                 let checking = false;
                 const checkSession = async () => {
-                    if (checking || !navigator.onLine) return; // never overlap requests
+                    if (checking || loggingOut || !navigator.onLine) return; // never overlap requests
                     checking = true;
                     try {
                         const response = await fetch(@json(route('session.status')), {
@@ -769,9 +1089,14 @@
                         });
                         if (response.redirected) window.location.assign(response.url);
                         else if (!response.ok) {
+                            if (loggingOut) return;
                             const result = await response.json().catch(() => ({}));
-                            const reason = result.reason === 'password_changed' ? 'password_changed' : 'revoked';
-                            window.location.assign(`/login?access=${reason}`);
+                            // Only a disabled account is "revoked"; a logout (here or in another tab) just returns to sign-in.
+                            const target = {
+                                account_disabled: '/login?access=revoked',
+                                password_changed: '/login?access=password_changed',
+                            }[result.reason] || '/login';
+                            window.location.assign(target);
                         }
                         else {
                             const { permissions, user_id: userId, auth_version: authVersion } = await response.json();
@@ -787,7 +1112,8 @@
                             });
                             // Hide a group's heading when none of its links are allowed any more.
                             document.querySelectorAll('[data-nav-group]').forEach(group => {
-                                const anyAllowed = [...group.querySelectorAll('a')].some(link => !link.hidden);
+                                if (group.hasAttribute('data-feature')) return; // whole group follows its own permission
+                                const anyAllowed = [...group.querySelectorAll('a')].some(link => !link.closest('[hidden]'));
                                 group.hidden = !anyAllowed;
                                 group.style.display = anyAllowed ? '' : 'none';
                             });
@@ -800,8 +1126,9 @@
                                 '/inquire-modify': 'Inquire_Allow',
                                 '/tarheta-status': 'tarheta_status_allow',
                                 '/filter-bnh-helper': 'filter_bnh_helper_allow',
+                                '/note-checker': 'note_checker_allow',
                                 '/superadmin-dashboard': 'head_secretary',
-                            }).find(([path]) => window.location.pathname === path)?.[1];
+                            }).find(([path]) => window.location.pathname === path || window.location.pathname.startsWith(`${path}/`))?.[1];
                             if (currentFeature && !permissions[currentFeature]) window.location.assign('/home');
                         }
                     } catch (error) {

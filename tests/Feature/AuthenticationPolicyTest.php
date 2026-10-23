@@ -168,6 +168,7 @@ class AuthenticationPolicyTest extends TestCase
         ]);
         $this->verifiedSmtpAccount();
         Mail::fake();
+        $this->freezeSecond(); // the cooldown countdown below must not lose a second between requests
 
         $this->post(route('password.email'), ['email' => $user->gmail])
             ->assertRedirect(route('password.request', ['sent' => 1]));

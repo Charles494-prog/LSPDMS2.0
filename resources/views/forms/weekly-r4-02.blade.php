@@ -156,7 +156,7 @@
             <h1>R4-02 Generator</h1>
             <p>Filter the R4-01 list, pick the rows you need, then download the R4-02 and R4-03 for each Purok.</p>
         </div>
-        <a class="r402-back" href="{{ route('form-generator', ['panel' => 'weekly']) }}">Back to Form Generator</a>
+        <a class="r402-back" href="{{ route('form-generator') }}#generate-weekly">Back to Form Generator</a>
     </header>
 
     @if ($errors->any())

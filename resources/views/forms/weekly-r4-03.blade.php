@@ -23,7 +23,7 @@
     <section class="r403-card">
         <div class="r403-heading">
             <div><h1>R4-03 Generator</h1><p>Summarize generated R4-02 forms, grouped only under Puroks that have saved reports.</p></div>
-            <a class="r403-button" href="{{ route('form-generator', ['panel' => 'weekly']) }}">Back to Form Generator</a>
+            <a class="r403-button" href="{{ route('form-generator') }}#generate-weekly">Back to Form Generator</a>
         </div>
         <form class="r403-filter" method="GET" action="{{ route('forms.weekly.r4-03') }}">
             <label for="r403Status">Kalagayan

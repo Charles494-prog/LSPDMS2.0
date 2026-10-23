@@ -101,7 +101,7 @@
 </style>
 <main class="monthly-modify">
     <section class="monthly-modify-hero">
-        <a class="monthly-back-button" href="{{ route('form-generator') }}">&larr; Back to Form Generator</a>
+        <a class="monthly-back-button" href="{{ route('form-generator') }}#deliberation">&larr; Back to Form Generator</a>
         <h1>Monthly Modify</h1>
         <p>Search for a member to change their status or transfer them to a different configured Purok. Inactive records can be found but cannot be changed.</p>
     </section>

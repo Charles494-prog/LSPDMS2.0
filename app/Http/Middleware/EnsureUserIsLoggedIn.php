@@ -73,7 +73,8 @@ class EnsureUserIsLoggedIn
             return $this->invalidSessionResponse('logged_out');
         }
 
-        return redirect('/login')->withErrors(['login' => 'Please log in to continue.']);
+        // Not an error: this is also where Back lands after a normal logout.
+        return redirect('/login')->with('status', 'Please log in to continue.');
     }
 
     /** Background fetches (session poll, chat, widgets) get JSON instead of a login-page redirect. */

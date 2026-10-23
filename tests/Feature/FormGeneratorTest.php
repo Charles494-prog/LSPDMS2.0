@@ -21,42 +21,70 @@ class FormGeneratorTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_form_generator_displays_weekly_monthly_and_notes_checker_sections(): void
+    public function test_form_generator_shows_generate_forms_and_a_separate_deliberation_section(): void
     {
         $user = $this->makeSecretary(['form_generator_allow' => true]);
 
         $this->withSession(['login_user' => ['id' => $user->id]])
             ->get(route('form-generator'))
             ->assertOk()
-            ->assertSee('R4-02 Generator')
-            ->assertSee('R4-03 Generator')
+            ->assertSeeInOrder(['id="generate-forms"', 'id="generate-weekly"', 'R4-02 Generator', 'R4-03 Generator',
+                'id="generate-monthly"', 'Resumen &amp; R4-01 Generator (This Month)', 'R4-01 Snapshots',
+                'id="deliberation"', 'Add', 'Subtract', 'Modify'], false)
             ->assertSee(route('forms.weekly.r4-02'), false)
             ->assertSee(route('forms.weekly.r4-03'), false)
-            ->assertSee('aria-label="Monthly generator sections"', false)
-            ->assertSee('id="deliberation-tab"', false)
-            ->assertSee('id="monthly-forms-tab"', false)
-            ->assertSee('Monthly Forms')
+            ->assertSee(route('forms.monthly.generators'), false)
+            ->assertSee(route('forms.monthly.r4-01.snapshots'), false)
+            ->assertSee(route('forms.monthly.deliberation', ['mode' => 'subtract']), false)
+            ->assertSee(route('forms.monthly.modify'), false)
             ->assertSee('id="monthlySessionWidget"', false)
             ->assertSee('id="monthlySessionOpen"', false)
             ->assertSee('Please type the following exactly. It is case-sensitive:', false)
             ->assertSee('Please match the entire sentence exactly, including capitalization.', false)
             ->assertSee('monthlySessionBlocker', false)
-            ->assertDontSee('data-panel="deliberation"', false)
-            ->assertSee('Deliberation')
-            ->assertSee(route('forms.monthly.modify'), false)
-            ->assertSee('Resumen &amp; R4-01 Generator', false)
-            ->assertSee('Resumen &amp; R4-01 Snapshots', false)
-            ->assertDontSee('id="resumen-generator-heading"', false)
-            ->assertDontSee('id="r401-generator-heading"', false)
-            ->assertSee(route('forms.monthly.r4-01.snapshots'), false)
-            ->assertSee(route('forms.monthly.generators'), false)
-            ->assertSee('Notes Checker')
+            // Sidebar submenus and the breadcrumb trail
+            ->assertSee('data-nav-tree="generate"', false)
+            ->assertSee('data-nav-tree="deliberation"', false)
+            ->assertSee('aria-label="Breadcrumb"', false)
+            // Notes moved to their own page
+            ->assertDontSee('id="notesApp"', false);
+    }
+
+    public function test_old_notes_tab_link_redirects_and_form_pages_show_breadcrumbs(): void
+    {
+        $user = $this->makeSecretary(['form_generator_allow' => true, 'note_checker_allow' => true]);
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->get(route('form-generator', ['panel' => 'notes']))
+            ->assertRedirect(route('note-checker'));
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->get(route('forms.weekly.r4-03'))
+            ->assertOk()
+            ->assertSeeInOrder(['aria-label="Breadcrumb"', 'Form Generator', 'Generate Forms', 'Weekly', 'R4-03 Generator'], false);
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->get(route('forms.monthly.deliberation', ['mode' => 'subtract']))
+            ->assertOk()
+            ->assertSeeInOrder(['aria-label="Breadcrumb"', 'Form Generator', 'Deliberation Form', 'Subtract'], false);
+    }
+
+    public function test_note_checker_is_its_own_page(): void
+    {
+        $user = $this->makeSecretary(['note_checker_allow' => true]);
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->get(route('note-checker'))
+            ->assertOk()
+            ->assertSee('Note Checker')
+            ->assertSee('id="notesApp"', false)
             ->assertSee('id="notesRecordPagination"', false)
             ->assertSee('id="previousRecordsPage"', false)
             ->assertSee('id="nextRecordsPage"', false)
             ->assertSee('new AbortController()', false)
             ->assertSee('Save or clear the unsaved note before switching records.', false)
-            ->assertSee('const recordsPerPage = 10;', false);
+            ->assertSee('const recordsPerPage = 10;', false)
+            ->assertSee('href="'.route('note-checker').'"', false);
     }
 
     public function test_resumen_and_r4_01_generators_render_together_in_order(): void
@@ -1232,7 +1260,7 @@ class FormGeneratorTest extends TestCase
 
     public function test_secretary_can_search_append_and_delete_dated_record_notes(): void
     {
-        $user = $this->makeSecretary(['form_generator_allow' => true]);
+        $user = $this->makeSecretary(['note_checker_allow' => true]);
         $record = Record::query()->create([
             'full_name' => 'Member With Notes',
             'registry' => 'REG-NOTE-1',
@@ -1270,16 +1298,53 @@ class FormGeneratorTest extends TestCase
             ->assertJsonPath('notes.0', $today.': Should be on deliberation, discuss with head secretary');
     }
 
-    public function test_secretary_without_form_generator_permission_cannot_access_notes(): void
+    public function test_note_checker_search_finds_records_without_notes(): void
     {
-        $user = $this->makeSecretary(['form_generator_allow' => false]);
+        $user = $this->makeSecretary(['note_checker_allow' => true]);
+        Record::query()->create(['full_name' => 'Eniron Mercado', 'registry' => 'REG-EM-1', 'status' => 'MS']);
+        Record::query()->create(['full_name' => 'Noted Person', 'registry' => 'REG-NP-1', 'log_section' => '01/09/2025: First']);
+
+        // No search: only records that already have notes.
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->getJson(route('forms.notes'))
+            ->assertOk()
+            ->assertJsonCount(1)
+            ->assertJsonPath('0.name', 'Noted Person');
+
+        // A search finds any record, so a first note can be added.
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->getJson(route('forms.notes').'?q=Eniron')
+            ->assertOk()
+            ->assertJsonCount(1)
+            ->assertJsonPath('0.name', 'Eniron Mercado')
+            ->assertJsonPath('0.status', 'MS')
+            ->assertJsonPath('0.notes', []);
+    }
+
+    public function test_note_checker_needs_its_own_permission(): void
+    {
+        // Form Generator access alone no longer opens the notes.
+        $user = $this->makeSecretary(['form_generator_allow' => true, 'note_checker_allow' => false]);
 
         $this->withSession(['login_user' => ['id' => $user->id]])
-            ->get(route('form-generator'))
+            ->get(route('note-checker'))
             ->assertForbidden();
         $this->withSession(['login_user' => ['id' => $user->id]])
             ->getJson(route('forms.notes'))
             ->assertForbidden();
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->get(route('form-generator'))
+            ->assertOk()
+            ->assertDontSee('href="'.route('note-checker').'"', false);
+
+        // And the Note Checker works without Form Generator access.
+        $noteOnly = $this->makeSecretary(['form_generator_allow' => false, 'note_checker_allow' => true]);
+        $this->withSession(['login_user' => ['id' => $noteOnly->id]])
+            ->get(route('form-generator'))
+            ->assertForbidden();
+        $this->withSession(['login_user' => ['id' => $noteOnly->id]])
+            ->getJson(route('forms.notes'))
+            ->assertOk();
     }
 
     private function makeSecretary(array $attributes = []): User

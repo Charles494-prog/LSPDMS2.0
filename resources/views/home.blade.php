@@ -92,7 +92,7 @@
 <div class="faith-page">
 
     {{-- Verse of the day: picked once per page load. Without JavaScript the default verse below stays visible.
-         The canvas behind the verse draws the cursor-following paint trail (see the script at the bottom). --}}
+         The canvas behind the verse draws the drifting green and red dust (see the script at the bottom). --}}
     <section class="hm-hero" id="top" aria-label="Talata mula sa Biblia">
         <canvas class="hm-paint" id="hm-paint" aria-hidden="true"></canvas>
         <p class="hm-eyebrow">The Daily Faith</p>
@@ -222,14 +222,11 @@
         padding: clamp(2.6rem, 7vw, 5rem) clamp(1.2rem, 4vw, 3rem) clamp(2rem, 5vw, 3rem);
         border: 1px solid var(--line); border-radius: 10px; background: var(--card);
     }
-    /* Paint trail canvas sits behind all hero content */
+    /* Green / red dust canvas sits behind all hero content */
     .hm-paint {
         position: absolute; inset: 0; width: 100%; height: 100%;
         z-index: 0; pointer-events: none;
-        filter: blur(18px) saturate(1.3); /* soft, wet-paint look */
-        opacity: .7;
     }
-    html[data-theme="dark"] .hm-paint { opacity: .55; }
     .hm-hero > :not(.hm-paint) { position: relative; z-index: 1; }
 
     .hm-eyebrow { display: inline-flex; align-items: center; gap: .8rem; color: var(--muted); font-size: .74rem; font-weight: 600; letter-spacing: .24em; text-transform: uppercase; }
@@ -413,83 +410,109 @@ document.addEventListener('DOMContentLoaded', () => {
         paint(current);
     }));
 
-    /* ---------- Paint trail that follows the mouse over the Bible quote ----------
-       Soft, blurred, semi-transparent strokes in red / green / gold that blend and slowly fade.
-       Skipped on touch devices and when the visitor prefers reduced motion. */
+    /* ---------- Green and red dust over the Bible quote ----------
+       Specks drift across the card and off its edges (new ones drift in), and now and then a soft
+       green or red flare sweeps in and fades out, like a camera catching coloured flashlights.
+       Runs on its own (no hover needed); pauses off-screen / in a hidden tab; off for reduced motion. */
     (() => {
         const hero = document.getElementById('top');
         const canvas = document.getElementById('hm-paint');
         if (!hero || !canvas) return;
-        if (matchMedia('(prefers-reduced-motion: reduce)').matches || matchMedia('(hover: none)').matches) {
+        if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
             canvas.remove();
             return;
         }
 
         const ctx = canvas.getContext('2d');
-        const palette = ['220,38,38', '22,163,74', '234,179,8']; // red, green, gold
-        let w = 0, h = 0;
+        const COLORS = ['22,163,74', '220,38,38']; // green, red
+        const rand = (a, b) => a + Math.random() * (b - a);
+        const isDark = () => document.documentElement.dataset.theme === 'dark';
+        let w = 0, h = 0, dust = [], flares = [], nextFlare = 0, running = false, visible = true, last = 0;
+
+        // A speck enters from a random edge (or anywhere, on first fill) and drifts slowly across.
+        const speck = scatter => {
+            const p = { r: rand(.7, 2.4), c: COLORS[Math.random() < .5 ? 0 : 1], a: rand(.35, .9), tw: rand(0, Math.PI * 2), ts: rand(.6, 1.8) };
+            const angle = rand(0, Math.PI * 2), speed = rand(6, 22); // px per second
+            p.vx = Math.cos(angle) * speed; p.vy = Math.sin(angle) * speed - 4; // slight upward lift
+            if (scatter) { p.x = rand(0, w); p.y = rand(0, h); }
+            else {
+                // start just outside the edge it is moving away from
+                p.x = p.vx > 0 ? -6 : w + 6; p.y = rand(0, h);
+                if (Math.abs(p.vy) > Math.abs(p.vx)) { p.x = rand(0, w); p.y = p.vy > 0 ? -6 : h + 6; }
+            }
+            return p;
+        };
+        const flare = now => {
+            const fromLeft = Math.random() < .5;
+            return {
+                c: COLORS[Math.random() < .5 ? 0 : 1], born: now, life: rand(1800, 2800),
+                x: fromLeft ? rand(-.15, .25) * w : rand(.75, 1.15) * w, y: rand(.1, .9) * h,
+                vx: (fromLeft ? 1 : -1) * rand(.04, .09) * w / 1000, radius: rand(.35, .6) * Math.max(w, h),
+            };
+        };
 
         const resize = () => {
             const dpr = Math.min(window.devicePixelRatio || 1, 2);
             w = hero.clientWidth; h = hero.clientHeight;
             canvas.width = Math.max(1, w * dpr); canvas.height = Math.max(1, h * dpr);
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            const count = Math.min(90, Math.round(w * h / 9000));
+            dust = Array.from({ length: count }, () => speck(true));
         };
+
+        const frame = now => {
+            if (!running) return;
+            const dt = Math.min(64, now - (last || now)) / 1000;
+            last = now;
+            const dark = isDark();
+            ctx.clearRect(0, 0, w, h);
+            ctx.globalCompositeOperation = dark ? 'lighter' : 'source-over';
+
+            // Flares: quick rise, slow fade, gentle sideways sweep
+            if (now >= nextFlare) { flares.push(flare(now)); nextFlare = now + rand(1600, 3600); }
+            flares = flares.filter(f => {
+                const t = (now - f.born) / f.life;
+                if (t >= 1) return false;
+                f.x += f.vx * dt * 1000;
+                const env = t < .25 ? t / .25 : 1 - (t - .25) / .75;
+                const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.radius);
+                g.addColorStop(0, `rgba(${f.c},${(dark ? .36 : .16) * env})`);
+                g.addColorStop(1, `rgba(${f.c},0)`);
+                ctx.fillStyle = g;
+                ctx.fillRect(0, 0, w, h);
+                return true;
+            });
+
+            // Dust: drift, twinkle, and replace any speck that has left the card
+            for (let i = 0; i < dust.length; i++) {
+                const p = dust[i];
+                p.x += p.vx * dt; p.y += p.vy * dt; p.tw += p.ts * dt;
+                if (p.x < -10 || p.x > w + 10 || p.y < -10 || p.y > h + 10) { dust[i] = speck(false); continue; }
+                const alpha = p.a * (.55 + .45 * Math.sin(p.tw)) * (dark ? 1 : .8);
+                ctx.fillStyle = `rgba(${p.c},${alpha})`;
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+                if (p.r > 1.8) { // the bigger specks get a faint halo
+                    ctx.fillStyle = `rgba(${p.c},${alpha * .18})`;
+                    ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 3.2, 0, Math.PI * 2); ctx.fill();
+                }
+            }
+            ctx.globalCompositeOperation = 'source-over';
+            requestAnimationFrame(frame);
+        };
+        const sync = () => {
+            const shouldRun = visible && !document.hidden;
+            if (shouldRun && !running) { running = true; last = 0; requestAnimationFrame(frame); }
+            else if (!shouldRun) running = false;
+        };
+
         resize();
         if ('ResizeObserver' in window) new ResizeObserver(resize).observe(hero);
         else window.addEventListener('resize', resize);
-
-        const target = { x: 0, y: 0 }, pos = { x: 0, y: 0 };
-        let hovering = false, running = false, idleFrames = 0, t = 0;
-
-        const stamp = (x, y, radius, rgb) => {
-            const g = ctx.createRadialGradient(x, y, 0, x, y, radius);
-            g.addColorStop(0, `rgba(${rgb},.35)`);
-            g.addColorStop(1, `rgba(${rgb},0)`);
-            ctx.fillStyle = g;
-            ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
-        };
-
-        const frame = () => {
-            // Slowly fade the old paint (lower alpha = longer trail)
-            ctx.globalCompositeOperation = 'destination-out';
-            ctx.fillStyle = 'rgba(0,0,0,.035)';
-            ctx.fillRect(0, 0, w, h);
-            ctx.globalCompositeOperation = 'source-over';
-
-            if (hovering) {
-                const px = pos.x, py = pos.y;
-                pos.x += (target.x - pos.x) * 0.16; // easing gives the "following" feel
-                pos.y += (target.y - pos.y) * 0.16;
-                const dist = Math.hypot(pos.x - px, pos.y - py);
-                const steps = Math.max(1, Math.ceil(dist / 8));
-                t += 0.012;
-                for (let i = 1; i <= steps; i++) {
-                    const x = px + (pos.x - px) * (i / steps);
-                    const y = py + (pos.y - py) * (i / steps);
-                    const radius = 70 + Math.min(dist, 40) * 1.6; // faster mouse = bigger brush
-                    const k = (Math.sin(t) + 1) / 2 * (palette.length - 1); // colors drift smoothly
-                    stamp(x, y, radius, palette[Math.round(k)]);
-                }
-                idleFrames = 0;
-            } else if (++idleFrames > 180) {
-                running = false; // fully faded: stop the loop
-                ctx.clearRect(0, 0, w, h);
-                return;
-            }
-            requestAnimationFrame(frame);
-        };
-        const start = () => { if (!running) { running = true; requestAnimationFrame(frame); } };
-        const setTarget = (e, snap) => {
-            const r = hero.getBoundingClientRect();
-            target.x = e.clientX - r.left;
-            target.y = e.clientY - r.top;
-            if (snap) { pos.x = target.x; pos.y = target.y; }
-        };
-
-        hero.addEventListener('pointerenter', e => { setTarget(e, true); hovering = true; start(); });
-        hero.addEventListener('pointermove', e => { setTarget(e, false); if (!hovering) { hovering = true; start(); } });
-        hero.addEventListener('pointerleave', () => { hovering = false; });
+        if ('IntersectionObserver' in window) {
+            new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; sync(); }).observe(hero);
+        }
+        document.addEventListener('visibilitychange', sync);
+        sync();
     })();
 
     // Featured image: skeleton while loading, an error state with retry if it fails

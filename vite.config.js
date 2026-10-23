@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => {
     return {
         plugins: [
             laravel({
-                input: ['resources/css/app.css', 'resources/js/app.js', 'resources/js/messaging.js', 'resources/js/assistant.js', 'resources/js/chat-notifications.js', 'resources/js/dashboard.js', 'resources/js/delistment-charts.js', 'resources/js/motion.js'],
+                input: ['resources/css/app.css', 'resources/js/app.js', 'resources/js/messaging.js', 'resources/js/assistant.js', 'resources/js/chat-notifications.js', 'resources/js/dashboard.js', 'resources/js/delistment-charts.js', 'resources/js/motion.js', 'resources/js/workspace.js', 'resources/js/tasks.js'],
                 refresh: true,
             }),
             tailwindcss(),

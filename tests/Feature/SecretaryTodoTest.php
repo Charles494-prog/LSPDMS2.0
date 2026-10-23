@@ -119,7 +119,7 @@ class SecretaryTodoTest extends TestCase
 
     public function test_to_do_widget_is_not_embedded_in_the_notes_checker(): void
     {
-        $secretary = $this->makeSecretary(['form_generator_allow' => true]);
+        $secretary = $this->makeSecretary(['note_checker_allow' => true]);
 
         $this->withSession(['login_user' => ['id' => $secretary->id]])
             ->get(route('messages.index'))
@@ -127,11 +127,11 @@ class SecretaryTodoTest extends TestCase
             ->assertDontSee('Secretary To-Do');
 
         $this->withSession(['login_user' => ['id' => $secretary->id]])
-            ->get(route('form-generator'))
+            ->get(route('note-checker'))
             ->assertOk()
             ->assertDontSee('Secretary To-Do')
-            ->assertSee('id="notes-panel"', false)
-            ->assertSee('Notes Checker');
+            ->assertSee('id="notesApp"', false)
+            ->assertSee('Note Checker');
     }
 
     private function makeSecretary(array $attributes = []): User

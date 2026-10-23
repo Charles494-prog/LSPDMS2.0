@@ -176,7 +176,7 @@ class DashboardController extends Controller
         $monthlySnapshots = MonthlyRecordSnapshot::query()
             ->orderBy('month')
             ->orderBy('purok_number')
-            ->get(['month', 'purok_number', 'ms_count', 'uwp_count', 'mk_count', 'movement_counts']);
+            ->get(['month', 'purok_number', 'purok_id', 'ms_count', 'uwp_count', 'mk_count', 'movement_counts']);
         // Only months that have a snapshot are charted; months without one are
         // skipped (never shown as 0).
         $monthKeys = $monthlySnapshots
@@ -193,9 +193,16 @@ class DashboardController extends Controller
             $monthlyCounts[$monthKey] = ['MS' => 0, 'UWP' => 0, 'MK' => 0];
             $monthlyPurokCounts[$monthKey] = [];
         }
+        // Puroks come from the Purok settings (segments such as 2a / 2b stay separate); a snapshot
+        // saved before segments existed falls back to its Purok number.
+        $purokSettings = Purok::query()->orderBy('purok_number')->orderBy('grupo_start')->orderBy('id')
+            ->get(['id', 'purok_number', 'purok_name']);
+        $purokKey = fn (MonthlyRecordSnapshot $snapshot): string => $snapshot->purok_id
+            ? 'p'.$snapshot->purok_id
+            : 'n'.(int) $snapshot->purok_number;
         foreach ($monthlySnapshots as $snapshot) {
             $monthKey = $snapshot->month->format('Y-m');
-            $purok = (string) $snapshot->purok_number;
+            $purok = $purokKey($snapshot);
             $monthlyPurokCounts[$monthKey][$purok] ??= ['MS' => 0, 'UWP' => 0, 'MK' => 0];
             foreach (['MS' => 'ms_count', 'UWP' => 'uwp_count', 'MK' => 'mk_count'] as $status => $column) {
                 $quantity = (int) $snapshot->{$column};
@@ -206,7 +213,7 @@ class DashboardController extends Controller
                 foreach ($codes as $code => $count) {
                     $movementDetails[] = [
                         'month' => $monthKey,
-                        'purok' => (int) $snapshot->purok_number,
+                        'purok' => $purok,
                         'status' => $status,
                         'code' => $code,
                         'count' => (int) $count,
@@ -214,12 +221,19 @@ class DashboardController extends Controller
                 }
             }
         }
-        $movementPuroks = $monthlySnapshots
-            ->pluck('purok_number')
-            ->unique()
-            ->sort()
-            ->values()
-            ->all();
+        $snapshotKeys = $monthlySnapshots->map($purokKey)->unique();
+        $configured = $purokSettings
+            ->map(fn (Purok $purok): array => ['id' => 'p'.$purok->id, 'label' => trim((string) $purok->purok_name) ?: 'Purok '.$purok->purok_number])
+            ->filter(fn (array $purok): bool => $snapshotKeys->contains($purok['id']));
+        $legacy = $snapshotKeys
+            ->reject(fn (string $key): bool => $configured->contains('id', $key))
+            ->map(fn (string $key): array => [
+                'id' => $key,
+                'label' => str_starts_with($key, 'n')
+                    ? 'Purok '.substr($key, 1)
+                    : 'Purok (removed setting #'.substr($key, 1).')',
+            ]);
+        $movementPuroks = $configured->concat($legacy)->values()->all();
 
         $registryStatuses = ['MS', 'UWP', 'MK'];
         $registryRecords = $records->filter(fn (Record $record): bool => in_array(

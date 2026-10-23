@@ -31,6 +31,7 @@ class User extends Authenticatable
         'tarheta_status_allow',
         'filter_bnh_helper_allow',
         'chatbot_records_allow',
+        'note_checker_allow',
     ];
 
     protected $hidden = [
@@ -51,6 +52,7 @@ class User extends Authenticatable
             'tarheta_status_allow' => 'boolean',
             'filter_bnh_helper_allow' => 'boolean',
             'chatbot_records_allow' => 'boolean',
+            'note_checker_allow' => 'boolean',
         ];
     }
 

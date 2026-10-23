@@ -23,6 +23,7 @@ class EnsureUserHasPermission
             'Inquire_Allow',
             'tarheta_status_allow',
             'filter_bnh_helper_allow',
+            'note_checker_allow',
         ], true) || ! ($user[$permission] ?? false)) {
             abort(403, 'Your account does not have permission to access this feature.');
         }

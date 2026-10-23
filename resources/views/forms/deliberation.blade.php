@@ -155,7 +155,7 @@
 
 <div class="deliberation-page">
     <header class="deliberation-hero">
-        <a class="monthly-back-button" href="{{ route('form-generator') }}">&larr; Back to Form Generator</a>
+        <a class="monthly-back-button" href="{{ route('form-generator') }}#deliberation">&larr; Back to Form Generator</a>
         <h1>Deliberation Form</h1>
         <p>Enter a member's information. Asterisks mark required fields. Existing records can be found, but cannot be changed or reused in Add.</p>
     </header>
@@ -442,6 +442,7 @@
         if (isSubtract) url.searchParams.set('mode', 'subtract');
         else url.searchParams.delete('mode');
         window.history.replaceState({}, '', url);
+        window.dispatchEvent(new CustomEvent('deliberation-mode', { detail: { mode: isSubtract ? 'subtract' : 'add' } }));
     }
 
     function setStatus(message, kind = '') {

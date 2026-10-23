@@ -54,6 +54,7 @@ class RegistrationController extends Controller
                 'tarheta_status_allow' => false,
                 'filter_bnh_helper_allow' => false,
                 'chatbot_records_allow' => false,
+                'note_checker_allow' => false,
             ]);
         } catch (UniqueConstraintViolationException) {
             // Two registrations for the same email raced past the check above.

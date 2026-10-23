@@ -115,9 +115,10 @@ html[data-theme="dark"] .spotlight { --spot-color: rgba(120, 170, 255, .10); }
 
 /* ---------- Back to top ---------- */
 .motion-top {
+    /* Right side, stacked above the chat launcher (never over the sidebar). */
     position: fixed;
-    left: max(1.25rem, env(safe-area-inset-left, 0px));
-    bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
+    right: max(32px, calc(env(safe-area-inset-right, 0px) + 32px));
+    bottom: calc(max(1.25rem, env(safe-area-inset-bottom, 0px)) + 84px);
     z-index: 55;
     display: grid;
     place-items: center;

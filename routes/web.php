@@ -8,6 +8,7 @@ use App\Http\Controllers\DeliberationController;
 use App\Http\Controllers\DelistmentController;
 use App\Http\Controllers\FilterBnhHelperController;
 use App\Http\Controllers\FormGeneratorController;
+use App\Http\Controllers\AssignedTaskController;
 use App\Http\Controllers\BuiltInHelpChatbotController;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\MessageController;
@@ -57,6 +58,20 @@ Route::middleware(['login.session', 'no-store'])->group(function () {
     Route::post('/secretary-todos', [SecretaryTodoController::class, 'store'])->middleware('throttle:60,1')->name('secretary-todos.store');
     Route::patch('/secretary-todos/{todo}', [SecretaryTodoController::class, 'update'])->middleware('throttle:60,1')->name('secretary-todos.update');
     Route::post('/secretary-todos/{todo}/complete', [SecretaryTodoController::class, 'complete'])->middleware('throttle:60,1')->name('secretary-todos.complete');
+    // Tasks the Head Secretary assigns to secretaries (Tasks page in the sidebar).
+    Route::get('/tasks', [AssignedTaskController::class, 'page'])->name('tasks');
+    Route::get('/assigned-tasks', [AssignedTaskController::class, 'index'])->middleware('throttle:120,1')->name('assigned-tasks.index');
+    Route::get('/assigned-tasks/unseen', [AssignedTaskController::class, 'unseen'])->middleware('throttle:120,1')->name('assigned-tasks.unseen');
+    Route::post('/assigned-tasks/seen', [AssignedTaskController::class, 'markSeenRequest'])->middleware('throttle:60,1')->name('assigned-tasks.seen');
+    Route::get('/assigned-tasks/secretaries', [AssignedTaskController::class, 'secretaries'])->name('assigned-tasks.secretaries');
+    Route::post('/assigned-tasks', [AssignedTaskController::class, 'store'])->middleware('throttle:30,1')->name('assigned-tasks.store');
+    Route::put('/assigned-tasks/{task}', [AssignedTaskController::class, 'update'])->middleware('throttle:30,1')->name('assigned-tasks.update');
+    Route::delete('/assigned-tasks/{task}', [AssignedTaskController::class, 'destroy'])->middleware('throttle:30,1')->name('assigned-tasks.destroy');
+    Route::post('/assigned-tasks/{task}/comments', [AssignedTaskController::class, 'comment'])->middleware('throttle:60,1')->name('assigned-tasks.comment');
+    Route::post('/assigned-tasks/{task}/reactions', [AssignedTaskController::class, 'react'])->middleware('throttle:120,1')->name('assigned-tasks.react');
+    Route::post('/assigned-tasks/{task}/complete', [AssignedTaskController::class, 'complete'])->middleware('throttle:30,1')->name('assigned-tasks.complete');
+    Route::post('/assigned-tasks/{task}/reopen', [AssignedTaskController::class, 'reopen'])->middleware('throttle:30,1')->name('assigned-tasks.reopen');
+    Route::post('/assigned-tasks/{task}/confirm', [AssignedTaskController::class, 'confirm'])->middleware('throttle:30,1')->name('assigned-tasks.confirm');
     Route::post('/messages/broadcasting/auth', BroadcastAuthController::class)->name('broadcasting.auth');
     Route::get('/messages', [MessageController::class, 'index'])->name('messages.index');
     Route::get('/messages/assistant', [BuiltInHelpChatbotController::class, 'index'])->name('messages.assistant');
@@ -101,6 +116,15 @@ Route::middleware(['login.session', 'no-store'])->group(function () {
         Route::delete('/records/{record}', [RecordsController::class, 'destroy'])->middleware('throttle:30,1')->name('records.destroy');
         Route::put('/records/{record}', [RecordsController::class, 'update'])->middleware('throttle:30,1')->name('records.update');
     });
+    // Note Checker: its own page and permission (it used to be a Form Generator tab).
+    Route::middleware('permission:note_checker_allow')->group(function (): void {
+        Route::get('/note-checker', [FormGeneratorController::class, 'noteChecker'])->name('note-checker');
+        Route::get('/forms/notes', [FormGeneratorController::class, 'notes'])->name('forms.notes');
+        Route::post('/forms/notes/records/{record}', [FormGeneratorController::class, 'appendNote'])->middleware('throttle:30,1')->name('forms.notes.append');
+        Route::delete('/forms/notes/records/{record}/{noteIndex}', [FormGeneratorController::class, 'deleteNote'])
+            ->whereNumber('noteIndex')
+            ->name('forms.notes.delete');
+    });
     Route::middleware('permission:form_generator_allow')->group(function (): void {
         Route::get('/form-generator', [FormGeneratorController::class, 'index'])->name('form-generator');
         Route::get('/forms/monthly/deliberation', [DeliberationController::class, 'index'])->name('forms.monthly.deliberation');
@@ -133,7 +157,6 @@ Route::middleware(['login.session', 'no-store'])->group(function () {
             ->name('forms.monthly.session.finish');
         Route::delete('/forms/monthly/session/movements/{movement}', [DeliberationController::class, 'undoMovement'])->name('forms.monthly.session.undo');
         Route::delete('/forms/monthly/session/activities/{activity}', [DeliberationController::class, 'undoActivity'])->name('forms.monthly.session.activity.undo');
-        Route::get('/forms/notes', [FormGeneratorController::class, 'notes'])->name('forms.notes');
         Route::get('/forms/monthly/generators', [FormGeneratorController::class, 'monthlyGenerators'])->name('forms.monthly.generators');
         Route::get('/forms/monthly/r4-01', [FormGeneratorController::class, 'r401'])->name('forms.monthly.r4-01');
         Route::get('/forms/monthly/r4-01/snapshots', [FormGeneratorController::class, 'r401Snapshots'])->name('forms.monthly.r4-01.snapshots');
@@ -152,10 +175,6 @@ Route::middleware(['login.session', 'no-store'])->group(function () {
             ->name('forms.weekly.r4-02.print');
         Route::get('/forms/weekly/r4-03', [R402R403Controller::class, 'r403'])->name('forms.weekly.r4-03');
         Route::get('/forms/weekly/r4-03/print', [R402R403Controller::class, 'printR403'])->name('forms.weekly.r4-03.print');
-        Route::post('/forms/notes/records/{record}', [FormGeneratorController::class, 'appendNote'])->middleware('throttle:30,1')->name('forms.notes.append');
-        Route::delete('/forms/notes/records/{record}/{noteIndex}', [FormGeneratorController::class, 'deleteNote'])
-            ->whereNumber('noteIndex')
-            ->name('forms.notes.delete');
         // Former placeholder pages: the names stay for old links, the forms live in the Form Generator.
         Route::get('/forms/weekly', fn () => redirect()->route('form-generator'))->name('forms.weekly');
         Route::get('/forms/monthly', fn () => redirect()->route('form-generator'))->name('forms.monthly');
@@ -240,6 +259,7 @@ Route::middleware(['login.session', 'no-store'])->group(function () {
                 'Inquire_Allow' => $isHeadSecretary || (bool) ($user['Inquire_Allow'] ?? false),
                 'tarheta_status_allow' => $isHeadSecretary || (bool) ($user['tarheta_status_allow'] ?? false),
                 'filter_bnh_helper_allow' => $isHeadSecretary || (bool) ($user['filter_bnh_helper_allow'] ?? false),
+                'note_checker_allow' => $isHeadSecretary || (bool) ($user['note_checker_allow'] ?? false),
             ],
         ]);
     })->name('session.status');

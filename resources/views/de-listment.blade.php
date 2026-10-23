@@ -233,32 +233,49 @@
                 <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="5.5"/><path d="m13.5 13.5 3.5 3.5"/></svg>
                 <input type="search" id="member-search" placeholder="Search members" autocomplete="off" aria-label="Search members">
             </label>
-            <div class="filter-group" role="group" aria-label="Filter by eligibility">
-                <button type="button" class="chip is-active" data-filter="all">All</button>
-                <button type="button" class="chip" data-filter="eligible">Eligible</button>
-                <button type="button" class="chip" data-filter="not-eligible">Not eligible</button>
+            {{-- Same "Add Filter" pattern as the R4-01 generator: one menu, active filters shown as chips. --}}
+            <div class="dl-filter-add">
+                <button type="button" class="dl-filter-trigger" id="dl-filter-trigger" aria-haspopup="true" aria-expanded="false" aria-controls="dl-filter-menu">
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M2 4.5h12M4.5 8h7M7 11.5h2"/></svg>
+                    Add Filter
+                </button>
+                <div class="dl-filter-menu" id="dl-filter-menu" hidden>
+                    <div class="dl-filter-section">
+                        <div class="dl-filter-label" id="dl-label-eligibility">R2-10 eligibility</div>
+                        <div class="dl-filter-seg" role="group" aria-labelledby="dl-label-eligibility">
+                            <button type="button" class="dl-seg-btn is-active" data-filter="all">All</button>
+                            <button type="button" class="dl-seg-btn" data-filter="eligible">Eligible</button>
+                            <button type="button" class="dl-seg-btn" data-filter="not-eligible">Not eligible</button>
+                        </div>
+                    </div>
+                    <div class="dl-filter-section">
+                        <div class="dl-filter-label" id="dl-label-status">Status</div>
+                        <div class="dl-filter-seg" role="group" aria-labelledby="dl-label-status">
+                            <button type="button" class="dl-seg-btn is-active" data-status="all">Any</button>
+                            <button type="button" class="dl-seg-btn" data-status="pending">Not yet done</button>
+                            <button type="button" class="dl-seg-btn" data-status="done">Reported</button>
+                        </div>
+                    </div>
+                    <div class="dl-filter-section">
+                        <div class="dl-filter-label" id="dl-label-kalagayan">Kalagayan</div>
+                        <div class="dl-filter-seg" role="group" aria-labelledby="dl-label-kalagayan">
+                            <button type="button" class="dl-seg-btn is-active" data-kalagayan="all">All</button>
+                            <button type="button" class="dl-seg-btn" data-kalagayan="MS">MS</button>
+                            <button type="button" class="dl-seg-btn" data-kalagayan="UWP">UWP</button>
+                            <button type="button" class="dl-seg-btn" data-kalagayan="MK">MK</button>
+                        </div>
+                    </div>
+                    <div class="dl-filter-section">
+                        <div class="dl-filter-label" id="dl-label-age">Age in system</div>
+                        <div class="dl-filter-seg" role="group" aria-labelledby="dl-label-age">
+                            <button type="button" class="dl-seg-btn is-active" data-age="all">Any</button>
+                            <button type="button" class="dl-seg-btn" data-age="under">Under 1 year</button>
+                            <button type="button" class="dl-seg-btn" data-age="over">1 year or more</button>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="filter-group" role="group" aria-label="Filter by status">
-                <button type="button" class="chip is-active" data-status="all">Any status</button>
-                <button type="button" class="chip" data-status="pending">Not yet done</button>
-                <button type="button" class="chip" data-status="done">Reported</button>
-            </div>
-            <select id="kalagayan-filter" class="select-field" aria-label="Filter by kalagayan">
-                <option value="all">All kalagayan</option>
-                <option value="MS">MS</option>
-                <option value="UWP">UWP</option>
-                <option value="MK">MK</option>
-            </select>
-            <div class="filter-group" role="group" aria-label="Filter by age in system">
-                <button type="button" class="chip is-active" data-age="all">Any age</button>
-                <button type="button" class="chip" data-age="under">Under 1 year</button>
-                <button type="button" class="chip" data-age="over">1 year or more</button>
-            </div>
-            <select id="age-sort" class="select-field" aria-label="Sort by age in system">
-                <option value="">Sort by age</option>
-                <option value="newest">Newest first</option>
-                <option value="longest">Longest first</option>
-            </select>
+            <div class="dl-chips" id="dl-chips" aria-live="polite"></div>
         </div>
 
         <div class="table-scroll">
@@ -435,7 +452,6 @@
         </div>
     </dialog>
 
-    <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </div>
 @endsection
 
@@ -450,17 +466,17 @@
         --delist-border: var(--border);
         --delist-surface: var(--surface);
         --tone-pending: color-mix(in srgb, var(--text) 25%, var(--bg));
-        --k-ms: #2a78d6; --k-uwp: #eb6834; --k-mk: #1baf7a;
+        --k-ms: #0f9d58; --k-uwp: #e8590c; --k-mk: #e0a800;
         max-width: 1180px;
         margin: 0 auto;
         color: var(--delist-ink);
         font-variant-numeric: tabular-nums;
     }
     .delist-page *, .delist-page *::before, .delist-page *::after,
-    .modal, .modal *, .toast { border-radius: 0; box-shadow: none; background-image: none; }
+    .modal, .modal * { border-radius: 0; box-shadow: none; background-image: none; }
 
     /* Heading */
-    html[data-theme="dark"] .delist-page { --k-ms: #3987e5; --k-uwp: #d95926; --k-mk: #199e70; }
+    html[data-theme="dark"] .delist-page { --k-ms: #0f9d58; --k-uwp: #e8590c; --k-mk: #e0a800; }
 
     .delist-heading,
     .panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1.25rem; }
@@ -541,6 +557,28 @@
     .record-count { color: var(--delist-muted); font-size: .78rem; white-space: nowrap; }
 
     .table-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-bottom: 1rem; }
+    /* "Add Filter" menu and chips: same look as the R4-01 generator. */
+    .dl-filter-add { position: relative; }
+    .dl-filter-trigger { display: inline-flex; align-items: center; gap: .5rem; min-height: 36px; padding: 0 .95rem; border: 1px solid var(--border); border-radius: 999px; background: transparent; color: var(--text); font: inherit; font-size: .82rem; font-weight: 700; cursor: pointer; transition: background-color .12s, border-color .12s; }
+    .dl-filter-trigger:hover, .dl-filter-trigger[aria-expanded="true"] { background: color-mix(in srgb, var(--text) 6%, var(--bg)); border-color: color-mix(in srgb, var(--text) 45%, var(--border)); }
+    .dl-filter-trigger svg { width: 15px; height: 15px; flex: none; }
+    .dl-filter-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; width: 340px; max-width: calc(100vw - 2rem); border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); overflow: hidden; box-shadow: 0 18px 40px -20px rgba(0, 0, 0, .45); }
+    .dl-filter-menu[hidden] { display: none; }
+    .dl-filter-section + .dl-filter-section { border-top: 1px solid var(--border); }
+    .dl-filter-label { padding: .6rem 1rem .25rem; color: var(--text-muted); font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+    .dl-filter-seg { display: flex; gap: .5rem; padding: .35rem 1rem .8rem; }
+    .dl-seg-btn { flex: 1; min-height: 34px; padding: 0 .4rem; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--text); font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer; transition: background-color .12s, color .12s, border-color .12s; }
+    .dl-seg-btn:hover { background: color-mix(in srgb, var(--text) 8%, var(--bg)); }
+    .dl-seg-btn.is-active { border-color: var(--text); background: var(--text); color: var(--bg); }
+    .dl-chips { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+    .dl-chip { display: inline-flex; align-items: center; gap: .45rem; min-height: 36px; padding: 0 .4rem 0 .85rem; border: 1px dashed color-mix(in srgb, var(--text) 45%, var(--border)); border-radius: 999px; color: var(--text); font-size: .82rem; }
+    .dl-chip-label { color: var(--text-muted); font-weight: 500; }
+    .dl-chip-value { font-weight: 700; }
+    .dl-chip-remove { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-muted); cursor: pointer; }
+    .dl-chip-remove:hover { background: color-mix(in srgb, var(--text) 10%, var(--bg)); color: var(--text); }
+    .dl-chip-remove svg { width: 12px; height: 12px; }
+    .dl-clear { padding: 0 .4rem; border: 0; background: transparent; color: var(--text-muted); font: inherit; font-size: .82rem; text-decoration: underline; cursor: pointer; }
+    .dl-filter-trigger:focus-visible, .dl-seg-btn:focus-visible, .dl-chip-remove:focus-visible, .dl-clear:focus-visible { outline: 2px solid color-mix(in srgb, var(--text) 55%, transparent); outline-offset: 2px; }
     .search-field { position: relative; flex: 1 1 200px; max-width: 260px; }
     .search-field svg { position: absolute; left: .7rem; top: 50%; width: 16px; height: 16px; transform: translateY(-50%); fill: none; stroke: var(--delist-muted); stroke-width: 1.7; stroke-linecap: round; pointer-events: none; }
     .search-field input {
@@ -691,13 +729,6 @@
     .bd-bar { height: 6px; background: var(--delist-border); overflow: hidden; }
     .bd-bar span { display: block; width: 0; height: 100%; transition: width .7s cubic-bezier(.2,.8,.2,1); }
 
-    .toast {
-        position: fixed; left: 50%; bottom: max(1.5rem, env(safe-area-inset-bottom)); width: max-content; max-width: calc(100vw - 2rem); padding: .65rem 1rem;
-        background: var(--delist-ink); color: var(--bg); font-size: .8rem; font-weight: 600;
-        overflow-wrap: anywhere; text-align: center; opacity: 0; pointer-events: none; transform: translate(-50%, 12px); transition: opacity .25s ease, transform .25s ease; z-index: 2000;
-    }
-    .toast.show { opacity: 1; transform: translate(-50%, 0); }
-
     /* Header actions + missing data */
     .delist-tools { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .6rem; }
     .missing-btn {
@@ -843,14 +874,12 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     // Kalagayan color coding (bars + labels).
     const isDark = () => document.documentElement.dataset.theme === 'dark';
-    // Validated categorical slots (blue / orange / aqua), with their own dark-theme steps.
-    const kPalette = () => (isDark()
-        ? { MS: '#3987e5', UWP: '#d95926', MK: '#199e70' }
-        : { MS: '#2a78d6', UWP: '#eb6834', MK: '#1baf7a' });
+    // MS green, UWP orange, MK yellow (steps checked for colour-blind separation in both themes).
+    const kPalette = () => ({ MS: '#0f9d58', UWP: '#e8590c', MK: '#e0a800' });
     const kBar = new Proxy({}, { get: (_target, k) => kPalette()[k] });
     // Text never wears the series colour; identity comes from the dot beside it.
     const kInk = () => bodyInk();
-    const kOnBar = () => '#ffffff';
+    const kOnBar = k => (k === 'MK' ? '#111111' : '#ffffff');
     const hexA = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16}, ${(n >> 8) & 255}, ${n & 255}, ${a})`; };
     const kColor = k => kBar[k];
     const reportedColors = () => kalagayanTypes.map(k => kBar[k]);
@@ -859,18 +888,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // Eligibility colours: blue = eligible (light step while not yet endorsed), neutral = not eligible,
     // the reserved "serious" status colour = needs review, aqua = MK.
     const eligibilityColors = () => (isDark()
-        ? { eligible: '#3987e5', eligiblePending: '#1c5cab', notEligible: '#4a4a48', review: '#ec835a', mk: '#199e70' }
-        : { eligible: '#2a78d6', eligiblePending: '#9ec5f4', notEligible: '#c9c8c2', review: '#ec835a', mk: '#1baf7a' });
-    const bodyInk = () => getComputedStyle(document.body).color;
+        ? { eligible: '#3987e5', eligiblePending: '#1c5cab', notEligible: '#4a4a48', review: '#ec835a', mk: '#e0a800' }
+        : { eligible: '#2a78d6', eligiblePending: '#9ec5f4', notEligible: '#c9c8c2', review: '#ec835a', mk: '#e0a800' });
+    // Read the theme variable, not the body's colour: the body colour animates for 0.15s after a
+    // theme switch, so reading it right away returned the old theme's ink (white text on light).
+    const bodyInk = () => css('--text') || getComputedStyle(document.body).color;
     let total = members.length;
 
-    const toast = document.getElementById('toast');
-    let toastTimer;
-    function showToast(message) {
-        toast.textContent = message;
-        toast.classList.add('show');
-        clearTimeout(toastTimer);
-        toastTimer = setTimeout(() => toast.classList.remove('show'), 2600);
+    // Results use the shared centered message (components/flash-toast) with a list of what changed.
+    function showToast(message, type = 'success', details = {}) {
+        window.lspdmsNotify?.({ type, message, ...details });
     }
 
     /* ---------- Stats ---------- */
@@ -895,7 +922,6 @@ document.addEventListener('DOMContentLoaded', () => {
         countUp(document.getElementById('pending-total'), pending);
         document.getElementById('reported-note').textContent = `${pct}% of eligibles have been reported (R2-10)`;
         requestAnimationFrame(() => { document.getElementById('reported-bar').style.width = pct + '%'; });
-        document.getElementById('record-count').textContent = `${total} members`;
     }
 
     /* ---------- Dialog helpers ---------- */
@@ -995,7 +1021,10 @@ document.addEventListener('DOMContentLoaded', () => {
             renderProgress();
             renderTable();
             renderMissingCount();
-            showToast(`${result.data.name} was added as MK.`);
+            showToast(`${result.data.name} was added to the records.`, 'success', {
+                title: 'MK member added',
+                changes: [{ label: result.data.name, to: 'MK' }],
+            });
         } catch (error) {
             console.error('MK member could not be added:', error);
             addMkError.textContent = error.message || 'Unable to add this MK member.';
@@ -1296,7 +1325,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             // 2px surface gap between segments; only the data end of the bar is rounded.
             const segment = (color, end) => ({
-                backgroundColor: color, borderColor: surface(), borderWidth: { left: 0, right: 2, top: 0, bottom: 0 },
+                backgroundColor: color, borderColor: surface(), borderWidth: 2, // must stay a number: Chart.js animates it
                 borderRadius: end ? { topRight: 4, bottomRight: 4 } : 0, borderSkipped: false, barThickness: 22,
             });
             progressChart = new Chart(document.getElementById('progress-chart'), {
@@ -1339,7 +1368,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (!chartsOK) showChartError();
 
-    function renderProgress() {
+    // mode 'none' redraws instantly; theme changes use it because Chart.js cannot animate the colour swap.
+    function renderProgress(mode) {
         if (!progressChart) return;
         const done = kalagayanTypes.map(k => members.filter(m => m.kalagayan === k && m.reported).length);
         const pending = kalagayanTypes.map(k => members.filter(m => m.kalagayan === k && !m.reported).length);
@@ -1350,7 +1380,7 @@ document.addEventListener('DOMContentLoaded', () => {
         progressChart.data.datasets.forEach(d => { d.borderColor = surface(); });
         Object.assign(progressChart.options.plugins.tooltip, cardTooltip());
         progressChart.options.scales.x.max = Math.max(1, ...kalagayanTypes.map((k, i) => done[i] + pending[i]));
-        progressChart.update();
+        progressChart.update(mode);
         progressChart.canvas.setAttribute('aria-label',
             `Stacked bar chart of reported versus not yet done by kalagayan: ${kalagayanTypes.map((k, i) => `${k} ${done[i]} reported, ${pending[i]} not yet done`).join('; ')}`);
     }
@@ -1423,7 +1453,7 @@ document.addEventListener('DOMContentLoaded', () => {
             reportDialog.close();
         } catch (error) {
             console.error('R2-10 endorsement could not be saved:', error);
-            showToast(error.message || 'Unable to save the R2-10 endorsement.');
+            showToast(error.message || 'Unable to save the R2-10 endorsement.', 'error');
         } finally {
             reportSaving = false;
             reportSubmit.textContent = 'Confirm & mark as reported';
@@ -1435,7 +1465,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const state = { search: '', eligibility: 'all', status: 'all', kalagayan: 'all', age: 'all', sortKey: null, sortDir: 'asc', page: 1 };
     const rowsEl = document.getElementById('member-rows');
     const emptyEl = document.getElementById('empty-state');
-    const ageSort = document.getElementById('age-sort');
     let justDoneId = null;
 
     const ageMatches = m => state.age === 'all'
@@ -1507,7 +1536,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 : 'Not yet done'));
             btn.addEventListener('click', () => showToast(member.endorsed
                 ? `${member.name} is endorsed, but does not currently meet the R2-10 eligibility rules.`
-                : `${member.name} is not eligible, so R2-10 can't be reported.`));
+                : `${member.name} is not eligible, so R2-10 can't be reported.`, 'error', { title: 'R2-10 not available' }));
             return btn;
         }
 
@@ -1544,7 +1573,13 @@ document.addEventListener('DOMContentLoaded', () => {
         renderTable();
         renderStats();
         renderProgress();
-        showToast(`${member.name}: R2-10 marked as created & reported`);
+        showToast(`${member.name} is now R2-10 endorsed.`, 'success', {
+            title: 'R2-10 reported',
+            changes: [
+                { label: 'R2-10 status', from: 'Not yet done', to: 'Created & Reported' },
+                { label: 'Reason', to: oneYearConfirmed ? 'One year in the system (confirmed)' : (note || '—') },
+            ],
+        });
         setTimeout(() => { justDoneId = null; }, 600);
     }
 
@@ -1596,7 +1631,10 @@ document.addEventListener('DOMContentLoaded', () => {
             renderProgress();
             renderTable();
             renderMissingCount();
-            showToast(`${member.name} was delisted and marked INACTIVE.`);
+            showToast(`${member.name} was delisted.`, 'success', {
+                title: 'MK member delisted',
+                changes: [{ label: 'Kalagayan', from: member.kalagayan || 'MK', to: 'INACTIVE' }],
+            });
         } catch (error) {
             console.error('MK delistment could not be saved:', error);
             document.getElementById('delist-error').textContent = error.message || 'Unable to delist this MK member.';
@@ -1609,7 +1647,11 @@ document.addEventListener('DOMContentLoaded', () => {
     delistDialog.addEventListener('close', () => { pendingDelistMember = null; });
 
     function renderTable() {
+        renderFilterChips();
         const list = filtered();
+        document.getElementById('record-count').textContent = list.length === total
+            ? `${total} members`
+            : `${list.length} of ${total} members`;
         const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
         state.page = Math.min(state.page, pages);
         const start = (state.page - 1) * PAGE_SIZE;
@@ -1684,7 +1726,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const resetPageAndRender = () => { state.page = 1; renderTable(); };
 
     document.getElementById('member-search').addEventListener('input', e => { state.search = e.target.value; resetPageAndRender(); });
-    document.getElementById('kalagayan-filter').addEventListener('change', e => { state.kalagayan = e.target.value; resetPageAndRender(); });
 
     function bindChips(selector, key, attr) {
         document.querySelectorAll(selector).forEach(chip => chip.addEventListener('click', () => {
@@ -1696,6 +1737,50 @@ document.addEventListener('DOMContentLoaded', () => {
     bindChips('[data-filter]', 'eligibility', 'filter');
     bindChips('[data-status]', 'status', 'status');
     bindChips('[data-age]', 'age', 'age');
+    bindChips('[data-kalagayan]', 'kalagayan', 'kalagayan');
+
+    // "Add Filter" menu (opens and closes like the R4-01 generator's).
+    const filterTrigger = document.getElementById('dl-filter-trigger');
+    const filterMenu = document.getElementById('dl-filter-menu');
+    const setFilterMenu = open => { filterMenu.hidden = !open; filterTrigger.setAttribute('aria-expanded', String(open)); };
+    filterTrigger.addEventListener('click', () => setFilterMenu(filterMenu.hidden));
+    document.addEventListener('click', event => { if (!filterMenu.hidden && !event.target.closest('.dl-filter-add')) setFilterMenu(false); });
+    document.addEventListener('keydown', event => { if (event.key === 'Escape' && !filterMenu.hidden) { setFilterMenu(false); filterTrigger.focus(); } });
+
+    // Active filters as removable chips.
+    const FILTER_CHIPS = [
+        { key: 'eligibility', attr: 'filter', label: 'R2-10 eligibility', names: { eligible: 'Eligible', 'not-eligible': 'Not eligible' } },
+        { key: 'status', attr: 'status', label: 'Status', names: { pending: 'Not yet done', done: 'Reported' } },
+        { key: 'kalagayan', attr: 'kalagayan', label: 'Kalagayan', names: { MS: 'MS', UWP: 'UWP', MK: 'MK' } },
+        { key: 'age', attr: 'age', label: 'Age in system', names: { under: 'Under 1 year', over: '1 year or more' } },
+    ];
+    function syncFilterButtons() {
+        FILTER_CHIPS.forEach(({ key, attr }) => document.querySelectorAll(`[data-${attr}]`)
+            .forEach(btn => btn.classList.toggle('is-active', btn.dataset[attr] === state[key])));
+    }
+    function renderFilterChips() {
+        const host = document.getElementById('dl-chips');
+        const active = FILTER_CHIPS.filter(({ key }) => state[key] && state[key] !== 'all');
+        host.replaceChildren(...active.map(({ key, label, names }) => {
+            const chip = document.createElement('span');
+            chip.className = 'dl-chip';
+            const name = document.createElement('span'); name.className = 'dl-chip-label'; name.textContent = label;
+            const value = document.createElement('span'); value.className = 'dl-chip-value'; value.textContent = names[state[key]] || state[key];
+            const remove = document.createElement('button');
+            remove.type = 'button'; remove.className = 'dl-chip-remove';
+            remove.setAttribute('aria-label', `Remove ${label} filter`);
+            remove.innerHTML = '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M3 3l6 6M9 3l-6 6"/></svg>';
+            remove.addEventListener('click', () => { state[key] = 'all'; syncFilterButtons(); resetPageAndRender(); });
+            chip.append(name, value, remove);
+            return chip;
+        }));
+        if (active.length > 1) {
+            const clear = document.createElement('button');
+            clear.type = 'button'; clear.className = 'dl-clear'; clear.textContent = 'Clear all';
+            clear.addEventListener('click', () => { FILTER_CHIPS.forEach(({ key }) => { state[key] = 'all'; }); syncFilterButtons(); resetPageAndRender(); });
+            host.append(clear);
+        }
+    }
 
     document.getElementById('pending-card').addEventListener('click', () => {
         Object.assign(state, {
@@ -1707,10 +1792,7 @@ document.addEventListener('DOMContentLoaded', () => {
             page: 1,
         });
         document.getElementById('member-search').value = '';
-        document.getElementById('kalagayan-filter').value = 'all';
-        document.querySelectorAll('[data-filter]').forEach(chip => chip.classList.toggle('is-active', chip.dataset.filter === 'eligible'));
-        document.querySelectorAll('[data-status]').forEach(chip => chip.classList.toggle('is-active', chip.dataset.status === 'pending'));
-        document.querySelectorAll('[data-age]').forEach(chip => chip.classList.toggle('is-active', chip.dataset.age === 'all'));
+        syncFilterButtons();
         renderTable();
         document.getElementById('members-heading').scrollIntoView({
             behavior: reduceMotion ? 'auto' : 'smooth',
@@ -1721,14 +1803,11 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('clear-filters').addEventListener('click', () => {
         Object.assign(state, { search: '', eligibility: 'all', status: 'all', kalagayan: 'all', age: 'all' });
         document.getElementById('member-search').value = '';
-        document.getElementById('kalagayan-filter').value = 'all';
-        document.querySelectorAll('[data-filter]').forEach(c => c.classList.toggle('is-active', c.dataset.filter === 'all'));
-        document.querySelectorAll('[data-status]').forEach(c => c.classList.toggle('is-active', c.dataset.status === 'all'));
-        document.querySelectorAll('[data-age]').forEach(c => c.classList.toggle('is-active', c.dataset.age === 'all'));
+        syncFilterButtons();
         resetPageAndRender();
     });
 
-    // Sorting: the column headers and the "Sort by age" select stay in sync.
+    // Sorting: click a column header (Age in system included) to sort; click again to reverse.
     function setSort(key, dir) {
         state.sortKey = key;
         state.sortDir = dir;
@@ -1737,18 +1816,12 @@ document.addEventListener('DOMContentLoaded', () => {
             document.querySelector(`[data-sort="${key}"]`).closest('th')
                 .setAttribute('aria-sort', dir === 'asc' ? 'ascending' : 'descending');
         }
-        ageSort.value = key === 'age' ? (dir === 'asc' ? 'newest' : 'longest') : '';
         resetPageAndRender();
     }
     document.querySelectorAll('.sort-btn').forEach(btn => btn.addEventListener('click', () => {
         const key = btn.dataset.sort;
         setSort(key, state.sortKey === key && state.sortDir === 'asc' ? 'desc' : 'asc');
     }));
-    ageSort.addEventListener('change', () => {
-        if (ageSort.value === 'newest') setSort('age', 'asc');
-        else if (ageSort.value === 'longest') setSort('age', 'desc');
-        else setSort(null, 'asc');
-    });
 
     document.getElementById('prev-page').addEventListener('click', () => { state.page--; renderTable(); });
     document.getElementById('next-page').addEventListener('click', () => { state.page++; renderTable(); });
@@ -1835,9 +1908,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!ids.length) return;
         const today = toISO(startOfToday());
         if (ids.some(id => drafts[id].baptism > today)) {
-            showToast("Dates can't be in the future.");
+            showToast("Dates can't be in the future.", 'error', { title: 'Check the dates' });
             return;
         }
+        const dateChanges = ids.map(id => {
+            const record = missingRecords.find(item => String(item.id) === id);
+            return { label: `${record?.name || 'Record'} · Baptism date`, from: record?.baptism || '', to: drafts[id].baptism || '(blank)' };
+        });
         missingSave.disabled = true;
         missingSave.textContent = 'Saving...';
         try {
@@ -1877,10 +1954,10 @@ document.addEventListener('DOMContentLoaded', () => {
             renderStats();
             renderEligibility();
             renderProgress();
-            showToast('Record dates saved. R2-10 eligibility has been recalculated.');
+            showToast('R2-10 eligibility has been recalculated.', 'success', { title: 'Record dates saved', changes: dateChanges });
         } catch (error) {
             console.error('Record dates could not be saved:', error);
-            showToast(error.message || 'Unable to save record dates.');
+            showToast(error.message || 'Unable to save record dates.', 'error');
             updateSaveState();
         } finally {
             missingSave.textContent = 'Save changes';
@@ -1895,7 +1972,18 @@ document.addEventListener('DOMContentLoaded', () => {
     renderMissingCount();
 
     // Re-theme charts when the light/dark switch changes.
-    new MutationObserver(() => { renderEligibility(); renderProgress(); })
+    // Re-draw once the switch has settled (theme transitions run for 0.15s).
+    // Each chart is redrawn on its own, so a failure in one can never leave the other in the old theme,
+    // and once more after the page's colour transitions have fully settled.
+    let themeTimers = [];
+    const rethemeCharts = () => {
+        try { renderEligibility(); } catch (error) { console.error('Eligibility chart re-theme failed:', error); }
+        try { renderProgress('none'); } catch (error) { console.error('Progress chart re-theme failed:', error); }
+    };
+    new MutationObserver(() => {
+        themeTimers.forEach(clearTimeout);
+        themeTimers = [220, 700].map(delay => setTimeout(() => requestAnimationFrame(rethemeCharts), delay));
+    })
         .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 });
 </script>

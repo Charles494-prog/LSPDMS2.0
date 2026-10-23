@@ -275,7 +275,31 @@ return [
             ],
             'keywords' => ['print', 'generate form', 'form generator', 'r4-01', 'r4-02', 'r4-03', 'resumen', 'weekly form', 'monthly form'],
             'not' => ['monthly session'],
-            'answer' => 'Go to Form Generator to automatically generate Weekly Forms and Monthly Forms. Choose the Monthly or Weekly section, select the form or Resumen generator you need, then use Generate / Print and your browser’s print dialog.',
+            'answer' => 'Go to Form Generator > Generate Forms to automatically make the Weekly Forms (R4-02, R4-03) and Monthly Forms (Resumen & R4-01, R4-01 Snapshots). You can also open each one straight from the Form Generator menu in the sidebar, then use Generate / Print and your browser’s print dialog.',
+        ],
+        'assigned_tasks' => [
+            'title' => 'Tasks',
+            'route' => 'tasks',
+            'questions' => [
+                'Where are my tasks?', 'Where can I see the tasks assigned to me?', 'How do I assign a task to a secretary?',
+                'How do I mark a task as done?', 'Saan makikita ang tasks ko?', 'Paano mag-assign ng task?',
+            ],
+            'keywords' => ['tasks', 'assigned task', 'assign task', 'task menu', 'mark task done', 'new tasks'],
+            'not' => ['to-do', 'todo'],
+            'answer' => 'Open Tasks in the sidebar. The Head Secretary posts tasks there and chooses who sees each one and who can comment or mark it done. Secretaries comment and press "Mark as done"; the Head Secretary then confirms it and the task closes. Until you open Tasks, a pop-up reminds you about new tasks.',
+            'answer_tl' => 'Buksan ang Tasks sa sidebar. Doon nagpo-post ang Head Secretary ng tasks at pinipili kung sino ang makakakita, at kung sino ang puwedeng mag-comment o mag-mark as done. Kapag na-mark as done na, kukumpirmahin ito ng Head Secretary bago magsara. Habang hindi mo pa nabubuksan ang Tasks, may pop-up na magpapaalala.',
+        ],
+        'note_checker' => [
+            'title' => 'Note Checker',
+            'feature' => 'note_checker_allow',
+            'route' => 'note-checker',
+            'questions' => [
+                'Where can I see the notes of a record?', 'How do I add a note to a member?', 'Where is the Notes Checker?',
+                'How do I delete a note?', 'Saan makikita ang notes?', 'Paano magdagdag ng note?',
+            ],
+            'keywords' => ['note checker', 'notes checker', 'notes', 'log note', 'add note', 'delete note'],
+            'answer' => 'Open Note Checker in the sidebar (under Tools). Search a name or registry number, pick the record, then add a dated note or delete one. Today’s date is added to each new note automatically.',
+            'answer_tl' => 'Buksan ang Note Checker sa sidebar (sa ilalim ng Tools). Hanapin ang pangalan o registry number, piliin ang record, saka magdagdag o magbura ng note. Awtomatikong nilalagay ang petsa ngayon sa bawat bagong note.',
         ],
         'tarheta_checker' => [
             'title' => 'Tarheta and Status Checker',

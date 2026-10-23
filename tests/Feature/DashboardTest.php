@@ -99,7 +99,8 @@ class DashboardTest extends TestCase
                 $this->assertCount(10, $metrics['monthLabels']);
                 $this->assertSame('Oct 2025', $metrics['monthLabels'][9]);
                 $this->assertSame(331, $metrics['monthlyCounts'][9]['MS']);
-                $this->assertSame(51, $metrics['monthlyPurokCounts'][9]['1']['MS']);
+                // Snapshots imported before Purok segments existed are keyed by their Purok number.
+                $this->assertSame(51, $metrics['monthlyPurokCounts'][9]['n1']['MS']);
                 $this->assertSame(10, $metrics['registryEncoded']);
                 $this->assertEqualsWithDelta(66.66666666666666, $metrics['r210Updating'], 0.000001);
                 $this->assertSame(8.0, $metrics['localeSNumberTarget']);
@@ -186,9 +187,9 @@ class DashboardTest extends TestCase
         ])
             ->get(route('dashboard'))
             ->assertOk()
-            ->assertSee('id="appFlashToast"', false)
+            ->assertSee('id="appNotice"', false)
             ->assertSee('Dashboard changes saved.')
-            ->assertSee('safe-area-inset-left', false)
+            ->assertSee('safe-area-inset-bottom', false)
             ->assertSee('.ot-chart { position: relative; height: 420px;', false)
             ->assertViewHas('dashboardMetrics', function (array $metrics): bool {
                 $this->assertSame(['MS', 'MK', 'UWP'], array_keys($metrics['kalagayanCounts']));
@@ -349,14 +350,14 @@ class DashboardTest extends TestCase
                 $this->assertSame(67 + 27 + 84 + 92 + 39 + 114, $metrics['monthlyCounts'][0]['MS']);
                 $this->assertContains([
                     'month' => '2025-10',
-                    'purok' => 2,
+                    'purok' => 'n2',
                     'status' => 'MS',
                     'code' => 'DD',
                     'count' => 1,
                 ], $metrics['movementDetails']);
                 $this->assertContains([
                     'month' => '2025-09',
-                    'purok' => 5,
+                    'purok' => 'n5',
                     'status' => 'UWP',
                     'code' => 'DD',
                     'count' => 1,
@@ -390,11 +391,11 @@ class DashboardTest extends TestCase
             ->assertViewHas('dashboardMetrics', function (array $metrics): bool {
                 $this->assertSame('Nov 2025', $metrics['monthLabels'][10]);
                 $this->assertSame(25, $metrics['monthlyCounts'][10]['MS']);
-                $this->assertSame(25, $metrics['monthlyPurokCounts'][10]['11']['MS']);
-                $this->assertContains(11, $metrics['movementPuroks']);
+                $this->assertSame(25, $metrics['monthlyPurokCounts'][10]['n11']['MS']);
+                $this->assertContains('n11', array_column($metrics['movementPuroks'], 'id'));
                 $this->assertContains([
                     'month' => '2025-11',
-                    'purok' => 11,
+                    'purok' => 'n11',
                     'status' => 'MS',
                     'code' => 'B',
                     'count' => 2,
@@ -427,13 +428,13 @@ class DashboardTest extends TestCase
                 $this->assertNotContains('Nov 2025', $metrics['monthLabels']);
                 $this->assertNotContains(null, $metrics['monthlyPurokCounts']);
                 // A real snapshot of zero stays a verified zero.
-                $this->assertSame(0, $metrics['monthlyPurokCounts'][10]['11']['MS']);
+                $this->assertSame(0, $metrics['monthlyPurokCounts'][10]['n11']['MS']);
 
                 return true;
             });
     }
 
-    public function test_records_over_time_sums_segment_snapshots_for_the_same_purok_number(): void
+    public function test_records_over_time_lists_purok_segments_from_the_purok_settings(): void
     {
         $purok2a = Purok::query()->create([
             'purok_number' => 2,
@@ -462,9 +463,14 @@ class DashboardTest extends TestCase
         $this->withSession(['login_user' => ['id' => 1]])
             ->get(route('dashboard'))
             ->assertOk()
-            ->assertViewHas('dashboardMetrics', function (array $metrics): bool {
+            ->assertViewHas('dashboardMetrics', function (array $metrics) use ($purok2a, $purok2b): bool {
                 $this->assertSame(9, $metrics['monthlyCounts'][10]['MS']);
-                $this->assertSame(9, $metrics['monthlyPurokCounts'][10]['2']['MS']);
+                // 2A and 2B are separate Puroks, named as in the Purok settings.
+                $this->assertSame(4, $metrics['monthlyPurokCounts'][10]['p'.$purok2a->id]['MS']);
+                $this->assertSame(5, $metrics['monthlyPurokCounts'][10]['p'.$purok2b->id]['MS']);
+                $labels = array_column($metrics['movementPuroks'], 'label', 'id');
+                $this->assertSame('Purok 2A', $labels['p'.$purok2a->id]);
+                $this->assertSame('Purok 2B', $labels['p'.$purok2b->id]);
 
                 return true;
             });

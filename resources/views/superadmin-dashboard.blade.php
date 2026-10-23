@@ -442,39 +442,12 @@
         font-size: 0.82rem; color: var(--sa-ink-soft); background: var(--sa-bg);
         border: 1px solid var(--sa-border); border-radius: var(--sa-radius); padding: 0.7rem 0.9rem; margin-bottom: 1.2rem;
     }
-
-    /* ===== Toasts ===== */
-    .sa-toast-container {
-        position: fixed; top: max(1rem, env(safe-area-inset-top)); right: max(1rem, env(safe-area-inset-right));
-        z-index: 100100; display: grid; gap: 0.65rem; width: min(420px, calc(100vw - 2rem)); pointer-events: none;
-    }
-    .sa-toast {
-        display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.85rem 1rem;
-        border: 1px solid var(--sa-border); border-left: 2px solid var(--sa-navy); border-radius: var(--sa-radius);
-        background: var(--sa-surface); color: var(--sa-navy); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
-        pointer-events: auto; animation: sa-toast-in 200ms ease-out both;
-    }
-    .sa-toast[data-type="success"] { border-left-color: var(--sa-success); }
-    .sa-toast[data-type="error"] { border-left-color: var(--sa-danger); }
-    .sa-toast-icon {
-        display: grid; place-items: center; width: 1.3rem; height: 1.3rem; flex: 0 0 1.3rem; border-radius: 50%;
-        border: 1px solid var(--sa-border); background: transparent; color: var(--sa-navy); font-size: .75rem; font-weight: 700;
-    }
-    .sa-toast[data-type="success"] .sa-toast-icon { color: var(--sa-success); }
-    .sa-toast[data-type="error"] .sa-toast-icon { color: var(--sa-danger); }
-    .sa-toast-message { flex: 1; font-size: 0.88rem; line-height: 1.45; overflow-wrap: anywhere; }
-    .sa-toast-close { border: 0; padding: 0; background: transparent; color: var(--sa-ink-soft); font-size: 1.2rem; line-height: 1; cursor: pointer; }
-    .sa-toast-close:hover { color: var(--sa-navy); }
-    .sa-toast.sa-toast-leaving { animation: sa-toast-out 160ms ease-in both; }
     @media (max-width: 600px) {
-        .sa-toast-container { top: max(.65rem, env(safe-area-inset-top)); right: max(.65rem, env(safe-area-inset-right)); left: max(.65rem, env(safe-area-inset-left)); width: auto; }
         .sa-modal-overlay { align-items: flex-start; padding: max(.75rem, env(safe-area-inset-top)) .65rem; }
         .sa-modal { max-height: calc(100dvh - 1.5rem); padding: 1.1rem; }
         .sa-modal-save-bar { flex-wrap: wrap; }
         .sa-modal-save-bar .sa-btn { flex: 1 1 auto; justify-content: center; }
     }
-    @keyframes sa-toast-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
-    @keyframes sa-toast-out { to { opacity: 0; transform: translateY(-4px); } }
 
     /* ===== Modals ===== */
     .sa-modal-overlay {
@@ -576,7 +549,6 @@
     @keyframes sa-spin { to { transform: rotate(360deg); } }
     @media (prefers-reduced-motion: reduce) {
         .sa-btn.is-loading::before { animation-duration: 2s; }
-        .sa-toast, .sa-toast.sa-toast-leaving { animation: none; }
     }
     .sa-inline-error {
         margin: 1rem 0 0; padding: .65rem .85rem; border: 1px solid var(--sa-danger);
@@ -1606,7 +1578,6 @@
     </div>
 </div>
 
-<div class="sa-toast-container" id="saToastContainer" aria-live="polite" aria-atomic="false"></div>
 
 <div class="sa-modal-overlay" id="confirmDialog" aria-hidden="true">
     <div class="sa-modal sa-confirm" role="alertdialog" aria-modal="true" aria-labelledby="confirmDialogTitle" aria-describedby="confirmDialogMessage">
@@ -1792,6 +1763,7 @@
                         <th class="center">Allow Inquire<br>/ Modify</th>
                         <th class="center">Allow Tarheta<br>Status Checker</th>
                         <th class="center">Allow Filter &amp;<br>BNH Helper</th>
+                        <th class="center">Allow Note<br>Checker</th>
                         <th class="center">Allow chatbot<br>record lookups</th>
                     </tr>
                 </thead>
@@ -1814,10 +1786,11 @@
                             <td class="center"><input type="checkbox" class="sa-checkbox" data-permission="Inquire_Allow" @checked($user->Inquire_Allow)></td>
                             <td class="center"><input type="checkbox" class="sa-checkbox" data-permission="tarheta_status_allow" @checked($user->tarheta_status_allow)></td>
                             <td class="center"><input type="checkbox" class="sa-checkbox" data-permission="filter_bnh_helper_allow" @checked($user->filter_bnh_helper_allow)></td>
+                            <td class="center"><input type="checkbox" class="sa-checkbox" data-permission="note_checker_allow" @checked($user->note_checker_allow)></td>
                             <td class="center"><input type="checkbox" class="sa-checkbox" data-permission="chatbot_records_allow" @checked($user->chatbot_records_allow)></td>
                         </tr>
                     @empty
-                        <tr><td colspan="8" class="sa-empty">No verified users found.</td></tr>
+                        <tr><td colspan="9" class="sa-empty">No verified users found.</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -1958,47 +1931,15 @@
             smtpVerificationVerify: @json(\Illuminate\Support\Facades\Route::has('superadmin.smtp-settings.verification.verify') ? route('superadmin.smtp-settings.verification.verify') : null),
             databaseBackupRename: @json(\Illuminate\Support\Facades\Route::has('superadmin.database.backups.rename') ? route('superadmin.database.backups.rename', ['file' => '__FILE__']) : null),
         };
-        const toastContainer = document.getElementById('saToastContainer');
-        if (toastContainer && toastContainer.parentElement !== document.body) {
-            document.body.appendChild(toastContainer);
+        // Results open the shared centered message (components/flash-toast); `details` may add a
+        // title and the list of what changed: { title, changes: [{ label, from, to }] }.
+        function showToast(message, type = 'success', details = {}) {
+            if (!message) return;
+            window.lspdmsNotify?.({ type, message, ...details });
         }
-
-        function showToast(message, type = 'success') {
-            if (!toastContainer || !message) return;
-
-            const toast = document.createElement('div');
-            toast.className = 'sa-toast';
-            toast.dataset.type = type;
-            toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
-
-            const icon = document.createElement('span');
-            icon.className = 'sa-toast-icon';
-            icon.setAttribute('aria-hidden', 'true');
-            icon.textContent = type === 'success' ? '✓' : (type === 'error' ? '!' : 'i');
-
-            const text = document.createElement('span');
-            text.className = 'sa-toast-message';
-            text.textContent = message;
-
-            const close = document.createElement('button');
-            close.className = 'sa-toast-close';
-            close.type = 'button';
-            close.setAttribute('aria-label', 'Dismiss notification');
-            close.textContent = '×';
-
-            let removed = false;
-            const dismiss = () => {
-                if (removed) return;
-                removed = true;
-                window.clearTimeout(timer);
-                toast.classList.add('sa-toast-leaving');
-                window.setTimeout(() => toast.remove(), 180);
-            };
-            close.addEventListener('click', dismiss);
-            toast.append(icon, text, close);
-            toastContainer.appendChild(toast);
-            const timer = window.setTimeout(dismiss, type === 'error' ? 7000 : 4500);
-        }
+        const changeList = (before, after, labels) => Object.keys(labels)
+            .filter(key => String(before?.[key] ?? '') !== String(after?.[key] ?? ''))
+            .map(key => ({ label: labels[key], from: before?.[key] ?? '', to: after?.[key] ?? '' }));
 
         function setBusy(button, busy) {
             if (!button) return;
@@ -2599,7 +2540,10 @@
                 hakbangRows.appendChild(createHakbangRow(data));
                 hakbangAddForm.reset();
                 refreshHakbangRows();
-                showToast(message || 'Hakbang added.');
+                showToast(message || 'Hakbang added.', 'success', {
+                    title: 'Hakbang added',
+                    changes: [{ label: `${data.status || selectedHakbangStatus} ${data.code}`, to: data.description }],
+                });
             } catch (error) {
                 showToast(error.message, 'error');
             } finally {
@@ -2613,8 +2557,11 @@
 
             if (event.target.closest('.hakbang-save-btn')) {
                 const button = event.target.closest('.hakbang-save-btn');
-                const code = card.querySelector('.hakbang-code-input').value.trim();
-                const description = card.querySelector('.hakbang-description-input').value.trim();
+                const codeInput = card.querySelector('.hakbang-code-input');
+                const descriptionInput = card.querySelector('.hakbang-description-input');
+                const before = { code: codeInput.dataset.originalValue, description: descriptionInput.dataset.originalValue };
+                const code = codeInput.value.trim();
+                const description = descriptionInput.value.trim();
                 setBusy(button, true);
                 try {
                     const { data, message } = await sendHakbangRequest(
@@ -2622,10 +2569,13 @@
                         `${superadminUrls.r402Hakbangs}/${card.dataset.hakbangId}`,
                         { status: card.dataset.status, code, description }
                     );
-                    card.querySelector('.hakbang-code-input').value = data.code;
-                    card.querySelector('.hakbang-description-input').value = data.description;
+                    codeInput.value = data.code;
+                    descriptionInput.value = data.description;
                     setHakbangRowBaseline(card);
-                    showToast(message || 'Hakbang updated.');
+                    showToast(message || 'Hakbang updated.', 'success', {
+                        title: 'Hakbang updated',
+                        changes: changeList(before, data, { code: 'Code', description: 'Description' }),
+                    });
                 } catch (error) {
                     setBusy(button, false);
                     showToast(error.message, 'error');
@@ -2665,10 +2615,15 @@
                     'DELETE',
                     `${superadminUrls.r402Hakbangs}/${card.dataset.hakbangId}`
                 );
+                const removed = `${card.dataset.status} ${card.querySelector('.hakbang-code-input').dataset.originalValue}`;
+                const removedDescription = card.querySelector('.hakbang-description-input').dataset.originalValue;
                 card.remove();
                 closeHakbangDeleteModal();
                 refreshHakbangRows();
-                showToast(message || 'Hakbang deleted.');
+                showToast(message || 'Hakbang deleted.', 'success', {
+                    title: 'Hakbang deleted',
+                    changes: [{ label: removed, from: removedDescription, to: 'Deleted' }],
+                });
             } catch (error) {
                 showToast(error.message, 'error');
             } finally {
@@ -2691,6 +2646,10 @@
             if (!update) return;
 
             const previousValue = control.type === 'checkbox' ? !control.checked : control.dataset.previousValue;
+            const userName = row.querySelector('.sa-user-name')?.textContent.trim() || row.dataset.email || 'User';
+            const change = control.type === 'checkbox'
+                ? { label: 'Access', from: previousValue ? 'Verified' : 'Not Verified', to: control.checked ? 'Verified' : 'Not Verified' }
+                : { label: 'Role (Tungkulin)', from: previousValue || 'None', to: control.value || 'None' };
             control.disabled = true;
             sendUpdate(`${superadminUrls.users}/${row.dataset.userId}`, update)
                 .then(({ data }) => {
@@ -2716,7 +2675,7 @@
                         }
                         if (data.is_verified && !permissionRow) window.location.reload();
                     }
-                    showToast('User settings saved.');
+                    showToast(`Updated ${userName}.`, 'success', { title: 'User settings saved', changes: [change] });
                 })
                 .catch(error => {
                     if (control.type === 'checkbox') control.checked = previousValue;
@@ -2780,11 +2739,25 @@
                 return values;
             });
 
+            // What changed since the page loaded (or the last save): "Name: Allow X  Off → On".
+            const headers = Array.from(document.querySelectorAll('#permissionsTable thead th')).map(th => th.textContent.replace(/\s+/g, ' ').trim());
+            const changedInputs = Array.from(document.querySelectorAll('#permissionsTableBody [data-permission]'))
+                .filter(input => input.checked !== input.defaultChecked);
+            const changes = changedInputs.map(input => ({
+                label: `${input.closest('tr').querySelector('.sa-user-name')?.textContent.trim() || 'Secretary'} · ${headers[input.closest('td').cellIndex] || input.dataset.permission}`,
+                from: input.defaultChecked ? 'Allowed' : 'Not allowed',
+                to: input.checked ? 'Allowed' : 'Not allowed',
+            }));
+
             setBusy(button, true);
             try {
                 await sendUpdate(superadminUrls.permissions, { permissions });
+                changedInputs.forEach(input => { input.defaultChecked = input.checked; });
                 closePermissionsModalFn();
-                showToast('Permissions saved.');
+                showToast(changes.length ? `${changes.length} permission${changes.length === 1 ? '' : 's'} updated.` : 'No permission changes to save.', 'success', {
+                    title: 'Permissions saved',
+                    changes,
+                });
             } catch (error) {
                 showToast(error.message, 'error');
             } finally {
@@ -2831,6 +2804,31 @@
         }
 
         let savedSignatoriesSnapshot = JSON.stringify(collectSignatories());
+
+        // Per-purok list of edited fields (added / removed puroks too) for the save message.
+        function signatoryChanges(before, after) {
+            const secretaryName = value => {
+                const option = value ? purokList.querySelector(`.secretary-input option[value="${CSS.escape(String(value))}"]`) : null;
+                return option ? option.textContent.trim() : (value || '');
+            };
+            const describe = purok => purok.purok_name || `Purok ${purok.purok_number}`;
+            const labels = { purok_number: 'Header number', purok_name: 'Name', secretary: 'Secretary', manggagawa: 'Manggagawa', ministerial_id: 'Purok ID', grupo_start: 'Sakop from', grupo_end: 'Sakop to', full_purok: 'Complete purok' };
+            const shown = (key, value) => key === 'secretary' ? secretaryName(value) : key === 'full_purok' ? (Number(value) ? 'Yes' : 'No') : (value ?? '');
+            const byId = new Map(before.filter(p => p.id).map(p => [p.id, p]));
+            const changes = [];
+            after.forEach(purok => {
+                const old = purok.id ? byId.get(purok.id) : null;
+                if (!old) { changes.push({ label: describe(purok), to: 'Added' }); return; }
+                byId.delete(purok.id);
+                Object.keys(labels).forEach(key => {
+                    if (String(old[key] ?? '') !== String(purok[key] ?? '')) {
+                        changes.push({ label: `${describe(purok)} · ${labels[key]}`, from: shown(key, old[key]), to: shown(key, purok[key]) });
+                    }
+                });
+            });
+            byId.forEach(purok => changes.push({ label: describe(purok), to: 'Removed' }));
+            return changes;
+        }
         function getSakopOverlap(signatories = collectSignatories()) {
             for (let i = 0; i < signatories.length; i++) {
                 const current = signatories[i];
@@ -2992,8 +2990,12 @@
             setBusy(button, true);
             try {
                 await sendUpdate(superadminUrls.signatories, { puroks });
+                const previousPuroks = JSON.parse(savedSignatoriesSnapshot || '[]');
                 savedSignatoriesSnapshot = JSON.stringify(puroks);
-                showToast('Purok signatories saved.');
+                showToast('Purok signatories saved.', 'success', {
+                    title: 'Signatories saved',
+                    changes: signatoryChanges(previousPuroks, puroks),
+                });
             } catch (error) {
                 showToast(error.message, 'error');
             } finally {
@@ -3134,6 +3136,18 @@
         };
         // Both "Document settings" and "R2-10 eligibility" pages save through the same existing endpoint,
         // so the payload is identical to before and the backend is unchanged.
+        // Field labels + the last saved display values, so the result message can list what changed.
+        const globalFieldIds = { ...globalVariableFields, dateofbaptism_requirement_boolean: 'delistBaptismCheck', r401_use_purok_secretary: 'gvR401PurokSecretary' };
+        const globalLabel = id => (document.querySelector(`label[for="${id}"]`)?.textContent || id).replace(/\s+/g, ' ').replace(/\*$/, '').trim();
+        const globalDisplay = id => {
+            const input = document.getElementById(id);
+            if (!input) return '';
+            if (input.type === 'checkbox') return input.checked ? 'On' : 'Off';
+            if (input.tagName === 'SELECT') return input.selectedOptions[0]?.textContent.trim() || '';
+            return input.value;
+        };
+        const globalSnapshot = () => Object.fromEntries(Object.values(globalFieldIds).map(id => [id, globalDisplay(id)]));
+        let savedGlobals = globalSnapshot();
         document.querySelectorAll('[data-save-globals]').forEach(saveButton => saveButton.addEventListener('click', async () => {
             const values = Object.fromEntries(Object.entries(globalVariableFields).map(([column, id]) => {
                 const value = document.getElementById(id).value;
@@ -3146,7 +3160,13 @@
             saveButton.classList.add('is-loading');
             try {
                 await sendUpdate(superadminUrls.globalVariables, values);
-                showToast('Settings saved.');
+                const now = globalSnapshot();
+                const changes = changeList(savedGlobals, now, Object.fromEntries(Object.keys(now).map(id => [id, globalLabel(id)])));
+                savedGlobals = now;
+                showToast(changes.length ? `${changes.length} setting${changes.length === 1 ? '' : 's'} changed.` : 'Nothing changed.', 'success', {
+                    title: 'Settings saved',
+                    changes,
+                });
             } catch (error) {
                 setInlineError('globals', error.message);
                 showToast(error.message, 'error');
@@ -3175,7 +3195,11 @@
                     require_otp: document.getElementById('requireOtpSetting').checked ? 1 : 0,
                     allow_forgot_password: document.getElementById('allowForgotPasswordSetting').checked ? 1 : 0,
                 });
-                showToast('Security settings saved.');
+                const changes = securityInputs
+                    .filter(id => document.getElementById(id).checked !== securityDefaults[id])
+                    .map(id => ({ label: globalLabel(id), from: securityDefaults[id] ? 'On' : 'Off', to: document.getElementById(id).checked ? 'On' : 'Off' }));
+                securityInputs.forEach(id => { securityDefaults[id] = document.getElementById(id).checked; });
+                showToast(changes.length ? 'Security settings updated.' : 'Nothing changed.', 'success', { title: 'Security settings saved', changes });
             } catch (error) {
                 showToast(error.message, 'error');
             } finally {

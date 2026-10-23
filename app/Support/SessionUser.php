@@ -27,6 +27,7 @@ final class SessionUser
             'tarheta_status_allow' => (bool) $user->tarheta_status_allow,
             'filter_bnh_helper_allow' => (bool) $user->filter_bnh_helper_allow,
             'chatbot_records_allow' => (bool) ($user->chatbot_records_allow ?? false),
+            'note_checker_allow' => (bool) ($user->note_checker_allow ?? false),
             'is_verified' => (bool) $user->is_verified,
         ];
     }

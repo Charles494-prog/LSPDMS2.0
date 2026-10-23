@@ -48,6 +48,7 @@ class SuperadminController extends Controller
                 'tarheta_status_allow',
                 'filter_bnh_helper_allow',
                 'chatbot_records_allow',
+                'note_checker_allow',
             ])
             ->orderBy('id')
             ->get();
@@ -342,6 +343,7 @@ class SuperadminController extends Controller
             'permissions.*.tarheta_status_allow' => ['required', 'boolean'],
             'permissions.*.filter_bnh_helper_allow' => ['required', 'boolean'],
             'permissions.*.chatbot_records_allow' => ['sometimes', 'boolean'],
+            'permissions.*.note_checker_allow' => ['sometimes', 'boolean'],
         ]);
 
         DB::transaction(function () use ($validated): void {
@@ -365,8 +367,10 @@ class SuperadminController extends Controller
                     'tarheta_status_allow' => $permission['tarheta_status_allow'],
                     'filter_bnh_helper_allow' => $permission['filter_bnh_helper_allow'],
                 ];
-                if (array_key_exists('chatbot_records_allow', $permission)) {
-                    $userPermissions['chatbot_records_allow'] = $permission['chatbot_records_allow'];
+                foreach (['chatbot_records_allow', 'note_checker_allow'] as $optional) {
+                    if (array_key_exists($optional, $permission)) {
+                        $userPermissions[$optional] = $permission[$optional];
+                    }
                 }
                 $user->fill($userPermissions)->save();
             }

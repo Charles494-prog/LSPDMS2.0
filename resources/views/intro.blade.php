@@ -870,6 +870,19 @@
                     bgB.style.transform = `translate3d(${x * .55}px, ${y * .55}px, 0) scale(${1 + (s - 1) * .5})`;
                 }
 
+                // Resolves once the camera has fully stopped (its transform transition ended), with a fallback.
+                function cameraSettled(ms) {
+                    return new Promise(resolve => {
+                        const done = event => {
+                            if (event && (event.target !== world || event.propertyName !== 'transform')) return;
+                            world.removeEventListener('transitionend', done);
+                            resolve();
+                        };
+                        world.addEventListener('transitionend', done);
+                        timers.push(setTimeout(done, ms + 120));
+                    });
+                }
+
                 // Centre a box (measured with the camera at rest) on screen at the given zoom.
                 function lookAt(box, s, ms) {
                     const dx = box.left + box.width / 2 - window.innerWidth / 2;
@@ -922,31 +935,31 @@
                 /* ---------- Animated sequence (paced so each moment can be read) ---------- */
                 async function run() {
                     // 0. The scene lights up and the logo arrives
-                    await sleep(150);
+                    await sleep(100);
                     aurora.classList.add('on');
                     canvas.classList.add('on');
                     logoStage.classList.add('show');
                     setProgress(.04);
-                    await sleep(700);
+                    await sleep(450);
                     hint.classList.add('on');
-                    await sleep(1300);
+                    await sleep(850);
                     logoStage.classList.add('hide');
                     await sleep(600);
 
                     // 1. Welcome
                     welcome.classList.add('show');
                     setProgress(.1);
-                    await sleep(1500);
+                    await sleep(1100);
                     welcome.classList.add('hide');
                     await sleep(600);
 
                     // 2. L S P D M S appear in a row
                     for (const el of letterEls) {
                         el.classList.add('show');
-                        await sleep(140);
+                        await sleep(100);
                     }
                     setProgress(.18);
-                    await sleep(700);
+                    await sleep(350);
 
                     // 3. Row -> column (transform only)
                     const first = letterEls.map(el => el.getBoundingClientRect());
@@ -975,7 +988,8 @@
 
                     // 4. Camera frames the column L S P D M S
                     lookAt(columnBox, fit(columnBox), 1000);
-                    await sleep(1500);
+                    await cameraSettled(1000);
+                    await sleep(150);
 
                     // 5. Camera closes in on each letter, then follows down the column while its word types
                     letters.classList.add('focusing');
@@ -985,25 +999,27 @@
                         await sleep(i === 0 ? 950 : 550);
                         await type(words[i], 28);
                         setProgress(.22 + (i + 1) * .06);
-                        await sleep(150);
+                        await sleep(60);
                     }
 
                     // 6. Hover out: the camera pulls back so the whole list is on screen again,
                     //    then the six letters light up one after another and the full list is held.
                     letters.classList.remove('focusing');
                     rows.forEach(row => row.classList.remove('focus'));
+                    // The glow waits until the zoom-out has completely stopped.
                     lookAt(listBox, fit(listBox), 1500);
-                    await sleep(1700);
+                    await cameraSettled(1500);
+                    await sleep(80);
                     for (const row of rows) {
                         row.classList.add('flash');
-                        await sleep(280);
+                        await sleep(190);
                     }
                     setProgress(.64);
-                    await sleep(1600);
+                    await sleep(900);
 
                     // 7. Retype horizontally: every word peels off its row and flies into one line.
                     setCamera(0, 0, 1, 1000);
-                    await sleep(1050);
+                    await cameraSettled(1000);
 
                     const from = words.map(word => word.getBoundingClientRect());
                     const to = sentenceWords.map(span => span.getBoundingClientRect());
@@ -1018,20 +1034,20 @@
                     });
                     sentence.style.visibility = 'visible';
                     letters.classList.add('fade');
-                    await sleep(1400 + 120 * (sentenceWords.length - 1) + 300);
+                    await sleep(1400 + 120 * (sentenceWords.length - 1) + 120);
                     setProgress(.74);
 
                     // 8. The initials light up one by one and spell L S P D M S inside the sentence
                     sentence.classList.add('spell');
                     for (const span of sentenceWords) {
                         span.querySelector('.init').classList.add('lit');
-                        await sleep(300);
+                        await sleep(210);
                     }
-                    await sleep(900);
+                    await sleep(500);
 
                     // 8b. The other letters dim out; only L S P D M S remain, then they close up into one word
                     sentence.classList.add('dim');
-                    await sleep(1100);
+                    await sleep(950);
                     const initCenters = sentenceWords.map(span => {
                         const r = span.querySelector('.init').getBoundingClientRect();
                         return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
@@ -1048,9 +1064,9 @@
                             { duration: 1200, delay: i * 60, easing: 'cubic-bezier(.22, .9, .32, 1)', fill: 'backwards' }
                         ));
                     });
-                    await sleep(1200 + 60 * (sentenceWords.length - 1) + 200);
+                    await sleep(1200 + 60 * (sentenceWords.length - 1) + 100);
                     setProgress(.84);
-                    await sleep(1800);
+                    await sleep(1100);
 
                     // 9. The single word gives way to the finale
                     sentence.classList.add('out');
@@ -1059,10 +1075,10 @@
 
                     // 10. Finale: logo, shining wordmark, typed tagline, then a clear way in
                     hero.classList.add('on');
-                    await sleep(700);
+                    await sleep(500);
                     await type(tagline, 60);
                     setProgress(.92);
-                    await sleep(400);
+                    await sleep(250);
                     await finale(6);
                 }
 

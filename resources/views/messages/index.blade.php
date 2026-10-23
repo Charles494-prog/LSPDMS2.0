@@ -2,8 +2,15 @@
 
 @section('title', 'Messages')
 
+@php
+    $workspaceName = trim(($authenticatedUser['first_name'] ?? '').' '.($authenticatedUser['last_name'] ?? '')) ?: ($authenticatedUser['gmail'] ?? 'You');
+    $workspaceInitials = collect(preg_split('/\s+/', $workspaceName, -1, PREG_SPLIT_NO_EMPTY))->take(2)->map(fn ($part) => mb_strtoupper(mb_substr($part, 0, 1)))->implode('') ?: '?';
+    $workspaceAvatar = \App\Http\Controllers\ProfilePictureController::urlFor($authenticatedUser['id'] ?? null, $authenticatedUser['profile_picture'] ?? null);
+@endphp
+
 @push('styles')
 @include('messages.partials.assistant-styles')
+@include('messages.partials.workspace-styles')
 <style>
     .messages-page { display:grid; grid-template-columns:minmax(230px, 300px) minmax(0, 1fr); width:100%; height:100%; min-height:0; flex:1; background:var(--surface); border:1px solid var(--border); border-radius:14px; overflow:hidden; }
     .messages-sidebar { display:flex; flex-direction:column; min-width:0; min-height:0; overflow:hidden; border-right:1px solid var(--border); }
@@ -114,6 +121,25 @@ textarea:focus-visible, input:focus-visible { outline:none; border-color:var(--t
 @endpush
 
 @section('content')
+<div class="workspace" id="workspace"
+    data-csrf="{{ csrf_token() }}"
+    data-user-name="{{ $workspaceName }}"
+    data-user-avatar="{{ $workspaceAvatar }}"
+    data-todo-list-url="{{ route('secretary-todos.index') }}"
+    data-todo-create-url="{{ route('secretary-todos.store') }}"
+    data-todo-update-url="{{ route('secretary-todos.update', ['todo' => '__ID__']) }}"
+    data-todo-complete-url="{{ route('secretary-todos.complete', ['todo' => '__ID__']) }}">
+    <nav class="workspace-tabs" id="workspaceTabs" role="tablist" aria-label="Chats and to-do">
+        <button type="button" role="tab" id="wsTabChats" data-workspace-tab="chats" aria-selected="true">
+            <svg viewBox="0 0 24 24" class="ws-icon" aria-hidden="true"><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H5l1.8-3.2A7.5 7.5 0 1 1 20 11.5Z"/></svg>
+            <span>Chats</span>
+        </button>
+        <button type="button" role="tab" id="wsTabTodo" data-workspace-tab="todo" aria-selected="false" tabindex="-1">
+            <svg viewBox="0 0 24 24" class="ws-icon" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            <span>To-Do</span><span class="ws-count" data-count="todo" hidden></span>
+        </button>
+    </nav>
+    <div class="workspace-panel" data-workspace-panel="chats" role="tabpanel" aria-labelledby="wsTabChats">
 <section class="messages-page" id="messagesApp"
     data-user-id="{{ $authenticatedUser['id'] }}"
     data-bot-avatar="{{ asset('images/LSP_logo_white.png') }}?v={{ filemtime(public_path('images/LSP_logo_white.png')) }}"
@@ -168,9 +194,13 @@ textarea:focus-visible, input:focus-visible { outline:none; border-color:var(--t
         </form>
     </section>
 </section>
+    </div>
+    @include('messages.partials.workspace-panels')
+</div>
 @endsection
 
 @push('scripts')
 @vite('resources/js/messaging.js')
 @vite('resources/js/assistant.js')
+@vite('resources/js/workspace.js')
 @endpush

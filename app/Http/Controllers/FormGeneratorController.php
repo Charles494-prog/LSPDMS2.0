@@ -33,9 +33,19 @@ class FormGeneratorController extends Controller
             'monthly_section' => ['nullable', 'in:deliberation,monthly-forms'],
         ]);
 
+        // Old links into the hub's former tabs: Notes moved to its own page; the rest jump to a section.
+        if (($validated['panel'] ?? null) === 'notes') {
+            return redirect()->route('note-checker');
+        }
+        $section = match (true) {
+            ($validated['panel'] ?? null) === 'monthly' && ($validated['monthly_section'] ?? 'deliberation') === 'deliberation' => 'deliberation',
+            ($validated['panel'] ?? null) === 'monthly' => 'generate-monthly',
+            ($validated['panel'] ?? null) === 'weekly' => 'generate-weekly',
+            default => null,
+        };
+
         return view('form-generator', [
-            'activePanel' => $validated['panel'] ?? 'weekly',
-            'activeMonthlyPanel' => $validated['monthly_section'] ?? 'deliberation',
+            'focusSection' => $section,
             'monthlySession' => MonthlyMovementSession::query()
                 ->where('active_key', 'active')
                 ->withCount('activities')
@@ -417,14 +427,19 @@ class FormGeneratorController extends Controller
         ];
     }
 
+    public function noteChecker()
+    {
+        return view('note-checker');
+    }
+
     public function notes(Request $request): JsonResponse
     {
         $validated = $request->validate(['q' => ['nullable', 'string', 'max:150']]);
         $term = trim((string) ($validated['q'] ?? ''));
 
+        // No search: the records that already have notes. A search finds any record, so a first note can be added.
         $records = Record::query()
-            ->whereNotNull('log_section')
-            ->where('log_section', '!=', '')
+            ->when($term === '', fn ($query) => $query->whereNotNull('log_section')->where('log_section', '!=', ''))
             ->when($term !== '', function ($query) use ($term): void {
                 $query->where(function ($query) use ($term): void {
                     $query->where('full_name', 'like', '%'.$term.'%')
@@ -433,7 +448,7 @@ class FormGeneratorController extends Controller
             })
             ->orderBy('full_name')
             ->limit(100)
-            ->get(['id', 'full_name', 'registry', 'log_section']);
+            ->get(['id', 'full_name', 'registry', 'status', 'purok', 'grupo', 'log_section']);
 
         return response()->json($records->map(fn (Record $record): array => $this->recordPayload($record)));
     }
@@ -484,6 +499,9 @@ class FormGeneratorController extends Controller
             'id' => $record->id,
             'name' => $record->full_name ?? 'Unnamed record',
             'registry' => $record->registry ?? '',
+            'status' => $record->status,
+            'purok' => $record->purok,
+            'grupo' => $record->grupo,
             'notes' => $this->parseNotes((string) $record->log_section),
         ];
     }

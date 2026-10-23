@@ -87,6 +87,8 @@ if (widget && launcher && badge) {
         });
         echo.private(`user.${widget.dataset.userId}`)
             .listen('.message.sent', refreshUnreadCount)
+            // Tasks: the layout's reminder and the Tasks page react to this right away.
+            .listen('.task.updated', event => window.dispatchEvent(new CustomEvent('lspdms:task-updated', { detail: event })))
             .error(() => setNotificationConnectionState('subscription-error'));
     } else {
         setNotificationConnectionState('polling-only');

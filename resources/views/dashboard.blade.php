@@ -304,8 +304,8 @@
         --soft: #f5f5f5;
         --binhi: #15803d; --kadiwa: #2563eb; --buklod: #dc2626;
         --ot-bg: var(--card);
-        /* Validated categorical slots (blue / orange / aqua): colour-blind safe in both themes. */
-        --ms: #2a78d6; --uwp: #eb6834; --mk: #1baf7a; --off: #9aa5b1;
+        /* MS green, UWP orange, MK yellow - steps chosen to stay distinguishable for colour-blind readers. */
+        --ms: #0f9d58; --uwp: #e8590c; --mk: #e0a800; --off: #9aa5b1;
         --grid: #ececec;
         --g-good: #16a34a; --g-mid: #eab308; --g-low: #dc2626;
         --radius: 10px; --radius-sm: 6px;
@@ -315,7 +315,6 @@
     html[data-theme="dark"] .dash {
         --soft: #171717;
         --off: #6b7280;
-        --ms: #3987e5; --uwp: #d95926; --mk: #199e70;
         --grid: #1f1f1f;
         --binhi: #4ade80; --kadiwa: #60a5fa; --buklod: #f87171;
         --g-good: #22c55e; --g-mid: #facc15; --g-low: #f87171;
@@ -368,6 +367,16 @@
     .movement-purok-counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .35rem; }
     .movement-purok-count { display: flex; justify-content: space-between; gap: .35rem; color: var(--muted); font-size: .76rem; }
     .movement-purok-count strong { color: var(--ink); font-weight: 700; }
+    .movement-group + .movement-group .movement-group-head th { border-top: 2px solid var(--line); padding-top: 1.1rem; }
+    .movement-group-head th { text-align: left; font-weight: 600; background: transparent; }
+    .movement-group-head th > span { margin-right: .6rem; }
+    .movement-group-sign { display: inline-grid; place-items: center; width: 1.3rem; height: 1.3rem; border-radius: 50%; font-weight: 800; color: #fff; background: var(--muted); vertical-align: middle; }
+    .movement-group--add .movement-group-sign { background: var(--ms); }
+    .movement-group--subtract .movement-group-sign { background: #d93025; }
+    .movement-group-label { color: var(--ink); font-size: .86rem; font-weight: 700; }
+    .movement-group-codes { color: var(--muted); font-size: .76rem; font-weight: 500; }
+    .movement-group-total { float: right; margin-right: 0 !important; color: var(--ink); font-size: .78rem; }
+    .movement-group-empty { color: var(--muted); font-style: italic; }
     @media (max-width: 520px) {
         .movement-code-modal .modal-head { padding: .75rem .85rem; }
         .movement-code-modal .modal-body { padding: .8rem; }
@@ -1036,10 +1045,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Puroks arrive from the server as [{ id, label }] in the configured order (2a / 2b separate).
+    const purokLabel = id => ensure().overtimePuroks.find(purok => purok.id === id)?.label || id;
+    const purokOrder = id => ensure().overtimePuroks.findIndex(purok => purok.id === id);
+
     function renderOvertime() {
         const { MONTHS, overtimePuroks, DATA_MONTHS } = ensure();
-        const allIds = overtimePuroks.map(String);
-        const ids = state.puroks.size ? [...state.puroks].sort((a, b) => Number(a) - Number(b)) : allIds;
+        const allIds = overtimePuroks.map(purok => purok.id);
+        const ids = state.puroks.size ? allIds.filter(id => state.puroks.has(id)) : allIds;
         const isAllPuroks = ids.length === allIds.length;
         $('ot-reset').hidden = isAllMonths() && state.puroks.size === 0;
         const sig = `${state.s}|${state.e}|${ids.join(',')}`;
@@ -1056,7 +1069,7 @@ document.addEventListener('DOMContentLoaded', () => {
             : isAllMonths() ? `All periods (${selectedMonths[0]}–${selectedMonths[selectedMonths.length - 1]})`
             : selectedMonths.length === 1 ? selectedMonths[0]
             : `${selectedMonths[0]}–${selectedMonths[selectedMonths.length - 1]}`;
-        $('ot-current').textContent = `Now showing trend graph for ${isAllPuroks ? 'All Puroks' : ids.map(id => `Purok ${id}`).join(', ')} · ${period}`;
+        $('ot-current').textContent = `Now showing trend graph for ${isAllPuroks ? 'All Puroks' : ids.map(purokLabel).join(', ')} · ${period}`;
 
         const totals = Object.fromEntries(historyStatuses.map(status => [status, seriesFor(status, ids)]));
         const missingMonths = idxs.filter((_, i) => totals.MS[i] === null).length;
@@ -1080,7 +1093,7 @@ document.addEventListener('DOMContentLoaded', () => {
         otChart.options.scales.x.max = Math.max(0, idxs.length - 1);
         otChart.update('none');
         otChart.canvas.setAttribute('aria-label',
-            `Records over time for ${isAllPuroks ? 'all puroks' : 'Purok ' + ids.join(', ')}: ` +
+            `Records over time for ${isAllPuroks ? 'all puroks' : ids.map(purokLabel).join(', ')}: ` +
             idxs.map((m, i) => `${MONTHS[m]} ${historyStatuses.map(s => `${s} ${totals[s][i] === null ? 'no snapshot' : fmt(totals[s][i])}`).join(', ')}`).join('; '));
     }
 
@@ -1089,17 +1102,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const monthIndex = MONTH_KEYS.indexOf(monthKey);
         const details = D.movementDetails
             .filter(item => item.month === monthKey && selectedPuroks.includes(String(item.purok)))
-            .sort((l, r) => l.purok - r.purok || l.status.localeCompare(r.status) || l.code.localeCompare(r.code));
+            .sort((l, r) => purokOrder(l.purok) - purokOrder(r.purok) || l.status.localeCompare(r.status) || l.code.localeCompare(r.code));
         const monthLabel = MONTHS[monthIndex];
         $('movement-code-title').textContent = `${monthLabel} movement codes`;
-        const purokLabel = selectedPuroks.length === overtimePuroks.length ? 'All Puroks' : selectedPuroks.map(id => `Purok ${id}`).join(', ');
-        $('movement-code-sub').textContent = `${purokLabel} · ${fmt(details.length)} recorded movement entr${details.length === 1 ? 'y' : 'ies'}`;
+        const selectionLabel = selectedPuroks.length === overtimePuroks.length ? 'All Puroks' : selectedPuroks.map(purokLabel).join(', ');
+        $('movement-code-sub').textContent = `${selectionLabel} · ${fmt(details.length)} recorded movement entr${details.length === 1 ? 'y' : 'ies'}`;
         const body = $('movement-code-body');
         const summary = el('div', 'movement-count-grid');
         selectedPuroks.forEach(purok => {
             const counts = overtime[monthIndex]?.[purok] || {};
             const card = el('section', 'movement-purok-card');
-            card.append(el('h3', '', `Purok ${purok}`));
+            card.append(el('h3', '', purokLabel(purok)));
             const statusCounts = el('div', 'movement-purok-counts');
             historyStatuses.forEach(status => {
                 const item = el('div', 'movement-purok-count');
@@ -1110,19 +1123,45 @@ document.addEventListener('DOMContentLoaded', () => {
             summary.append(card);
         });
         if (!details.length) {
-            body.replaceChildren(el('div', 'empty', `No movement codes were entered for ${monthLabel} in ${purokLabel}.`), summary);
+            body.replaceChildren(el('div', 'empty', `No movement codes were entered for ${monthLabel} in ${selectionLabel}.`), summary);
         } else {
             body.replaceChildren(summary);
             const table = el('table', 'tbl'), head = el('tr');
             ['Purok', 'Kalagayan', 'Code', 'Count'].forEach(column => head.append(el('th', '', column)));
             const thead = el('thead'); thead.append(head); table.append(thead);
-            const tbody = el('tbody');
-            details.forEach(item => {
-                const row = el('tr');
-                row.append(el('td', '', `Purok ${item.purok}`), el('td', '', item.status), el('td', '', item.code), el('td', '', fmt(item.count)));
-                tbody.append(row);
+            // Same sign rules as the Resumen ending count (MonthlyResumenReport::endingCount).
+            const groups = [
+                { key: 'add', label: 'Add', sign: '+', codes: ['B', 'C+'] },
+                { key: 'subtract', label: 'Subtract', sign: '−', codes: ['C-', 'D', 'DD', 'E', 'G', 'H'] },
+            ];
+            const known = groups.flatMap(g => g.codes);
+            groups.push({ key: 'other', label: 'Other', sign: '', codes: null });
+            groups.forEach(group => {
+                const items = details.filter(item => group.codes ? group.codes.includes(item.code) : !known.includes(item.code));
+                if (!items.length && group.key === 'other') return;
+                const tbody = el('tbody', `movement-group movement-group--${group.key}`);
+                const headRow = el('tr', 'movement-group-head'), headCell = el('th');
+                headCell.colSpan = 4;
+                const total = items.reduce((sum, item) => sum + Number(item.count || 0), 0);
+                headCell.append(
+                    el('span', 'movement-group-sign', group.sign || '•'),
+                    el('span', 'movement-group-label', group.label),
+                    el('span', 'movement-group-codes', group.codes ? group.codes.join(', ') : 'Uncategorized codes'),
+                    el('span', 'movement-group-total', `${fmt(total)} total`),
+                );
+                headRow.append(headCell);
+                tbody.append(headRow);
+                if (!items.length) {
+                    const row = el('tr'), cell = el('td', 'movement-group-empty', `No ${group.label.toLowerCase()} codes this month.`);
+                    cell.colSpan = 4; row.append(cell); tbody.append(row);
+                }
+                items.forEach(item => {
+                    const row = el('tr');
+                    row.append(el('td', '', purokLabel(item.purok)), el('td', '', item.status), el('td', '', item.code), el('td', '', fmt(item.count)));
+                    tbody.append(row);
+                });
+                table.append(tbody);
             });
-            table.append(tbody);
             const wrap = el('div', 'tbl-wrap'); wrap.append(table);
             body.append(wrap);
         }
@@ -1138,9 +1177,8 @@ document.addEventListener('DOMContentLoaded', () => {
             : `Showing ${MONTHS[state.s]} to ${MONTHS[state.e]}.`;
     }
     function renderPuroks() {
-        $('purok-list').replaceChildren(...ensure().overtimePuroks.map(purokNumber => {
-            const id = String(purokNumber);
-            const b = el('button', 'chip', `Purok ${id}`); b.type = 'button';
+        $('purok-list').replaceChildren(...ensure().overtimePuroks.map(({ id, label }) => {
+            const b = el('button', 'chip', label); b.type = 'button';
             b.setAttribute('aria-pressed', String(state.puroks.has(id)));
             b.addEventListener('click', () => {
                 if (state.puroks.has(id)) state.puroks.delete(id); else state.puroks.add(id);

@@ -132,6 +132,7 @@ class BuiltInHelpChatbotController extends Controller
             'filter_bnh_helper_allow' => $isHeadSecretary || (bool) ($user['filter_bnh_helper_allow'] ?? false),
             'tarheta_status_allow' => $isHeadSecretary || (bool) ($user['tarheta_status_allow'] ?? false),
             'chatbot_records_allow' => $isHeadSecretary || (bool) ($user['chatbot_records_allow'] ?? false),
+            'note_checker_allow' => $isHeadSecretary || (bool) ($user['note_checker_allow'] ?? false),
         ];
     }
 

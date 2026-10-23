@@ -38,7 +38,7 @@ class SuperadminDashboardTest extends TestCase
             ->assertDontSee('secret-password')
             ->assertDontSee('name="password"')
             ->assertSee('id="saveSignatoriesBtn" disabled', false)
-            ->assertSee('id="saToastContainer"', false)
+            ->assertSee('id="appNotice"', false)
             ->assertSee('Mga R4-02 Hakbang')
             ->assertSee('data-hakbang-status="MS"', false)
             ->assertSee('data-hakbang-status="UWP"', false)
@@ -329,6 +329,7 @@ class SuperadminDashboardTest extends TestCase
                     'tarheta_status_allow' => 1,
                     'filter_bnh_helper_allow' => 1,
                     'chatbot_records_allow' => 1,
+                    'note_checker_allow' => 1,
                 ]],
             ])
             ->assertOk();
@@ -342,6 +343,7 @@ class SuperadminDashboardTest extends TestCase
             'tarheta_status_allow' => 1,
             'filter_bnh_helper_allow' => 1,
             'chatbot_records_allow' => 1,
+            'note_checker_allow' => 1,
         ]);
 
         $this->withSession(['login_user' => ['id' => $admin->id]])
@@ -352,7 +354,9 @@ class SuperadminDashboardTest extends TestCase
             ->assertSee('Allow Filter &amp;<br>BNH Helper', false)
             ->assertSee('data-permission="filter_bnh_helper_allow" checked', false)
             ->assertSee('Allow chatbot<br>record lookups', false)
-            ->assertSee('data-permission="chatbot_records_allow" checked', false);
+            ->assertSee('data-permission="chatbot_records_allow" checked', false)
+            ->assertSee('Allow Note<br>Checker', false)
+            ->assertSee('data-permission="note_checker_allow" checked', false);
 
         $this->withSession(['login_user' => ['id' => $admin->id]])
             ->putJson(route('superadmin.permissions.update'), [
