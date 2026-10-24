@@ -52,11 +52,15 @@ class DatabaseBackupService
      * Database file copies belong to the table that references them, so an
      * export without (for example) messages carries no chat images, and an
      * import only replaces the file copies of the tables it contains.
+     *
+     * They are also the only places an import may put a file. The public
+     * disk is web-served (/storage), so it only takes image extensions;
+     * null means any extension (private local disk).
      */
     public const FILE_OWNERS = [
-        'login_user' => ['disk' => 'public', 'prefix' => 'profile-pictures/'],
-        'messages' => ['disk' => 'local', 'prefix' => 'messages/'],
-        'r4_01_snapshots' => ['disk' => 'local', 'prefix' => 'monthly-session-snapshots/'],
+        'login_user' => ['disk' => 'public', 'prefix' => 'profile-pictures/', 'extensions' => ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'avif']],
+        'messages' => ['disk' => 'local', 'prefix' => 'messages/', 'extensions' => null],
+        'r4_01_snapshots' => ['disk' => 'local', 'prefix' => 'monthly-session-snapshots/', 'extensions' => ['docx', 'html']],
     ];
 
     private const FILE_TABLES = ['stored_files', 'stored_file_chunks'];
@@ -116,6 +120,11 @@ class DatabaseBackupService
             }
             foreach ($query->orderBy($exportColumns[0])->cursor() as $row) {
                 $row = (array) $row;
+                if (in_array($table, self::FILE_TABLES, true)
+                    && ! self::isAllowedFileLocation($row['disk'] ?? null, $row['path'] ?? null)) {
+                    // The import would refuse the whole file over this row.
+                    continue;
+                }
                 $values = [];
                 foreach ($exportColumns as $column) {
                     $value = in_array($column, $redacted, true) ? null : ($row[$column] ?? null);
@@ -207,8 +216,13 @@ class DatabaseBackupService
             $query = DB::table($table);
             if (in_array($table, self::FILE_TABLES, true)) {
                 $this->limitToExportedOwners($query, $inspection['tables']);
+                $expected = $query->get(['disk', 'path'])
+                    ->filter(fn (object $row): bool => self::isAllowedFileLocation($row->disk, $row->path))
+                    ->count();
+            } else {
+                $expected = $query->count();
             }
-            if ($query->count() !== $count) {
+            if ($expected !== $count) {
                 throw new DatabaseBackupFailed("The safety backup is incomplete for table {$table}, so nothing was imported.");
             }
         }
@@ -279,6 +293,7 @@ class DatabaseBackupService
 
                         continue;
                     }
+                    $this->assertAllowedFileRow($table, $statement);
                     $tables[$table] = true;
                     $rowCounts[$table] = ($rowCounts[$table] ?? 0) + 1;
 
@@ -517,6 +532,97 @@ class DatabaseBackupService
             ->contains(fn (?string $role): bool => Role::isHeadSecretary($role));
     }
 
+    /**
+     * Whether a file copy at ($disk, $path) belongs to a FILE_OWNERS location:
+     * same disk, owner prefix, allowed extension, and a plain relative path
+     * (no "..", backslash, dot-file, control character or drive/stream colon).
+     * A segment with a script extension anywhere in it ("shell.php.png") is
+     * refused too, since some servers run those whatever the last extension.
+     */
+    public static function isAllowedFileLocation(?string $disk, ?string $path): bool
+    {
+        if ($disk === null || $path === null || $path === ''
+            || str_contains($path, '\\') || str_contains($path, ':')
+            || preg_match('/[\x00-\x1F\x7F]/', $path)) {
+            return false;
+        }
+
+        foreach (explode('/', $path) as $segment) {
+            if ($segment === '' || str_starts_with($segment, '.')
+                || preg_match('/\.(php\d*|phtml|phar|phps|pht|shtml|htaccess|htpasswd|cgi|pl|py|sh|asp|aspx|jsp)(\.|$)/i', $segment)) {
+                return false;
+            }
+        }
+
+        foreach (self::FILE_OWNERS as $location) {
+            if ($disk !== $location['disk'] || ! str_starts_with($path, $location['prefix'])) {
+                continue;
+            }
+
+            return $location['extensions'] === null
+                || in_array(strtolower(pathinfo($path, PATHINFO_EXTENSION)), $location['extensions'], true);
+        }
+
+        return false;
+    }
+
+    /**
+     * Reject a stored_files / stored_file_chunks INSERT whose (disk, path) is
+     * not a FILE_OWNERS location, so a crafted backup cannot make the
+     * post-import restore write files anywhere else (e.g. a .php file under
+     * the web-served /storage folder).
+     */
+    private function assertAllowedFileRow(string $table, string $statement): void
+    {
+        if (! in_array($table, self::FILE_TABLES, true)) {
+            return;
+        }
+
+        $row = $this->insertedValues($statement);
+        if ($row === null || ! self::isAllowedFileLocation($row['disk'] ?? null, $row['path'] ?? null)) {
+            throw ValidationException::withMessages([
+                'sql_file' => 'The SQL backup contains a stored file outside the folders LSPDMS uses. Nothing was imported.',
+            ]);
+        }
+    }
+
+    /**
+     * Column => decoded value of an INSERT that insertTable() already
+     * accepted (hex literals or NULL only), or null when it cannot be read.
+     * A repeated column is unreadable: SQLite keeps the first value while a
+     * column => value map would keep the last, so the check could be fooled.
+     *
+     * @return array<string, ?string>|null
+     */
+    private function insertedValues(string $statement): ?array
+    {
+        if (! preg_match('/^INSERT INTO\s+\S+\s+\((.*?)\)\s+VALUES\s+\((.*)\);$/is', $statement, $parts)) {
+            return null;
+        }
+
+        preg_match_all('/[A-Za-z0-9_]+/', $parts[1], $columns);
+        preg_match_all("/NULL|X'([a-f0-9]*)'/i", $parts[2], $values, PREG_SET_ORDER);
+        if (count($columns[0]) !== count($values)) {
+            return null;
+        }
+
+        $names = array_map('strtolower', $columns[0]);
+        if (count(array_unique($names)) !== count($names)) {
+            return null;
+        }
+
+        $row = [];
+        foreach ($names as $index => $column) {
+            $hex = $values[$index][1] ?? null;
+            if ($hex !== null && strlen($hex) % 2 !== 0) {
+                return null;
+            }
+            $row[$column] = $hex === null ? null : (string) hex2bin($hex);
+        }
+
+        return $row;
+    }
+
     /** Keep only file copies whose owning table is part of $tables. */
     private function limitToExportedOwners($query, array $tables): void
     {
@@ -667,6 +773,8 @@ class DatabaseBackupService
                     if (in_array($table, self::NEVER_EXPORTED_TABLES, true)) {
                         continue;
                     }
+                    // Checked again here: the file is re-read after inspectImport().
+                    $this->assertAllowedFileRow($table, $statement);
                     $callback($statement);
                 }
             }

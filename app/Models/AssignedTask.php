@@ -37,6 +37,11 @@ class AssignedTask extends Model
         return $this->belongsTo(User::class, 'done_by');
     }
 
+    public function confirmedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'confirmed_by');
+    }
+
     public function members(): HasMany
     {
         return $this->hasMany(AssignedTaskMember::class, 'task_id');
@@ -50,5 +55,10 @@ class AssignedTask extends Model
     public function reactions(): HasMany
     {
         return $this->hasMany(AssignedTaskReaction::class, 'task_id');
+    }
+
+    public function mentions(): HasMany
+    {
+        return $this->hasMany(AssignedTaskMention::class, 'task_id');
     }
 }

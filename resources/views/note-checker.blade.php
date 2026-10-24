@@ -238,15 +238,16 @@
     // Notes start with "NN/NN/YYYY:". The existing records write the month first (e.g. "10/02/2025: ... OCTOBER"),
     // so a date reads month-first unless a part over 12 shows it is day-first. Notes without a date are kept as-is.
     function parseNote(note) {
-        const match = note.match(/^(\d{2})\/(\d{2})\/(\d{4}):\s*(.*)$/s);
+        // DD/MM/YYYY or MM/DD/YYYY from notes; DD-MM-YYYY from Monthly Session log entries (always day first).
+        const match = note.match(/^(\d{1,2})([\/-])(\d{1,2})\2(\d{4})\s*:\s*(.*)$/s);
         if (!match) return { date: null, text: note };
-        const [, first, second, year, text] = match;
-        const dayFirst = Number(first) > 12;
+        const [, first, separator, second, year, text] = match;
+        const dayFirst = separator === '-' || Number(first) > 12;
         const month = Number(dayFirst ? second : first);
         const day = Number(dayFirst ? first : second);
         const date = new Date(Number(year), month - 1, day);
         if (Number.isNaN(date.getTime()) || date.getMonth() !== month - 1) return { date: null, text: note };
-        return { date, text, label: `${first}/${second}/${year}` };
+        return { date, text, label: `${first}${separator}${second}${separator}${year}` };
     }
 
     function showError(error) {
@@ -268,7 +269,9 @@
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
             const firstError = payload.errors ? Object.values(payload.errors).flat()[0] : null;
-            throw new Error(firstError || payload.message || 'Could not complete the notes request.');
+            const error = new Error(firstError || payload.message || 'Could not complete the notes request.');
+            error.status = response.status;
+            throw error;
         }
         return payload;
     }
@@ -409,12 +412,23 @@
                 remove.disabled = true;
                 try {
                     const url = app.dataset.deleteUrl.replace('__ID__', record.id).replace('__INDEX__', index);
-                    const updated = await request(url, { method: 'DELETE' });
+                    // The note text lets the server refuse (409) if the list changed since this page loaded.
+                    const updated = await request(url, { method: 'DELETE', body: JSON.stringify({ note }) });
                     replaceRecord(updated);
                     renderNotes(updated);
                     alert.textContent = '';
                     window.lspdmsNotify?.({ title: 'Note deleted', message: updated.name, changes: [{ label: parsed.label || 'Note', from: parsed.text, to: 'Deleted' }] });
-                } catch (error) { showError(error); remove.disabled = false; }
+                } catch (error) {
+                    remove.disabled = false;
+                    if (error.status !== 409) { showError(error); return; }
+                    // Reload first: a successful reload clears the alert, so the explanation is written after it.
+                    try { await loadRecords(); } catch (reloadError) { showError(reloadError); return; }
+                    const changed = 'The notes for this record changed since the page loaded.';
+                    const shown = records.find(item => Number(item.id) === selectedId);
+                    alert.textContent = Number(record.id) === selectedId
+                        ? `${changed} The latest notes are shown now; check them and try again.`
+                        : `${changed} ${record.name} is no longer in this list${shown ? `, so ${shown.name} is shown instead` : ''}.`;
+                }
             });
             row.append(date, el('p', 'nc-note-text', parsed.text), remove);
             notesList.append(row);

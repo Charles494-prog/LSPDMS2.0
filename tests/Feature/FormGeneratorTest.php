@@ -1292,10 +1292,107 @@ class FormGeneratorTest extends TestCase
         ]);
 
         $this->withSession(['login_user' => ['id' => $user->id]])
-            ->deleteJson(route('forms.notes.delete', ['record' => $record, 'noteIndex' => 0]))
+            ->deleteJson(route('forms.notes.delete', ['record' => $record, 'noteIndex' => 0]), [
+                'note' => '09/06/2025: Existing note, includes commas',
+            ])
             ->assertOk()
             ->assertJsonCount(1, 'notes')
             ->assertJsonPath('notes.0', $today.': Should be on deliberation, discuss with head secretary');
+    }
+
+    public function test_note_checker_splits_dash_dated_monthly_session_entries_into_their_own_notes(): void
+    {
+        $user = $this->makeSecretary(['note_checker_allow' => true]);
+        // Add note writes d/m/Y; Monthly Session subtract/add/delist log entries write d-m-Y.
+        $record = Record::query()->create([
+            'full_name' => 'Subtracted Member',
+            'registry' => 'REG-DASH-1',
+            'log_section' => '20/10/2026: Called family, 24-10-2026: MS: D, 24-10-2026: Moved abroad,',
+        ]);
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->getJson(route('forms.notes').'?q=REG-DASH-1')
+            ->assertOk()
+            ->assertJsonCount(3, '0.notes')
+            ->assertJsonPath('0.notes.0', '20/10/2026: Called family')
+            ->assertJsonPath('0.notes.1', '24-10-2026: MS: D')
+            ->assertJsonPath('0.notes.2', '24-10-2026: Moved abroad,');
+
+        // Deleting the secretary's note keeps the system log entries.
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->deleteJson(route('forms.notes.delete', ['record' => $record, 'noteIndex' => 0]), [
+                'note' => '20/10/2026: Called family',
+            ])
+            ->assertOk()
+            ->assertJsonCount(2, 'notes');
+        $this->assertDatabaseHas('records', [
+            'id' => $record->id,
+            'log_section' => '24-10-2026: MS: D, 24-10-2026: Moved abroad,',
+        ]);
+    }
+
+    public function test_note_checker_refuses_to_delete_from_a_stale_note_list(): void
+    {
+        $user = $this->makeSecretary(['note_checker_allow' => true]);
+        $record = Record::query()->create([
+            'full_name' => 'Shared Member',
+            'registry' => 'REG-STALE-1',
+            'log_section' => '01/10/2026: First, 02/10/2026: Second, 03/10/2026: Third',
+        ]);
+        $session = ['login_user' => ['id' => $user->id]];
+
+        // Secretary A deletes the first note.
+        $this->withSession($session)
+            ->deleteJson(route('forms.notes.delete', ['record' => $record, 'noteIndex' => 0]), ['note' => '01/10/2026: First'])
+            ->assertOk();
+
+        // Secretary B's page still shows the old list and deletes "Second" by its old index (now "Third").
+        $this->withSession($session)
+            ->deleteJson(route('forms.notes.delete', ['record' => $record, 'noteIndex' => 1]), ['note' => '02/10/2026: Second'])
+            ->assertStatus(409);
+        // An index past the end of the changed list is stale too.
+        $this->withSession($session)
+            ->deleteJson(route('forms.notes.delete', ['record' => $record, 'noteIndex' => 2]), ['note' => '03/10/2026: Third'])
+            ->assertStatus(409);
+        // The note text is required.
+        $this->withSession($session)
+            ->deleteJson(route('forms.notes.delete', ['record' => $record, 'noteIndex' => 0]))
+            ->assertUnprocessable();
+        $this->assertDatabaseHas('records', [
+            'id' => $record->id,
+            'log_section' => '02/10/2026: Second, 03/10/2026: Third',
+        ]);
+    }
+
+    public function test_resumen_uses_the_session_month_on_the_last_day_of_a_longer_month(): void
+    {
+        // Oct 31: createFromFormat('Y-m', '2026-11') would borrow day 31 and roll over to December.
+        $this->travelTo(Carbon::parse('2026-10-31 10:00:00', 'Asia/Manila'));
+        $user = $this->makeSecretary(['form_generator_allow' => true]);
+        DB::table('puroks')->insert([
+            'purok_number' => 1,
+            'purok_name' => 'Purok Uno',
+            'manggagawa' => 'Worker One',
+            'ministerial_id' => 'MIN-001',
+            'grupo_start' => 1,
+            'grupo_end' => 24,
+            'full_purok' => false,
+        ]);
+        Record::query()->create(['full_name' => 'Member One', 'purok' => '1', 'grupo' => '1', 'status' => 'MS']);
+        $this->createMonthlySession('2026-11-01');
+        $session = ['login_user' => ['id' => $user->id]];
+
+        $this->withSession($session)
+            ->get(route('forms.monthly.resumen'))
+            ->assertOk()
+            ->assertSee('NOVEMBER 2026')
+            ->assertViewHas('selectedMonth', '2026-11')
+            ->assertViewHas('report', fn (array $report): bool => $report['month']->format('Y-m-d') === '2026-11-01');
+
+        $this->withSession($session)
+            ->get(route('forms.monthly.resumen.download'))
+            ->assertOk()
+            ->assertDownload('Resumen Nov 2026.docx');
     }
 
     public function test_note_checker_search_finds_records_without_notes(): void

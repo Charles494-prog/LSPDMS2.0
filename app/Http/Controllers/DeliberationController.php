@@ -1064,10 +1064,11 @@ class DeliberationController extends Controller
             'purok_id' => ['required_without:reuse_record_id', 'nullable', 'integer', 'exists:puroks,id'],
             'grupo' => ['nullable', 'integer', 'min:1', 'max:999'],
             'kapisanan' => ['required_without:reuse_record_id', 'nullable', Rule::in(['Buklod', 'Kadiwa', 'Suliranin', 'Binhi'])],
-            'date_of_baptism' => ['nullable', 'date', 'before_or_equal:today'],
+            // "Today" is the Manila date; the app timezone is UTC, which lags it until 08:00.
+            'date_of_baptism' => ['nullable', 'date', 'before_or_equal:'.now('Asia/Manila')->toDateString()],
             'evangelist' => ['nullable', 'string', 'max:150'],
             'status' => ['required', Rule::in(['MS', 'UWP', 'MK'])],
-            'date_of_birth' => ['nullable', 'date', 'before_or_equal:today'],
+            'date_of_birth' => ['nullable', 'date', 'before_or_equal:'.now('Asia/Manila')->toDateString()],
             'is_married' => ['sometimes', 'required', 'boolean'],
             'description' => ['nullable', 'string', 'max:500'],
             'reuse_record_id' => ['nullable', 'integer', 'exists:records,id'],
@@ -1336,7 +1337,8 @@ class DeliberationController extends Controller
             return 'Buklod';
         }
 
-        return Carbon::parse($birthDate)->age < 18 ? 'Binhi' : 'Kadiwa';
+        // Age is counted against Manila's date, not the UTC app clock.
+        return Carbon::parse($birthDate)->addYears(18)->isAfter(Carbon::parse(Carbon::now('Asia/Manila')->toDateString())) ? 'Binhi' : 'Kadiwa';
     }
 
     private function activeMonthlySession(Request $request, bool $create): ?MonthlyMovementSession

@@ -308,6 +308,18 @@ if (root) {
         }
     }
 
+    // Loading a conversation is a plain GET; marking it read is this separate CSRF-protected POST.
+    async function markConversationRead(conversationId, items) {
+        const lastUnreadId = items
+            .filter(item => Number(item.sender_id) !== userId && !item.read_at)
+            .reduce((max, item) => Math.max(max, Number(item.id) || 0), 0);
+        if (!lastUnreadId) return;
+        await request(`${endpoint(root.dataset.messagesUrl, conversationId)}/read`, {
+            method: 'POST',
+            body: JSON.stringify({ up_to_id: lastUnreadId }),
+        });
+    }
+
     function isMessagesViewVisible() {
         if (window.parent === window) return true;
         const chatWindow = window.parent.document.getElementById('chatWindow');
@@ -401,6 +413,7 @@ if (root) {
             const items = await request(endpoint(root.dataset.messagesUrl, selected));
             if (selected === Number(id)) {
                 renderMessages(items);
+                await markConversationRead(id, items);
                 refreshParentUnreadCount();
             }
             await loadConversations();
@@ -575,8 +588,10 @@ if (root) {
         if (event.data?.type !== 'chat:panel-opened' || !selected) return;
 
         try {
-            const items = await request(endpoint(root.dataset.messagesUrl, selected));
+            const conversationId = selected;
+            const items = await request(endpoint(root.dataset.messagesUrl, conversationId));
             renderMessages(items);
+            await markConversationRead(conversationId, items);
             await loadConversations();
             refreshParentUnreadCount();
         } catch (error) {

@@ -4,6 +4,7 @@
  * Opening this page marks the visible tasks as seen, which stops the "new tasks" pop-up.
  */
 import { createHelpers } from './workspace-helpers';
+import { createMentions } from './mentions';
 
 const root = document.getElementById('tasksApp');
 
@@ -19,6 +20,11 @@ if (root) {
         { type: 'angry', emoji: '😡', label: 'Angry' },
     ];
     const REACTION = Object.fromEntries(REACTIONS.map(reaction => [reaction.type, reaction]));
+    // @mentions: the picker offers only people who can see the task; the author is never offered.
+    const myId = Number(data.userId);
+    const mentions = createMentions({ root, request, peopleUrl: data.taskPeopleUrl, el, avatar, me: myId });
+    const canSeeTask = (task, person) => person.is_head || task.visibility === 'everyone' || task.members.some(member => member.id === person.id);
+    const mentionableFor = task => () => mentions.people().filter(person => person.id !== myId && canSeeTask(task, person));
     const panel = root;
     const feed = panel.querySelector('#taskFeed');
     const composer = panel.querySelector('#taskComposer');
@@ -58,6 +64,12 @@ if (root) {
         visibilityInputs.forEach(input => input.addEventListener('change', syncVisibility));
         const submit = form.querySelector('#taskSubmit');
         const cancel = form.querySelector('#taskCancel');
+        form.querySelectorAll('[data-due-offset]').forEach(button => button.addEventListener('click', () => {
+            if (button.dataset.dueOffset === '') { due.value = ''; return; }
+            const d = new Date(`${todayIso()}T00:00:00`);
+            d.setDate(d.getDate() + Number(button.dataset.dueOffset));
+            due.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }));
         const heading = form.querySelector('#taskComposeHeading');
 
         const open = (task = null) => {
@@ -149,6 +161,23 @@ if (root) {
         toggle.addEventListener('click', () => (composer.classList.contains('is-open') ? close() : open()));
         cancel.addEventListener('click', close);
         body.addEventListener('input', () => autoGrow(body));
+        // Typing @Name in the title or details also ticks that secretary below, so they can see the task.
+        const everyoneButMe = () => mentions.people().filter(person => person.id !== myId);
+        mentions.attach(title, everyoneButMe);
+        mentions.attach(body, everyoneButMe);
+        const selectMentioned = () => {
+            const ids = mentions.mentioned(`${title.value}\n${body.value}`).map(person => person.id);
+            people.querySelectorAll('.ws-person').forEach(row => {
+                const box = row.querySelector('.ws-person-see');
+                if (!ids.includes(Number(row.dataset.id)) || box.checked) return;
+                box.checked = true;
+                box.dispatchEvent(new Event('change'));
+                row.classList.add('is-mentioned');
+                setTimeout(() => row.classList.remove('is-mentioned'), 1600);
+            });
+        };
+        title.addEventListener('input', selectMentioned);
+        body.addEventListener('input', selectMentioned);
         form.addEventListener('submit', async event => {
             event.preventDefault();
             const members = [...people.querySelectorAll('.ws-person')]
@@ -207,12 +236,20 @@ if (root) {
     function statusPill(task) {
         if (task.status === 'awaiting_confirmation') {
             const pill = el('span', 'ws-pill wait');
-            pill.append(icon(['M12 7v5l3 2', 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z']), document.createTextNode(
-                `Done by ${task.done_by?.name || 'a secretary'} · waiting for Head Secretary`));
+            // "All" only when every member really marked it (tasks closed before per-member marks have just one).
+            const allMarked = (task.progress?.total || 0) > 1 && task.progress.done === task.progress.total;
+            const who = allMarked ? `Done by all ${task.progress.total}` : `Done by ${task.done_by?.name || 'a secretary'}`;
+            pill.append(icon(['M12 7v5l3 2', 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z']), document.createTextNode(`${who} · waiting for Head Secretary`));
             return pill;
         }
         const pill = el('span', 'ws-pill open');
         pill.append(el('span', 'ws-dot'), document.createTextNode('Open'));
+        // With several people finishing it, show how far along they are.
+        if ((task.progress?.total || 0) > 1) {
+            pill.append(el('span', 'ws-pill-progress', ` · ${task.progress.done} of ${task.progress.total} done`));
+            pill.title = task.members.filter(member => member.can_complete)
+                .map(member => `${member.name}: ${member.done_at ? 'done' : 'not yet'}`).join('\n');
+        }
         return pill;
     }
 
@@ -239,7 +276,8 @@ if (root) {
         when.title = task.created_at ? new Date(task.created_at).toLocaleString() : '';
         who.append(when);
         head.append(who);
-        if (task.is_new) head.append(el('span', 'ws-new', 'New'));
+        if (task.mentions_me) head.append(el('span', 'ws-new', 'Mentioned you'));
+        else if (task.is_new) head.append(el('span', 'ws-new', 'New'));
         if (task.viewer.can_manage) {
             const tools = el('div', 'ws-task-tools');
             const edit = el('button', 'ws-icon-btn');
@@ -268,8 +306,14 @@ if (root) {
 
         // Body
         const main = el('div', 'ws-task-main');
-        main.append(el('h3', 'ws-task-title', task.title));
-        if (task.body) main.append(el('p', 'ws-task-body', task.body));
+        const titleNode = el('h3', 'ws-task-title');
+        titleNode.append(mentions.render(task.title));
+        main.append(titleNode);
+        if (task.body) {
+            const bodyNode = el('p', 'ws-task-body');
+            bodyNode.append(mentions.render(task.body));
+            main.append(bodyNode);
+        }
         const tags = el('div', 'ws-task-tags');
         tags.append(statusPill(task));
         const chip = dueLabel(task.due_date);
@@ -285,7 +329,8 @@ if (root) {
         const stack = el('div', 'ws-avatar-stack');
         task.members.slice(0, 6).forEach(member => {
             const node = avatar(member, 'xs');
-            node.title = `${member.name}${task.viewer.can_manage ? ` · ${member.can_comment ? 'can comment' : 'view only'}${member.can_complete ? ', can mark done' : ''}` : ''}`;
+            node.title = `${member.name}${task.viewer.can_manage ? ` · ${member.can_comment ? 'can comment' : 'view only'}${member.can_complete ? ', can mark done' : ''}` : ''}${member.done_at ? ' · done' : ''}`;
+            if (member.done_at) node.classList.add('is-done');
             stack.append(node);
         });
         if (task.members.length > 6) stack.append(el('span', 'ws-avatar xs more', `+${task.members.length - 6}`));
@@ -335,14 +380,33 @@ if (root) {
         if (task.viewer.can_complete) {
             bar.append(act('Mark as done', 'primary', data.taskCompleteUrl, updated => {
                 upsert(updated);
-                notify({ title: 'Marked as done', message: 'The Head Secretary will confirm it.', changes: [{ label: task.title, from: 'Open', to: 'Waiting for confirmation' }] });
+                if (updated.status === 'awaiting_confirmation') {
+                    notify({ title: 'Marked as done', message: 'The Head Secretary will confirm it.', changes: [{ label: task.title, from: 'Open', to: 'Waiting for confirmation' }] });
+                } else {
+                    const left = updated.progress.total - updated.progress.done;
+                    notify({ title: 'Your part is done', message: `Waiting for ${left} more ${left === 1 ? 'secretary' : 'secretaries'} before it goes to the Head Secretary.` });
+                }
             }, ['M5 12.5l4.5 4.5L19 7.5']));
         }
+        if (task.viewer.can_undo) {
+            bar.append(act('Undo my done', '', data.taskUndoUrl, updated => {
+                upsert(updated);
+                notify({ title: 'Marked as not done', message: task.title });
+            }, ['M4 4v6h6', 'M20 12a8 8 0 0 0-14.9-4L4 10']));
+        }
         if (task.viewer.can_confirm) {
-            bar.append(act('Confirm done', 'primary', data.taskConfirmUrl, () => {
+            // Still open = only some secretaries finished; the Head can close it early.
+            const early = task.status === 'open';
+            const button = act('Confirm done', 'primary', data.taskConfirmUrl, () => {
+                completed = null;
+                completedCount += 1;
                 remove(task.id);
-                notify({ title: 'Task closed', message: 'It has been removed from the feed.', changes: [{ label: task.title, from: 'Waiting for confirmation', to: 'Done' }] });
-            }, ['M5 12.5l4.5 4.5L19 7.5']));
+                notify({ title: 'Task closed', message: 'It has been removed from the feed.', changes: [{ label: task.title, from: early ? 'Open' : 'Waiting for confirmation', to: 'Done' }] });
+            }, ['M5 12.5l4.5 4.5L19 7.5']);
+            if (early) button.title = `${task.progress.done} of ${task.progress.total} marked it done. Confirming closes it for everyone.`;
+            bar.append(button);
+        }
+        if (task.viewer.can_reopen) {
             bar.append(act('Reopen', '', data.taskReopenUrl, updated => {
                 upsert(updated);
                 notify({ title: 'Task reopened', changes: [{ label: task.title, from: 'Waiting for confirmation', to: 'Open' }] });
@@ -394,7 +458,9 @@ if (root) {
         rowNode.append(avatar(item.author, isReply ? 'xs' : 'sm'));
         const wrap = el('div', 'ws-comment-wrap');
         const bubble = el('div', 'ws-bubble');
-        bubble.append(el('strong', '', item.author?.name || 'Someone'), el('p', '', item.body));
+        const text = el('p');
+        text.append(mentions.render(item.body));
+        bubble.append(el('strong', '', item.author?.name || 'Someone'), text);
         if (item.reactions.total) {
             const pill = reactionSummary(item.reactions);
             pill.classList.add('on-bubble');
@@ -412,7 +478,8 @@ if (root) {
                 const key = `${task.id}:r${item.parent_id || item.id}`;
                 const input = feed.querySelector(`.ws-comment-input[data-draft-key="${key}"]`);
                 if (input) {
-                    if (isReply && !input.value) input.value = `${item.author?.name?.split(' ')[0] || ''} `.trimStart();
+                    const handle = mentions.people().find(person => person.id === item.author?.id)?.handle;
+                    if (isReply && !input.value && handle && item.author?.id !== myId) input.value = `@${handle} `;
                     input.focus();
                     input.setSelectionRange(input.value.length, input.value.length);
                 }
@@ -435,9 +502,10 @@ if (root) {
         input.rows = 1;
         input.maxLength = 2000;
         input.dataset.draftKey = key;
-        input.placeholder = parent ? `Reply to ${parent.author?.name || 'this comment'}…` : 'Write a comment…';
+        input.placeholder = parent ? `Reply to ${parent.author?.name || 'this comment'}…` : 'Write a comment… (type @ to mention someone)';
         input.setAttribute('aria-label', parent ? `Reply to ${parent.author?.name || 'comment'}` : `Comment on ${task.title}`);
         input.value = drafts.get(key) || '';
+        mentions.attach(input, mentionableFor(task));
         const send = el('button', 'ws-send');
         send.type = 'submit';
         send.setAttribute('aria-label', parent ? 'Send reply' : 'Send comment');
@@ -678,31 +746,216 @@ if (root) {
         }
     }
 
+    /* ---------- What is shown: Open/Completed, filter, search, sort ---------- */
+    const view = { name: 'open', filter: 'all', query: '', sort: 'due' };
+    let completed = null;          // loaded on first visit of the Completed tab
+    let completedCount = 0;
+    const statsEl = panel.querySelector('#taskStats');
+    const activityEl = panel.querySelector('#taskActivity');
+    const searchInput = panel.querySelector('#taskSearch');
+    const sortSelect = panel.querySelector('#taskSort');
+    const filterBar = panel.querySelector('#taskFilters');
+
+    const needsMe = task => state.is_head ? task.status === 'awaiting_confirmation' : task.status === 'open' && task.viewer.can_complete;
+    const lastActivity = task => task.comments.length ? task.comments[task.comments.length - 1].created_at : task.created_at;
+    const matchesQuery = task => {
+        if (!view.query) return true;
+        const haystack = [task.title, task.body, task.author?.name, ...task.members.map(member => member.name), ...(task.comments || []).map(item => item.body)]
+            .filter(Boolean).join(' ').toLowerCase();
+        return view.query.split(/\s+/).every(word => haystack.includes(word));
+    };
+    const FILTERS = {
+        all: () => true,
+        mine: needsMe,
+        overdue: task => URGENCY(task) === 'overdue',
+        soon: task => ['today', 'soon'].includes(URGENCY(task)),
+        waiting: task => task.status === 'awaiting_confirmation',
+    };
+    function visibleTasks() {
+        const list = state.tasks.filter(task => FILTERS[view.filter](task) && matchesQuery(task));
+        const byDue = (a, b) => (a.due_date || '9999').localeCompare(b.due_date || '9999') || b.created_at.localeCompare(a.created_at);
+        if (view.sort === 'new') return list.sort((a, b) => b.created_at.localeCompare(a.created_at));
+        if (view.sort === 'active') return list.sort((a, b) => lastActivity(b).localeCompare(lastActivity(a)));
+        // Due date: waiting-for-confirmation first for the Head (it needs them), then by date.
+        return list.sort((a, b) => (state.is_head ? Number(b.status !== 'open') - Number(a.status !== 'open') : 0) || byDue(a, b));
+    }
+
+    function renderStats() {
+        if (!statsEl) return;
+        const today = todayIso();
+        const weekEnd = (() => { const d = new Date(`${today}T00:00:00`); d.setDate(d.getDate() + 7); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
+        const items = [
+            { key: 'all', label: 'Open', value: state.tasks.length },
+            { key: 'mine', label: state.is_head ? 'Needs confirmation' : 'Assigned to me', value: state.tasks.filter(needsMe).length, tone: 'ink' },
+            { key: 'overdue', label: 'Overdue', value: state.tasks.filter(task => URGENCY(task) === 'overdue').length, tone: 'danger' },
+            { key: 'week', label: 'Due this week', value: state.tasks.filter(task => task.status === 'open' && task.due_date && task.due_date >= today && task.due_date <= weekEnd).length },
+            { key: 'completed', label: 'Completed · 30 days', value: completedCount },
+        ];
+        statsEl.replaceChildren(...items.map(item => {
+            const button = el('button', `ws-stat ${item.tone && item.value ? item.tone : ''}`.trim());
+            button.type = 'button';
+            const active = item.key === 'completed' ? view.name === 'completed' : view.name === 'open' && view.filter === item.key;
+            button.setAttribute('aria-pressed', String(active));
+            button.append(el('span', 'ws-stat-value', String(item.value)), el('span', 'ws-stat-label', item.label));
+            button.addEventListener('click', () => {
+                if (item.key === 'completed') return setView('completed');
+                if (item.key === 'week') { view.sort = 'due'; sortSelect.value = 'due'; return setView('open', 'all'); }
+                setView('open', item.key);
+            });
+            return button;
+        }));
+        panel.querySelector('[data-view-count="open"]').textContent = String(state.tasks.length);
+        panel.querySelector('[data-view-count="completed"]').textContent = completedCount ? String(completedCount) : '';
+    }
+
+    function setView(name, filter = view.filter) {
+        view.name = name;
+        view.filter = filter;
+        panel.querySelectorAll('[data-view]').forEach(tab => tab.setAttribute('aria-selected', String(tab.dataset.view === name)));
+        filterBar.hidden = name !== 'open';
+        filterBar.querySelectorAll('[data-filter]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.filter === view.filter)));
+        if (name === 'completed' && completed === null) loadCompleted();
+        render();
+    }
+
     function render() {
         // Keep focus/typing in a comment or reply box across re-renders.
         const focusedKey = document.activeElement?.classList?.contains('ws-comment-input') ? document.activeElement.dataset.draftKey : null;
         feed.replaceChildren();
-        if (!state.tasks.length) {
-            const empty = el('div', 'ws-empty');
-            empty.append(icon(['M9 11l3 3L22 4', 'M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11'], 'ws-empty-icon'));
-            empty.append(el('strong', '', 'No open tasks'));
-            empty.append(el('span', '', state.is_head
-                ? 'Assign a task above. Secretaries see only the tasks you share with them.'
-                : 'When the Head Secretary assigns you a task, it shows up here.'));
-            feed.append(empty);
-        }
-        state.tasks.forEach(task => feed.append(card(task)));
+        renderStats();
         renderCritical();
         renderCalendar();
-        state.attention = state.tasks.filter(task => state.is_head
-            ? task.status === 'awaiting_confirmation'
-            : task.status === 'open' && task.viewer.can_complete).length;
+        if (view.name === 'completed') {
+            renderCompleted();
+        } else {
+            const list = visibleTasks();
+            if (!list.length) {
+                const empty = el('div', 'ws-empty');
+                empty.append(icon(['M9 11l3 3L22 4', 'M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11'], 'ws-empty-icon'));
+                if (state.tasks.length) {
+                    empty.append(el('strong', '', 'No tasks match'), el('span', '', view.query ? `Nothing matches “${view.query}”.` : 'Try another filter.'));
+                    const reset = el('button', 'ws-btn', 'Show all open tasks');
+                    reset.type = 'button';
+                    reset.addEventListener('click', () => { view.query = ''; searchInput.value = ''; setView('open', 'all'); });
+                    empty.append(reset);
+                } else {
+                    empty.append(el('strong', '', 'No open tasks'), el('span', '', state.is_head
+                        ? 'Assign a task above. Secretaries see only the tasks you share with them.'
+                        : 'When the Head Secretary assigns you a task, it shows up here.'));
+                }
+                feed.append(empty);
+            }
+            list.forEach(task => feed.append(card(task)));
+        }
+        state.attention = state.tasks.filter(needsMe).length;
         setCount('tasks', state.attention);
         if (focusedKey) {
             const input = feed.querySelector(`.ws-comment-input[data-draft-key="${focusedKey}"]`);
             if (input) { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
         }
     }
+
+    /* ---------- Completed (read-only history of the last 60 days) ---------- */
+    async function loadCompleted() {
+        feed.replaceChildren(el('div', 'ws-loading', 'Loading completed tasks…'));
+        try {
+            completed = await request(data.taskCompletedUrl);
+        } catch (error) {
+            completed = null;
+            say(error.message, true);
+        }
+        if (view.name === 'completed') render();
+    }
+
+    function renderCompleted() {
+        if (completed === null) { feed.append(el('div', 'ws-loading', 'Loading completed tasks…')); return; }
+        // Everyone who marked their part done gets the credit (older tasks only have the one done_by).
+        const finishers = task => (task.finished_by?.length ? task.finished_by : [task.done_by]).filter(Boolean);
+        const names = people => people.length <= 2 ? people.map(p => p.name).join(' and ')
+            : `${people.slice(0, -1).map(p => p.name).join(', ')} and ${people[people.length - 1].name}`;
+        const list = completed.filter(task => !view.query || [task.title, task.body, ...finishers(task).map(p => p.name)].filter(Boolean).join(' ').toLowerCase().includes(view.query));
+        if (!list.length) {
+            const empty = el('div', 'ws-empty');
+            empty.append(icon(['M9 11l3 3L22 4'], 'ws-empty-icon'), el('strong', '', 'Nothing completed yet'), el('span', '', 'Tasks the Head Secretary confirms in the last 60 days are listed here.'));
+            feed.append(empty);
+            return;
+        }
+        const table = el('div', 'ws-card ws-done-list');
+        list.forEach(task => {
+            const row = el('article', 'ws-done-row');
+            const check = el('span', 'ws-done-check');
+            check.append(icon(['M5 12.5l4.5 4.5L19 7.5']));
+            const body = el('div', 'ws-done-body');
+            body.append(el('strong', '', task.title));
+            const meta = el('span', 'ws-done-meta');
+            const parts = [
+                finishers(task).length ? `Done by ${names(finishers(task))}` : null,
+                task.confirmed_by ? `confirmed by ${task.confirmed_by.name}` : null,
+                task.confirmed_at ? timeAgo(task.confirmed_at) : null,
+            ].filter(Boolean);
+            meta.textContent = parts.join(' · ');
+            body.append(meta);
+            row.append(check, body);
+            if (task.due_date) {
+                const tag = el('span', `ws-chip ${task.on_time ? '' : 'late'}`.trim(), task.on_time ? 'On time' : 'Late');
+                tag.title = `Due ${task.due_date}`;
+                row.append(tag);
+            }
+            table.append(row);
+        });
+        feed.append(table);
+    }
+
+    /* ---------- Recent activity (side column) ---------- */
+    async function loadActivity() {
+        if (!activityEl) return;
+        let items = [];
+        try { items = await request(data.taskActivityUrl); } catch (error) { return; }
+        activityEl.replaceChildren();
+        const head = el('div', 'ws-side-head plain');
+        head.append(icon(['M3 12h4l3-8 4 16 3-8h4']), el('h2', '', 'Recent activity'));
+        activityEl.append(head);
+        if (!items.length) { activityEl.append(el('p', 'ws-side-empty', 'No activity yet.')); return; }
+        const list = el('ul', 'ws-activity');
+        const words = { comment: 'commented on', done: 'marked done', reopened: 'reopened', confirmed: 'confirmed' };
+        items.slice(0, 8).forEach(item => {
+            const li = el('li');
+            const button = el('button', 'ws-activity-item');
+            button.type = 'button';
+            const line = el('span', 'ws-activity-line');
+            line.append(el('strong', '', item.author?.name || 'Someone'), document.createTextNode(` ${item.is_reply ? 'replied on' : (words[item.kind] || item.kind)} `), el('em', '', item.task_title || 'a task'));
+            button.append(avatar(item.author, 'xs'), line);
+            if (item.body) button.append(el('span', 'ws-activity-quote', item.body));
+            button.append(el('span', 'ws-activity-time', timeAgo(item.created_at)));
+            button.addEventListener('click', () => {
+                if (view.name !== 'open' || !state.tasks.some(task => task.id === item.task_id && FILTERS[view.filter](task))) setView('open', 'all');
+                openComments.add(item.task_id);
+                render();
+                focusTask(item.task_id);
+            });
+            li.append(button);
+            list.append(li);
+        });
+        activityEl.append(list);
+    }
+
+    /* ---------- Toolbar wiring + keyboard shortcuts ---------- */
+    panel.querySelectorAll('[data-view]').forEach(tab => tab.addEventListener('click', () => setView(tab.dataset.view)));
+    filterBar.querySelectorAll('[data-filter]').forEach(button => button.addEventListener('click', () => setView('open', button.dataset.filter)));
+    let searchTimer = 0;
+    searchInput.addEventListener('input', () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => { view.query = searchInput.value.trim().toLowerCase(); render(); }, 120);
+    });
+    searchInput.addEventListener('keydown', event => { if (event.key === 'Escape') { searchInput.value = ''; view.query = ''; render(); searchInput.blur(); } });
+    sortSelect.addEventListener('change', () => { view.sort = sortSelect.value; render(); });
+    document.addEventListener('keydown', event => {
+        const active = document.activeElement;
+        const typing = active && (active.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName));
+        if (typing || event.ctrlKey || event.metaKey || event.altKey) return;
+        if (event.key === '/') { event.preventDefault(); searchInput.focus(); }
+        if ((event.key === 'n' || event.key === 'N') && composerApi) { event.preventDefault(); composerApi.open(); }
+    });
 
     async function load(quiet = false) {
         if (loading) return;
@@ -716,8 +969,10 @@ if (root) {
             const seenNow = new Set(state.tasks.filter(task => task.is_new).map(task => task.id));
             result.tasks.forEach(task => { if (seenNow.has(task.id)) task.is_new = true; });
             state = result;
+            completedCount = result.completed_count || 0;
             if (!typing) render();
             else setCount('tasks', result.attention);
+            loadActivity();
             say('');
             // Everything this page just showed counts as seen (POST: CSRF-protected).
             if (!document.hidden && result.tasks.length) {
@@ -734,6 +989,7 @@ if (root) {
 
 
     load();
+    mentions.ready.then(() => { if (state.tasks.length) render(); });
     // Live: another person posted, commented, reacted or finished something (pushed over Reverb).
     let liveTimer = 0;
     window.addEventListener('lspdms:task-updated', () => {

@@ -343,6 +343,170 @@ class DatabaseSafetyTest extends TestCase
             ->assertSee('<p>preview</p>', false);
     }
 
+    public function test_import_refuses_stored_files_outside_the_upload_folders(): void
+    {
+        Storage::fake('public');
+        Storage::fake('local');
+        $head = $this->makeHead();
+        $sql = $this->export($head);
+        $payload = '<?php echo "pwned";';
+        $crafted = [
+            ['public', 'shell.php'],
+            ['public', 'profile-pictures/shell.php.png'],
+            ['public', 'profile-pictures/../shell.php'],
+            ['local', 'messages/1/..\\..\\x.png'],
+            ['local', 'elsewhere/x.png'],
+        ];
+
+        foreach ($crafted as [$disk, $path]) {
+            $file = UploadedFile::fake()->createWithContent('crafted.sql', $sql.$this->storedFileInserts($disk, $path, $payload));
+            $this->withSession(['login_user' => ['id' => $head->id]])
+                ->postJson(route('superadmin.database.import-preview'), ['sql_file' => $file])
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors('sql_file');
+            $this->withSession(['login_user' => ['id' => $head->id]])
+                ->postJson(route('superadmin.database.import'), [
+                    'sql_file' => $file,
+                    'confirmation_text' => 'IMPORT DATABASE',
+                    'current_password' => 'secret-password',
+                ])
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors('sql_file');
+        }
+
+        $this->assertSame(0, DB::table('stored_files')->count());
+        $this->assertSame(0, DB::table('stored_file_chunks')->count());
+        $this->assertSame([], Storage::disk('public')->allFiles());
+        $this->assertSame([], Storage::disk('local')->allFiles());
+    }
+
+    public function test_import_refuses_a_stored_file_insert_that_repeats_a_column(): void
+    {
+        Storage::fake('public');
+        Storage::fake('local');
+        $head = $this->makeHead();
+        // SQLite keeps the first "path" (shell.php); a last-wins check would only see ok.png.
+        $okPath = "CAST(X'".bin2hex('profile-pictures/ok.png')."' AS TEXT)";
+        $inserts = preg_replace(
+            ['/\) VALUES \(/', '/\);$/m'],
+            [', "Path") VALUES (', ', '.$okPath.');'],
+            $this->storedFileInserts('public', 'profile-pictures/shell.php', '<?php echo "pwned";')
+        );
+        $file = UploadedFile::fake()->createWithContent('crafted.sql', $this->export($head).$inserts);
+
+        $this->withSession(['login_user' => ['id' => $head->id]])
+            ->postJson(route('superadmin.database.import-preview'), ['sql_file' => $file])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('sql_file');
+        $this->withSession(['login_user' => ['id' => $head->id]])
+            ->postJson(route('superadmin.database.import'), [
+                'sql_file' => $file,
+                'confirmation_text' => 'IMPORT DATABASE',
+                'current_password' => 'secret-password',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('sql_file');
+
+        $this->assertSame(0, DB::table('stored_files')->count());
+        $this->assertSame([], Storage::disk('public')->allFiles());
+    }
+
+    public function test_import_still_restores_files_in_the_upload_folders(): void
+    {
+        Storage::fake('public');
+        Storage::fake('local');
+        $head = $this->makeHead();
+        $sql = $this->export($head).$this->storedFileInserts('public', 'profile-pictures/new.PNG', 'PNG-BYTES');
+
+        $this->withSession(['login_user' => ['id' => $head->id]])
+            ->postJson(route('superadmin.database.import'), [
+                'sql_file' => UploadedFile::fake()->createWithContent('lspdms.sql', $sql),
+                'confirmation_text' => 'IMPORT DATABASE',
+                'current_password' => 'secret-password',
+            ])
+            ->assertOk();
+
+        $this->assertSame('PNG-BYTES', Storage::disk('public')->get('profile-pictures/new.PNG'));
+    }
+
+    public function test_rehydrate_never_writes_rows_outside_the_upload_folders(): void
+    {
+        Storage::fake('public');
+        Storage::fake('local');
+        $store = app(FileStore::class);
+        // persist() writes only the database copy, as an import would.
+        $store->persist('public', 'shell.php', '<?php echo 1;', 'text/plain');
+        $store->persist('public', 'profile-pictures/x.phtml', '<?php echo 1;', 'text/plain');
+        $store->persist('public', 'profile-pictures/ok.png', 'PNG-BYTES', 'image/png');
+        $store->persist('local', 'messages/1/chat.png', 'PNG-BYTES-CHAT', 'image/png');
+
+        $this->assertSame(2, $store->rehydrateMissing());
+        Storage::disk('public')->assertMissing('shell.php');
+        Storage::disk('public')->assertMissing('profile-pictures/x.phtml');
+        Storage::disk('public')->assertExists('profile-pictures/ok.png');
+        Storage::disk('local')->assertExists('messages/1/chat.png');
+    }
+
+    public function test_allowed_file_locations_follow_the_file_owners(): void
+    {
+        foreach ([
+            ['public', 'profile-pictures/a.jpg'],
+            ['public', 'profile-pictures/a.WEBP'],
+            ['public', 'profile-pictures/php.png'],
+            ['public', 'profile-pictures/a.phpx.png'],
+            ['local', 'messages/12/abc.png'],
+            ['local', 'messages/12/legacy.pdf'],
+            ['local', 'monthly-session-snapshots/2026-10/session-1.docx'],
+            ['local', 'monthly-session-snapshots/2026-10/session-1.html'],
+        ] as [$disk, $path]) {
+            $this->assertTrue(DatabaseBackupService::isAllowedFileLocation($disk, $path), "{$disk}:{$path}");
+        }
+
+        foreach ([
+            ['public', 'shell.php'],
+            ['public', 'profile-pictures/a.php'],
+            ['public', 'profile-pictures/a.php.png'],
+            ['public', 'profile-pictures/a.PHTML.jpg'],
+            ['public', 'profile-pictures/a.php7.gif'],
+            ['public', 'profile-pictures/a.phar.webp'],
+            ['public', 'profile-pictures/a.shtml.png'],
+            ['public', 'profile-pictures/x.php/a.png'],
+            ['local', 'messages/1/a.php.png'],
+            ['local', 'messages/1/a.htaccess'],
+            ['public', 'profile-pictures/a.svg'],
+            ['public', 'profile-pictures/.htaccess'],
+            ['public', 'profile-pictures/../a.png'],
+            ['public', 'profile-pictures//a.png'],
+            ['public', 'messages/1/a.png'],
+            ['local', 'profile-pictures/a.png'],
+            ['local', 'messages/1\\..\\a.png'],
+            ['local', 'messages/1/a.png:stream'],
+            ['local', "messages/1/a\x00.png"],
+            ['local', 'monthly-session-snapshots/2026-10/x.php'],
+            ['s3', 'messages/1/a.png'],
+            [null, 'messages/1/a.png'],
+            ['local', null],
+        ] as [$disk, $path]) {
+            $this->assertFalse(DatabaseBackupService::isAllowedFileLocation($disk, $path), "{$disk}:{$path}");
+        }
+    }
+
+    /** INSERT lines (SQLite export syntax) for a stored file at ($disk, $path). */
+    private function storedFileInserts(string $disk, string $path, string $contents): string
+    {
+        $value = fn (mixed $value): string => $value === null ? 'NULL' : "CAST(X'".bin2hex((string) $value)."' AS TEXT)";
+        $file = [
+            'disk' => $disk, 'path' => $path, 'mime' => 'image/png', 'size' => strlen($contents),
+            'sha256' => hash('sha256', $contents), 'chunk_count' => 1,
+            'created_at' => now()->toDateTimeString(), 'updated_at' => now()->toDateTimeString(),
+        ];
+        $chunk = ['disk' => $disk, 'path' => $path, 'chunk_index' => 0, 'data' => base64_encode($contents)];
+        $line = fn (string $table, array $row): string => 'INSERT INTO "'.$table.'" ("'.implode('", "', array_keys($row)).'") VALUES ('
+            .implode(', ', array_map($value, $row)).");\n";
+
+        return $line('stored_files', $file).$line('stored_file_chunks', $chunk);
+    }
+
     private function makeHead(array $attributes = []): User
     {
         $user = User::query()->create([

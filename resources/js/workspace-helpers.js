@@ -35,6 +35,10 @@ export function createHelpers(root) {
             },
         });
         const payload = await response.json().catch(() => ({}));
+        if (response.status === 429) {
+            const wait = Number(response.headers.get('Retry-After')) || 30;
+            throw new Error(`Too many requests at once. Please wait ${wait} second${wait === 1 ? '' : 's'} and try again.`);
+        }
         if (!response.ok) {
             const first = payload.errors ? Object.values(payload.errors).flat()[0] : null;
             throw new Error(first || payload.message || 'Something went wrong. Please try again.');

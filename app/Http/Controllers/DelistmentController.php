@@ -111,10 +111,11 @@ class DelistmentController extends Controller
             'purok_id' => ['required', 'integer', 'exists:puroks,id'],
             'grupo' => ['nullable', 'integer', 'min:1'],
             'kapisanan' => ['required', 'in:Buklod,Kadiwa,Binhi,Suliranin'],
-            'date_of_baptism' => ['nullable', 'date', 'before_or_equal:today'],
-            'date_of_birth' => ['nullable', 'date', 'before_or_equal:today'],
+            // "Today" is the Manila date; the app timezone is UTC, which lags it until 08:00.
+            'date_of_baptism' => ['nullable', 'date', 'before_or_equal:'.now('Asia/Manila')->toDateString()],
+            'date_of_birth' => ['nullable', 'date', 'before_or_equal:'.now('Asia/Manila')->toDateString()],
             'evangelist' => ['nullable', 'string', 'max:150'],
-            'date_of_entry' => ['nullable', 'date', 'before_or_equal:today'],
+            'date_of_entry' => ['nullable', 'date', 'before_or_equal:'.now('Asia/Manila')->toDateString()],
             'is_married' => ['sometimes', 'boolean'],
         ]);
 
@@ -175,7 +176,8 @@ class DelistmentController extends Controller
             if (isset($validated['date_of_birth'])) {
                 $kapisanan = $isMarried
                     ? 'B'
-                    : (Carbon::parse($validated['date_of_birth'])->age < 18 ? 'binhi' : 'K');
+                    // Age is counted against Manila's date, not the UTC app clock.
+                    : (Carbon::parse($validated['date_of_birth'])->addYears(18)->isAfter(Carbon::parse(Carbon::now('Asia/Manila')->toDateString())) ? 'binhi' : 'K');
             } else {
                 $kapisanan = match ($isMarried ? 'Buklod' : $validated['kapisanan']) {
                     'Buklod' => 'B',
@@ -422,7 +424,7 @@ class DelistmentController extends Controller
         $validated = $request->validate([
             'changes' => ['required', 'array', 'min:1', 'max:500'],
             'changes.*.id' => ['required', 'integer', 'distinct', 'exists:records,id'],
-            'changes.*.baptism' => ['nullable', 'date', 'before_or_equal:today'],
+            'changes.*.baptism' => ['nullable', 'date', 'before_or_equal:'.now('Asia/Manila')->toDateString()],
         ]);
 
         $saved = DB::transaction(function () use ($validated, $eligibility): array {

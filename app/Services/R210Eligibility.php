@@ -19,7 +19,9 @@ class R210Eligibility
         }
 
         $requiredYears = max(1, (int) ($requirements?->entry_years_requirement ?? 1));
-        if ($record->date_of_entry->copy()->addYears($requiredYears)->isAfter(Carbon::today())) {
+        // Today's date in Manila (the app clock is UTC), at midnight like the stored dates it is compared with.
+        $today = Carbon::parse(Carbon::now('Asia/Manila')->toDateString());
+        if ($record->date_of_entry->copy()->addYears($requiredYears)->isAfter($today)) {
             return false;
         }
 

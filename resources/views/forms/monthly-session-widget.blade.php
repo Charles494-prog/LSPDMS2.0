@@ -97,7 +97,7 @@
 @php($currentMonthlySession = $monthlySession ?? null)
 @php($monthlySessionRole = mb_strtolower(trim((string) request()->session()->get('login_user.tungkulin', ''))))
 @php($canFinishMonthlySession = in_array($monthlySessionRole, ['head secretary', 'secretary head'], true))
-<aside class="monthly-session-widget" id="monthlySessionWidget" aria-live="polite" data-minimized="false" data-active="{{ $currentMonthlySession ? 'true' : 'false' }}">
+<aside class="monthly-session-widget" id="monthlySessionWidget" aria-live="polite" data-minimized="true" data-active="{{ $currentMonthlySession ? 'true' : 'false' }}">
     <span class="monthly-session-grip" id="monthlySessionGrip" role="button" tabindex="0" aria-label="Move the monthly session control. Drag it, or use the arrow keys." title="Drag to move">⠿</span>
     <span class="monthly-session-dot" aria-hidden="true"></span>
     <strong id="monthlySessionStatus">{{ $currentMonthlySession ? 'Session active · '.$currentMonthlySession->period_month?->format('F Y') : 'Monthly session' }}</strong>
@@ -106,7 +106,7 @@
     <button type="button" id="monthlySessionOpen" @if (! $currentMonthlySession) hidden @endif>
         Activity (<span id="monthlySessionCount">{{ $currentMonthlySession?->activities_count ?? 0 }}</span>)
     </button>
-    <button type="button" class="monthly-session-widget-minimize" id="monthlySessionMinimize" aria-label="Minimize monthly session bubble" title="Minimize">−</button>
+    <button type="button" class="monthly-session-widget-minimize" id="monthlySessionMinimize" aria-label="Expand monthly session bubble" title="Expand">+</button>
 </aside>
 <dialog class="monthly-session-dialog" id="monthlySessionDialog" aria-labelledby="monthlySessionDialogTitle">
     <header>
@@ -381,13 +381,29 @@
             ? `For ${session.period_month}. Changes remain temporary until you finish this session.`
             : `For ${session.period_month}. Changes remain temporary; only the Head Secretary can close this session.`;
     };
+    let renderedActivityCount = null;
     async function refresh() {
-        const response = await fetch(`${statusUrl}?include_movements=1`, { headers: { 'Accept': 'application/json' } });
+        // The movement/activity list is heavy; only ask for it while the dialog shows it.
+        const full = dialog.open;
+        const response = await fetch(full ? `${statusUrl}?include_movements=1` : statusUrl, { headers: { 'Accept': 'application/json' } });
         const result = await response.json();
         if (!response.ok) throw new Error(result.message || 'Could not load monthly session.');
         update(result);
-        if (dialog.open) renderMovements(result.activities || []);
+        if (full && dialog.open) {
+            renderMovements(result.activities || []);
+            renderedActivityCount = result.session?.activity_count ?? null;
+        }
     }
+    // A host page that already polls the status endpoint (the Monthly Session page) shares its
+    // lightweight result here instead of the widget running a second poll.
+    window.addEventListener('monthly-session-status', event => {
+        const result = event.detail;
+        if (!result) return;
+        update(result);
+        if (dialog.open && (result.session?.activity_count ?? null) !== renderedActivityCount) {
+            refresh().catch(() => {});
+        }
+    });
 
     document.getElementById('monthlySessionClose').addEventListener('click', () => dialog.close());
     document.getElementById('monthlySessionRefresh').addEventListener('click', () => refresh().catch(error => notify('Could not refresh session', error.message, 'danger')));
@@ -451,19 +467,22 @@
             try { await refresh(); } catch (_) {}
         }
     });
-    minimize.addEventListener('click', () => {
-        const minimized = widget.dataset.minimized !== 'true';
+    // Shortened (minimized) by default; expanding it is remembered on this device.
+    const minimizedKey = 'monthlySessionWidgetMinimized';
+    const setMinimized = minimized => {
         widget.dataset.minimized = String(minimized);
         minimize.textContent = minimized ? '+' : '−';
         minimize.setAttribute('aria-label', minimized ? 'Expand monthly session bubble' : 'Minimize monthly session bubble');
         minimize.title = minimized ? 'Expand' : 'Minimize';
-        window.sessionStorage.setItem('monthlySessionWidgetMinimized', String(minimized));
+    };
+    minimize.addEventListener('click', () => {
+        const minimized = widget.dataset.minimized !== 'true';
+        setMinimized(minimized);
+        try { window.localStorage.setItem(minimizedKey, String(minimized)); } catch (_) {}
     });
-    if (window.sessionStorage.getItem('monthlySessionWidgetMinimized') === 'true') {
-        widget.dataset.minimized = 'true';
-        minimize.textContent = '+';
-        minimize.setAttribute('aria-label', 'Expand monthly session bubble');
-    }
+    let storedMinimized = null;
+    try { storedMinimized = window.localStorage.getItem(minimizedKey); } catch (_) {}
+    setMinimized(storedMinimized !== 'false');
 
     // ---------- Draggable widget (chat-head behavior) ----------
     const positionKey = 'monthlySessionWidgetPosition';
@@ -556,6 +575,14 @@
     applyPosition();
 
     refresh().catch(error => { status.textContent = error.message; });
-    window.setInterval(() => refresh().catch(() => {}), 15000);
+    if (@json($monthlySessionWidgetPolls ?? true)) {
+        window.setInterval(() => {
+            if (document.hidden) return;
+            refresh().catch(() => {});
+        }, 15000);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) refresh().catch(() => {});
+        });
+    }
 })();
 </script>

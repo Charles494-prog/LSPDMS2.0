@@ -7,6 +7,7 @@ if (root) {
     const send = document.getElementById('assistantSend');
     const error = document.getElementById('assistantError');
     let session = 0; // bumped on every reset, so a reply that arrives after the panel was closed is discarded
+    let fresh = true; // the first message after a reset tells the server to forget the previous question
     const GREETING = 'Hi! I am LSPBot! I can help you find features and answer permission-approved record questions. That said though, I don\u2019t change records \u{1F642}';
     function appendMessage(role, text, link = null) {
         const bubble = document.createElement('div');
@@ -24,6 +25,34 @@ if (root) {
         feed.append(bubble);
         feed.scrollTop = feed.scrollHeight;
         return bubble;
+    }
+
+    // Quick replies under an answer ("List them", "Per purok", "Did you mean…?"). Each is a string
+    // or {label, message}; tapping one sends it as if typed. Only the newest set stays on screen.
+    function appendSuggestions(suggestions) {
+        feed.querySelectorAll('.assistant-suggestions').forEach(row => row.remove());
+        if (!Array.isArray(suggestions) || suggestions.length === 0) return;
+        const row = document.createElement('div');
+        row.className = 'assistant-suggestions';
+        suggestions.slice(0, 4).forEach(item => {
+            const label = typeof item === 'string' ? item : item?.label;
+            const message = typeof item === 'string' ? item : (item?.message || item?.label);
+            if (!label || !message) return;
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'assistant-suggestion';
+            chip.textContent = label;
+            chip.addEventListener('click', () => {
+                if (send.disabled) return;
+                input.value = message;
+                form.requestSubmit();
+            });
+            row.append(chip);
+        });
+        if (row.childElementCount > 0) {
+            feed.append(row);
+            feed.scrollTop = feed.scrollHeight;
+        }
     }
 
     // Same three bouncing dots the regular chats show while the other person is typing.
@@ -44,6 +73,7 @@ if (root) {
 
         error.hidden = true;
         error.textContent = '';
+        feed.querySelectorAll('.assistant-suggestions').forEach(row => row.remove());
         const userBubble = appendMessage('user', text);
         const typing = showTyping();
         const mySession = session;
@@ -60,17 +90,23 @@ if (root) {
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': root.dataset.csrf,
                 },
-                body: JSON.stringify({ message: text }),
+                body: JSON.stringify(fresh ? { message: text, fresh: true } : { message: text }),
             });
             const data = await response.json().catch(() => ({}));
+            if (response.status === 429) {
+                const wait = Number(response.headers.get('Retry-After')) || 30;
+                throw new Error(`You're sending messages quickly. Please wait ${wait} second${wait === 1 ? '' : 's'} and try again.`);
+            }
             if (!response.ok) {
                 const validationMessage = data.errors ? Object.values(data.errors).flat()[0] : null;
                 throw new Error(validationMessage || data.message || 'The assistant could not reply. Please try again.');
             }
 
             if (mySession !== session) return;
+            fresh = false;
             typing.remove();
             appendMessage('model', data.reply, data.link);
+            appendSuggestions(data.suggestions);
         } catch (requestError) {
             userBubble.remove();
             input.value = text;
@@ -95,6 +131,7 @@ if (root) {
     // and the next time it opens it starts again from the greeting.
     function resetConversation() {
         session++;
+        fresh = true;
         feed.replaceChildren();
         const greeting = document.createElement('div');
         greeting.className = 'assistant-message';

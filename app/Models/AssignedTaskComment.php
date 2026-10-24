@@ -19,4 +19,9 @@ class AssignedTaskComment extends Model
     {
         return $this->belongsTo(User::class, 'user_id');
     }
+
+    public function task(): BelongsTo
+    {
+        return $this->belongsTo(AssignedTask::class, 'task_id');
+    }
 }

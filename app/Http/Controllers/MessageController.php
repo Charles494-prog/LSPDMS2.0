@@ -64,22 +64,34 @@ class MessageController extends Controller
     public function conversations(Request $request): JsonResponse
     {
         $user = $this->currentUser($request);
+        $now = now();
         $conversations = Conversation::query()
             ->where(fn ($query) => $query->where('user_one_id', $user->id)->orWhere('user_two_id', $user->id))
             ->with(['userOne', 'userTwo'])
-            ->withMax(['messages as last_message_created_at' => fn ($query) => $query->where('expires_at', '>', now())], 'created_at')
+            ->withMax(['messages as last_message_created_at' => fn ($query) => $query->where('expires_at', '>', $now)], 'created_at')
+            ->withCount(['messages as unread_count' => fn ($query) => $query->where('sender_id', '!=', $user->id)
+                ->whereNull('read_at')->where('expires_at', '>', $now)])
             ->orderByDesc('last_message_created_at')
             ->get();
 
-        return response()->json($conversations->map(function (Conversation $conversation) use ($user): array {
-            $lastMessage = $conversation->messages()->where('expires_at', '>', now())->latest('id')->first();
+        // One query for every conversation's latest message (and one for their senders), not one per row.
+        $lastMessages = $conversations->isEmpty() ? collect() : Message::query()
+            ->whereIn('id', Message::query()->selectRaw('MAX(id)')
+                ->whereIn('conversation_id', $conversations->modelKeys())
+                ->where('expires_at', '>', $now)
+                ->groupBy('conversation_id'))
+            ->with('sender')
+            ->get()
+            ->keyBy('conversation_id');
+
+        return response()->json($conversations->map(function (Conversation $conversation) use ($user, $lastMessages): array {
+            $lastMessage = $lastMessages->get($conversation->id);
 
             return [
                 'id' => $conversation->id,
                 'user' => $this->userPayload($conversation->otherParticipant((int) $user->id)),
                 'last_message' => $lastMessage ? $this->messagePayload($lastMessage) : null,
-                'unread_count' => $conversation->messages()->where('sender_id', '!=', $user->id)
-                    ->whereNull('read_at')->where('expires_at', '>', now())->count(),
+                'unread_count' => (int) $conversation->unread_count,
             ];
         }));
     }
@@ -121,33 +133,46 @@ class MessageController extends Controller
 
     public function messages(Request $request, Conversation $conversation): JsonResponse
     {
-        $user = $this->authorizeParticipant($request, $conversation);
+        $this->authorizeParticipant($request, $conversation);
         $messages = $conversation->messages()->where('expires_at', '>', now())->with('sender')->oldest()->get();
 
-        $unread = $conversation->messages()->where('sender_id', '!=', $user->id)
-            ->whereNull('read_at')->where('expires_at', '>', now());
-        $unreadIds = $unread->pluck('id');
-        if ($unreadIds->isNotEmpty()) {
-            // Bound timestamps instead of SQL NOW(), so this works on every database driver.
-            $now = now();
-            DB::transaction(function () use ($unreadIds, $now): void {
-                Message::query()->whereKey($unreadIds)->whereNull('delivered_at')
-                    ->update(['delivered_at' => $now]);
-                Message::query()->whereKey($unreadIds)->update([
-                    'read_at' => $now,
-                    'updated_at' => $now,
-                ]);
-            });
+        return response()->json($messages->map(fn (Message $message): array => $this->messagePayload($message)));
+    }
+
+    // POST (CSRF-protected): reading the list is a GET, so marking messages read lives here instead.
+    public function markConversationRead(Request $request, Conversation $conversation): JsonResponse
+    {
+        $user = $this->authorizeParticipant($request, $conversation);
+        $validated = $request->validate(['up_to_id' => ['nullable', 'integer', 'min:1']]);
+
+        // up_to_id is the newest message the client rendered, so a message that arrives
+        // between loading the list and this call is not marked read unseen.
+        $unreadIds = $conversation->messages()->where('sender_id', '!=', $user->id)
+            ->whereNull('read_at')->where('expires_at', '>', now())
+            ->when(isset($validated['up_to_id']), fn ($query) => $query->where('id', '<=', $validated['up_to_id']))
+            ->pluck('id');
+        if ($unreadIds->isEmpty()) {
+            return response()->json(['read_ids' => []]);
         }
 
-        if ($unreadIds->isNotEmpty()) {
-            foreach ($messages->whereIn('id', $unreadIds) as $message) {
-                $message->refresh();
+        // Bound timestamps instead of SQL NOW(), so this works on every database driver.
+        $now = now();
+        DB::transaction(function () use ($unreadIds, $now): void {
+            Message::query()->whereKey($unreadIds)->whereNull('delivered_at')
+                ->update(['delivered_at' => $now]);
+            Message::query()->whereKey($unreadIds)->update([
+                'read_at' => $now,
+                'updated_at' => $now,
+            ]);
+        });
+
+        if (config('broadcasting.default') === 'reverb') {
+            foreach (Message::query()->whereKey($unreadIds)->get() as $message) {
                 $this->broadcastSafely(new MessageReceiptUpdated($message));
             }
         }
 
-        return response()->json($messages->map(fn (Message $message): array => $this->messagePayload($message)));
+        return response()->json(['read_ids' => $unreadIds->map(fn ($id): int => (int) $id)->values()]);
     }
 
     public function send(Request $request, Conversation $conversation): JsonResponse

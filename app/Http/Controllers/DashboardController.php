@@ -330,11 +330,13 @@ class DashboardController extends Controller
             ? $activeTotal / $localeSNumberTarget * 100
             : 0.0;
 
-        $baptismCutoff = Carbon::today()->subYear();
+        // Manila's date (the app clock is UTC), at midnight like the stored baptism dates.
+        $today = Carbon::parse(Carbon::now('Asia/Manila')->toDateString());
+        $baptismCutoff = $today->copy()->subYear();
         $newBaptisees = $registryRecords
             ->filter(fn (Record $record): bool => $record->date_of_baptism !== null
                 && $record->date_of_baptism->greaterThanOrEqualTo($baptismCutoff)
-                && $record->date_of_baptism->lessThanOrEqualTo(Carbon::today()))
+                && $record->date_of_baptism->lessThanOrEqualTo($today))
             ->sortByDesc(fn (Record $record): string => $record->date_of_baptism->format('Y-m-d'))
             ->map(fn (Record $record): array => [
                 'name' => $record->full_name ?? '',

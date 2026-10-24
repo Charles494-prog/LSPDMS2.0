@@ -273,6 +273,7 @@ class PurokSegmentReportsTest extends TestCase
                 'purok' => '2:4',
                 'kalagayan' => 'MS',
                 'selection' => '2',
+                'row_keys' => $this->displayedRowKeys('2:4', [2]),
                 'hakbang_code' => '1-7',
             ])
             ->assertSessionHasNoErrors();
@@ -288,6 +289,7 @@ class PurokSegmentReportsTest extends TestCase
                 'purok' => '2:3',
                 'kalagayan' => 'MS',
                 'selection' => '1-2',
+                'row_keys' => $this->displayedRowKeys('2:3', [1, 2]),
                 'hakbang_code' => '1-7',
             ])
             ->assertSessionHasNoErrors();
@@ -301,6 +303,7 @@ class PurokSegmentReportsTest extends TestCase
                 'purok' => '2:3',
                 'kalagayan' => 'MS',
                 'selection' => '3',
+                'row_keys' => '3:r1',
                 'hakbang_code' => '1-7',
             ])
             ->assertSessionHasErrors('selection');
@@ -311,6 +314,7 @@ class PurokSegmentReportsTest extends TestCase
                 'purok' => 1,
                 'kalagayan' => 'MS',
                 'selection' => '1',
+                'row_keys' => $this->displayedRowKeys('1', [1]),
                 'hakbang_code' => '1-7',
             ])
             ->assertSessionHasNoErrors();
@@ -328,6 +332,7 @@ class PurokSegmentReportsTest extends TestCase
                     'purok' => $token,
                     'kalagayan' => 'MS',
                     'selection' => '1',
+                    'row_keys' => '1:r1',
                     'hakbang_code' => '1-7',
                 ])
                 ->assertSessionHasErrors('purok');
@@ -481,6 +486,16 @@ class PurokSegmentReportsTest extends TestCase
 
         $this->expectException(ValidationException::class);
         PurokSelection::fromRequestValue('1:4');
+    }
+
+    /** The "number:key" pairs the R4-02 page posts for these rows of one segment, read from the rendered list. */
+    private function displayedRowKeys(string $token, array $numbers): string
+    {
+        $group = collect($this->asSecretary()
+            ->get(route('forms.weekly.r4-02', ['purok' => $token, 'kalagayan' => 'MS']))
+            ->viewData('purokGroups'))->firstWhere('number', $token);
+
+        return collect($numbers)->map(fn (int $n): string => $n.':'.$group['rows'][$n - 1]['row_key'])->implode(',');
     }
 
     private function asSecretary(): static

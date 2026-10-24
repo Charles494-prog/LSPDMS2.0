@@ -26,6 +26,12 @@
     .assistant-answer-link { display:inline-flex; margin-top:.45rem; color:var(--accent); font-weight:700; text-decoration:underline; text-underline-offset:2px; }
     .assistant-message.user .assistant-answer-link { color:inherit; }
 
+    /* Quick replies under the newest answer */
+    .assistant-suggestions { display:flex; flex-wrap:wrap; gap:.4rem; max-width:min(90%, 600px); }
+    .assistant-suggestion { padding:.38rem .75rem; border:1px solid var(--accent); border-radius:999px; background:var(--surface); color:var(--accent); font:inherit; font-size:.82rem; line-height:1.3; cursor:pointer; transition:background .15s ease, color .15s ease; }
+    .assistant-suggestion:hover { background:var(--accent); color:#fff; }
+    html[data-theme="dark"] .assistant-suggestion:hover { color:#000; }
+
     /* Typing dots */
     .assistant-typing { display:flex; align-items:center; align-self:flex-start; gap:4px; min-height:38px; padding:.65rem .8rem; border:1px solid var(--border); border-radius:15px 15px 15px 4px; background:var(--surface); }
     .assistant-typing span { width:6px; height:6px; border-radius:50%; background:var(--text-muted); animation:assistant-typing-bounce 1s ease-in-out infinite; }

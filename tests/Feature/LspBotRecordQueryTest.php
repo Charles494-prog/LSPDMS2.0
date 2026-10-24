@@ -105,6 +105,39 @@ class LspBotRecordQueryTest extends TestCase
         $this->ask('ilan naman sa purok 2b', 'There is 1 MS record in Purok 2B.');
     }
 
+    public function test_suggestion_buttons_keep_the_previous_conditions(): void
+    {
+        $this->ask('how many ms in purok 1', 'There are 3 MS records in Purok 1.');
+        $this->assertStringContainsString('(total 3)', $this->reply('Per grupo'));
+        $this->assertStringContainsString('(total 3)', $this->reply('By gender'));
+
+        $this->reply('list the ms in purok 2');
+        $this->assertStringContainsString('(total 2)', $this->reply('by kapisanan?'));
+
+        $this->reply('list the ms in purok 1');
+        $this->ask('How many?', 'There are 3 MS records in Purok 1.');
+        $this->ask('total?', 'There are 3 MS records in Purok 1.');
+    }
+
+    public function test_name_searches_do_not_reveal_who_is_mk_without_delistment_access(): void
+    {
+        $this->ask('how many mk named gil', 'MK member names are confidential. I can tell you how many there are, but listing names needs De-Listment access.');
+        $count = $this->reply('how many records named gil');
+        $this->assertStringNotContainsString('MK', strtok($count, "\n"));
+        $this->assertStringContainsString('I found no', $count);
+        $this->assertStringNotContainsString('MK: 1', $this->reply('records named gil per status'));
+
+        $this->assertSame('There is 1 MK record (name contains “gil”).', $this->reply('how many mk named gil', ['Delistment_allow' => true]));
+    }
+
+    public function test_number_words_in_lists_and_ages(): void
+    {
+        $this->ask('how many ms in purok one and two', $this->reply('how many ms in purok 1 and 2'));
+        $this->ask('how many members under eighteen', $this->reply('how many members under 18'));
+        $this->assertStringContainsString('There is 1', $this->reply('how many members under eighteen'));
+        $this->ask('how many members above sixty-five', $this->reply('how many members above 65'));
+    }
+
     public function test_r210_conditions_still_need_delistment_access(): void
     {
         $this->ask('how many endorsed mk in purok 2', 'Your account cannot view R2-10 endorsement information. Ask your Head Secretary to enable De-Listment access.');

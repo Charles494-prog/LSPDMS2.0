@@ -26,7 +26,10 @@ if (widget && launcher && badge) {
             ? 'Live chat notifications connected'
             : `Live chat notifications ${state.replaceAll('-', ' ')}; checking periodically`;
         launcher.title = status;
+        const changed = launcher.dataset.realtimeState !== state;
         launcher.dataset.realtimeState = state;
+        // The poll interval depends on the socket state, so re-arm it when that changes.
+        if (changed) schedulePoll();
     }
 
     async function refreshUnreadCount() {
@@ -55,10 +58,28 @@ if (widget && launcher && badge) {
         }
     }
 
+    // Fast polling only stands in for the socket; while Reverb is connected it pushes
+    // '.message.sent', so the poll becomes a slow safety net. Hidden tabs never poll.
+    const FALLBACK_POLL_MS = 5000;
+    const CONNECTED_POLL_MS = 90000;
+    let pollTimer = null;
+
+    function schedulePoll() {
+        window.clearTimeout(pollTimer);
+        pollTimer = null;
+        if (document.hidden) return;
+        const delay = launcher.dataset.realtimeState === 'connected' ? CONNECTED_POLL_MS : FALLBACK_POLL_MS;
+        pollTimer = window.setTimeout(() => {
+            refreshUnreadCount();
+            schedulePoll();
+        }, delay);
+    }
+
     refreshUnreadCount();
-    window.setInterval(refreshUnreadCount, 5000);
+    schedulePoll();
     document.addEventListener('visibilitychange', () => {
         if (!document.hidden) refreshUnreadCount();
+        schedulePoll();
     });
 
     const reverbConfigured = widget.dataset.reverbConfigured === 'true'

@@ -4,6 +4,7 @@
                               Optional $purokGroups = [['number' => , 'name' => , 'rows' => [...]], ...].
                               Without it, the view falls back to $rows for the first selected Purok.
     POST forms.weekly.r4-02   one request per Purok: purok, kalagayan, selection ("1-10,15"),
+                              row_keys ("1:r12,2:r15", each selected row's data-key so a changed list is refused),
                               hakbang_code OR split_codes + code_assignments, date_of_dalaw, date_of_ulat,
                               output = "r4-02" | "r4-03" (the controller returns the matching DOCX).
 --}}
@@ -284,7 +285,7 @@
                             </thead>
                             <tbody>
                                 @foreach ($group['rows'] as $ri => $row)
-                                    <tr data-row="{{ $ri + 1 }}">
+                                    <tr data-row="{{ $ri + 1 }}" data-key="{{ $row['row_key'] ?? '' }}">
                                         <td class="r402-check"><input type="checkbox" aria-label="Select row {{ $ri + 1 }}"></td>
                                         <td>{{ $ri + 1 }}</td>
                                         <td>{{ $row['code'] }}</td>
@@ -356,6 +357,7 @@
                         <input type="hidden" name="purok" value="{{ $group['number'] }}">
                         <input type="hidden" name="kalagayan" value="{{ $selectedStatus }}">
                         <input type="hidden" name="selection" value="" data-selection>
+                        <input type="hidden" name="row_keys" value="" data-row-keys>
                     </form>
                 @endforeach
             </div>
@@ -508,6 +510,7 @@
                 count: el.querySelector('[data-count]'),
                 records: summary.querySelector('[data-records]'),
                 selection: genForm.querySelector('[data-selection]'),
+                rowKeys: genForm.querySelector('[data-row-keys]'),
                 outputs: Array.from(summary.querySelectorAll('[data-output]')),
                 code: summary.querySelector('[data-code]'),
                 split: summary.querySelector('[data-split]'),
@@ -561,6 +564,11 @@
                 const parts = compress(set);
                 g.records.textContent = parts.length ? parts.join(', ') : '—';
                 g.selection.value = parts.join(',');
+                // The server checks each number still names the member shown here before saving.
+                g.rowKeys.value = g.rows
+                    .filter((row) => set.has(Number(row.dataset.row)))
+                    .map((row) => row.dataset.row + ':' + row.dataset.key)
+                    .join(',');
                 g.outputs.forEach((button) => { button.disabled = set.size === 0 || !g.code; });
             });
             totalEl.textContent = total ? total + ' selected' : 'None selected';

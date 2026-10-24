@@ -48,6 +48,22 @@ class FileStoreTest extends TestCase
         $this->assertNull($store->response('public', 'profile-pictures/missing.jpg', 'x.jpg'));
     }
 
+    public function test_get_never_writes_a_database_copy_outside_the_upload_folders(): void
+    {
+        Storage::fake('public');
+        $store = app(FileStore::class);
+        // persist() writes only the database copy, as an imported row would be.
+        $store->persist('public', 'profile-pictures/shell.php.png', '<?php echo 1;', 'image/png');
+        $store->persist('public', 'shell.php', '<?php echo 1;', 'image/png');
+        $store->persist('public', 'profile-pictures/ok.png', 'PNG-BYTES', 'image/png');
+
+        $this->assertNotNull($store->response('public', 'profile-pictures/shell.php.png', 'a.png'));
+        $store->get('public', 'shell.php');
+        $this->assertSame('PNG-BYTES', $store->get('public', 'profile-pictures/ok.png'));
+
+        $this->assertSame(['profile-pictures/ok.png'], Storage::disk('public')->allFiles());
+    }
+
     public function test_every_exported_chunk_fits_under_the_default_mariadb_packet_limit(): void
     {
         // The SQL exporter hex-encodes each value, doubling its length.

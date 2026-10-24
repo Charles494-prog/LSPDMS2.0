@@ -6,6 +6,7 @@ use App\Http\Middleware\EnsureUserIsHeadSecretary;
 use App\Http\Middleware\EnsureUserIsLoggedIn;
 use App\Http\Middleware\PreventSensitiveCaching;
 use App\Http\Middleware\RedirectAuthenticatedUser;
+use App\Http\Middleware\ThrottleRequestsPerRoute;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -29,6 +30,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'guest.redirect' => RedirectAuthenticatedUser::class,
             'it-recovery.session' => EnsureItRecoverySession::class,
             'no-store' => PreventSensitiveCaching::class,
+            // One counter per route and signed-in user (see the class for why).
+            'throttle' => ThrottleRequestsPerRoute::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -107,7 +107,10 @@ class FileStore
         if ($contents === null) {
             return null;
         }
-        $storage->put($path, $contents);
+        // Same rule as rehydrateMissing(): never write outside the upload folders.
+        if (DatabaseBackupService::isAllowedFileLocation($disk, $path)) {
+            $storage->put($path, $contents);
+        }
 
         return $contents;
     }
@@ -138,6 +141,8 @@ class FileStore
     /**
      * Write every database copy that is missing (or damaged) on disk back to
      * its disk, for example after an import. Returns how many were restored.
+     * Rows outside the known upload folders are never written (an imported
+     * row must not be able to drop, say, a .php file into public storage).
      */
     public function rehydrateMissing(): int
     {
@@ -147,6 +152,9 @@ class FileStore
 
         $restored = 0;
         foreach (DB::table('stored_files')->orderBy('id')->get() as $record) {
+            if (! DatabaseBackupService::isAllowedFileLocation($record->disk, $record->path)) {
+                continue;
+            }
             $storage = Storage::disk($record->disk);
             if ($storage->exists($record->path)
                 && hash_equals($record->sha256, hash('sha256', (string) $storage->get($record->path)))) {

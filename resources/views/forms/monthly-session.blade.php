@@ -49,7 +49,7 @@
         </div>
     </section>
 </main>
-@include('forms.monthly-session-widget', ['monthlySession' => $session])
+@include('forms.monthly-session-widget', ['monthlySession' => $session, 'monthlySessionWidgetPolls' => false])
 <script>
 (() => {
     const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
@@ -128,11 +128,14 @@
             button.disabled = false;
         }
     });
-    window.setInterval(async () => {
+    // One lightweight poll serves both this page and the floating widget; the full movement
+    // list is fetched only when the count shows it changed.
+    const poll = async () => {
         try {
-            const response = await fetch(`${statusUrl}?include_movements=1`, { headers: { 'Accept': 'application/json' } });
+            const response = await fetch(statusUrl, { headers: { 'Accept': 'application/json' } });
             if (!response.ok) return;
             const result = await response.json();
+            window.dispatchEvent(new CustomEvent('monthly-session-status', { detail: result }));
             if (!result.session) {
                 if (body.dataset.sessionId) window.location.reload();
                 return;
@@ -142,11 +145,21 @@
                 return;
             }
             if (Number(body.dataset.renderedCount) !== result.session.movement_count) {
-                renderMovements(result.movements || []);
-                body.dataset.renderedCount = result.session.movement_count;
+                const fullResponse = await fetch(`${statusUrl}?include_movements=1`, { headers: { 'Accept': 'application/json' } });
+                if (!fullResponse.ok) return;
+                const full = await fullResponse.json();
+                if (!full.session || String(full.session.id) !== String(body.dataset.sessionId)) return;
+                renderMovements(full.movements || []);
+                body.dataset.renderedCount = full.session.movement_count;
             }
         } catch (_) {}
+    };
+    window.setInterval(() => {
+        if (!document.hidden) poll();
     }, 5000);
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) poll();
+    });
 })();
 </script>
 @endsection

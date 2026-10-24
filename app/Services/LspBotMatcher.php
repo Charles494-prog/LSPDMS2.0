@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Cache;
+
 /**
  * Finds the best answer in config/lspbot.php for a free-text question.
  *
@@ -39,7 +41,18 @@ class LspBotMatcher
 
     public function __construct()
     {
-        $config = config('lspbot');
+        $config = LspBotKnowledge::merge((array) config('lspbot'));
+
+        // The index is rebuilt only when the knowledge changes (the key is a hash of it).
+        $built = Cache::rememberForever('lspbot.index.'.md5(serialize($config)), fn (): array => $this->build($config));
+        foreach ($built as $property => $value) {
+            $this->{$property} = $value;
+        }
+    }
+
+    /** @return array<string, mixed> every property the matcher needs, so it can be cached as one array */
+    private function build(array $config): array
+    {
         $this->threshold = (float) ($config['threshold'] ?? 0.55);
         $this->suggestThreshold = (float) ($config['suggest_threshold'] ?? 0.30);
 
@@ -112,18 +125,35 @@ class LspBotMatcher
             $this->idf[$token] = 1.0 + log($total / $df);
         }
         $this->unseenWeight = 1.0 + log($total);
+
+        return [
+            'threshold' => $this->threshold,
+            'suggestThreshold' => $this->suggestThreshold,
+            'phrases' => $this->phrases,
+            'stopwords' => $this->stopwords,
+            'synonyms' => $this->synonyms,
+            'greetings' => $this->greetings,
+            'exact' => $this->exact,
+            'index' => $this->index,
+            'idf' => $this->idf,
+            'unseenWeight' => $this->unseenWeight,
+        ];
     }
 
     /**
-     * @return array{entry: ?array, score: float, suggestions: list<string>}
+     * @return array{entry: ?array, score: float, suggestions: list<string>, options?: list<array{label: string, message: string}>}
      */
     public function match(string $message): array
     {
-        $plain = $this->plain($message);
-        $withoutPo = trim(preg_replace('/(?<![\p{L}\p{N}])(?:po|opo|please|pls)(?![\p{L}\p{N}])/u', ' ', $plain) ?? $plain);
-        foreach ([$plain, preg_replace('/\s+/u', ' ', $withoutPo)] as $candidate) {
-            if (isset($this->exact[$candidate])) {
-                return ['entry' => $this->index[$this->exact[$candidate]]['entry'], 'score' => 1.0, 'suggestions' => []];
+        $raw = $this->plain($message);
+        // Scoring reads the cleaned message (accents, stretched letters, chat shorthand, number words).
+        $plain = $this->plain(LspBotLanguage::normalize($message));
+        foreach ([$raw, $plain] as $text) {
+            $withoutPo = trim(preg_replace('/(?<![\p{L}\p{N}])(?:po|opo|please|pls)(?![\p{L}\p{N}])/u', ' ', $text) ?? $text);
+            foreach ([$text, preg_replace('/\s+/u', ' ', $withoutPo)] as $candidate) {
+                if (isset($this->exact[$candidate])) {
+                    return ['entry' => $this->index[$this->exact[$candidate]]['entry'], 'score' => 1.0, 'suggestions' => []];
+                }
             }
         }
         $stripped = $plain;
@@ -197,17 +227,20 @@ class LspBotMatcher
         }
 
         $suggestions = [];
+        $options = [];
         foreach ($ranked as $key => $score) {
             $entry = $this->index[$key]['entry'];
             if ($score >= $this->suggestThreshold && ($entry['suggest'] ?? true) && ! empty($entry['title'])) {
                 $suggestions[] = (string) $entry['title'];
+                // A button sends the entry's first example question, which is sure to match it.
+                $options[] = ['label' => (string) $entry['title'], 'message' => (string) ($entry['questions'][0] ?? $entry['title'])];
             }
             if (count($suggestions) === 3) {
                 break;
             }
         }
 
-        return ['entry' => null, 'score' => $bestKey !== null ? $ranked[$bestKey] : 0.0, 'suggestions' => $suggestions];
+        return ['entry' => null, 'score' => $bestKey !== null ? $ranked[$bestKey] : 0.0, 'suggestions' => $suggestions, 'options' => $options];
     }
 
   public function answerFor(array $entry, string $message = ''): string
@@ -267,7 +300,8 @@ class LspBotMatcher
             return $a === $b;
         }
 
-        return levenshtein($a, $b) <= (min($lengthA, $lengthB) >= 8 ? 2 : 1);
+        // Damerau distance: "pruok" or "delsitment" (two swapped letters) count as one slip.
+        return LspBotLanguage::distance($a, $b) <= (min($lengthA, $lengthB) >= 8 ? 2 : 1);
     }
 
     /** @return list<string> */

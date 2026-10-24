@@ -10,6 +10,7 @@ use App\Models\Message;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -267,6 +268,9 @@ class MessagingTest extends TestCase
         $this->withSession(['login_user' => ['id' => $recipient->id]])
             ->getJson(route('messages.list', $conversation))
             ->assertOk()->assertJsonCount(2);
+        $this->withSession(['login_user' => ['id' => $recipient->id]])
+            ->postJson(route('messages.conversation-read', $conversation))
+            ->assertOk();
         $this->assertNotNull($textMessage->fresh()->read_at);
 
         $this->withSession(['login_user' => ['id' => $sender->id]])
@@ -343,6 +347,111 @@ class MessagingTest extends TestCase
         $this->withSession(['login_user' => ['id' => $outsider->id]])
             ->postJson(route('broadcasting.auth'), ['socket_id' => '123.790', 'channel_name' => 'private-user.'.$recipient->id])
             ->assertForbidden();
+    }
+
+    public function test_loading_a_conversation_is_read_only_and_marking_read_needs_a_post(): void
+    {
+        $sender = $this->makeUser('sender@example.test');
+        $recipient = $this->makeUser('recipient@example.test');
+        $outsider = $this->makeUser('outsider@example.test');
+        $conversation = $this->conversation($sender, $recipient);
+        $seen = Message::query()->create([
+            'conversation_id' => $conversation->id,
+            'sender_id' => $sender->id,
+            'body' => 'Seen',
+            'expires_at' => now()->addDay(),
+        ]);
+
+        // A cross-site navigation can only issue a GET, which must not change anything.
+        $this->withSession(['login_user' => ['id' => $recipient->id]])
+            ->getJson(route('messages.list', $conversation))
+            ->assertOk()->assertJsonPath('0.read_at', null);
+        $this->assertNull($seen->fresh()->read_at);
+        $this->assertNull($seen->fresh()->delivered_at);
+
+        $arrivedLater = Message::query()->create([
+            'conversation_id' => $conversation->id,
+            'sender_id' => $sender->id,
+            'body' => 'Arrived after the list loaded',
+            'expires_at' => now()->addDay(),
+        ]);
+
+        $this->withSession(['login_user' => ['id' => $outsider->id]])
+            ->postJson(route('messages.conversation-read', $conversation), ['up_to_id' => $seen->id])
+            ->assertNotFound();
+        $this->withSession(['login_user' => ['id' => $recipient->id]])
+            ->postJson(route('messages.conversation-read', $conversation), ['up_to_id' => $seen->id])
+            ->assertOk()
+            ->assertExactJson(['read_ids' => [$seen->id]]);
+
+        $this->assertNotNull($seen->fresh()->read_at);
+        $this->assertNotNull($seen->fresh()->delivered_at);
+        $this->assertNull($arrivedLater->fresh()->read_at);
+        $this->withSession(['login_user' => ['id' => $recipient->id]])
+            ->getJson(route('messages.unread-count'))
+            ->assertExactJson(['unread_count' => 1]);
+
+        // The sender's own messages are never marked read on the sender's behalf.
+        $this->withSession(['login_user' => ['id' => $sender->id]])
+            ->postJson(route('messages.conversation-read', $conversation))
+            ->assertOk()
+            ->assertExactJson(['read_ids' => []]);
+        $this->assertNull($arrivedLater->fresh()->read_at);
+    }
+
+    public function test_conversation_list_uses_a_fixed_number_of_queries(): void
+    {
+        $user = $this->makeUser('owner@example.test');
+        $countQueries = function () use ($user): int {
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+            $this->withSession(['login_user' => ['id' => $user->id]])
+                ->getJson(route('messages.conversations'))->assertOk();
+            DB::disableQueryLog();
+
+            return count(DB::getQueryLog());
+        };
+        $addConversation = function (int $index) use ($user): void {
+            $contact = $this->makeUser("contact{$index}@example.test");
+            $conversation = $this->conversation($user, $contact);
+            foreach (['First', 'Latest'] as $body) {
+                Message::query()->create([
+                    'conversation_id' => $conversation->id,
+                    'sender_id' => $contact->id,
+                    'body' => "{$body} from {$index}",
+                    'expires_at' => now()->addDay(),
+                ]);
+            }
+        };
+
+        $addConversation(1);
+        $queriesForOne = $countQueries();
+        foreach (range(2, 6) as $index) {
+            $addConversation($index);
+        }
+        $this->assertSame($queriesForOne, $countQueries(), 'Each extra conversation must not add queries.');
+
+        $response = $this->withSession(['login_user' => ['id' => $user->id]])
+            ->getJson(route('messages.conversations'))
+            ->assertOk()
+            ->assertJsonCount(6);
+        foreach ($response->json() as $row) {
+            $this->assertSame(2, $row['unread_count']);
+            $this->assertStringStartsWith('Latest from ', $row['last_message']['body']);
+            $this->assertSame('Contact'.substr($row['last_message']['body'], 12).' Test', $row['last_message']['sender_name']);
+        }
+    }
+
+    public function test_unread_badge_does_not_poll_fast_while_hidden_or_while_the_socket_is_live(): void
+    {
+        $script = file_get_contents(resource_path('js/chat-notifications.js'));
+
+        // The old unconditional 5 s interval kept every tab, even hidden ones, polling forever.
+        $this->assertDoesNotMatchRegularExpression('/setInterval\(\s*refreshUnreadCount/', $script);
+        $this->assertMatchesRegularExpression('/function schedulePoll\(\)\s*\{[^}]*if \(document\.hidden\) return;/', $script);
+        $this->assertMatchesRegularExpression("/realtimeState === 'connected' \? CONNECTED_POLL_MS : FALLBACK_POLL_MS/", $script);
+        $this->assertMatchesRegularExpression('/const CONNECTED_POLL_MS = (6|7|8|9)\d{4}|const CONNECTED_POLL_MS = 1[0-2]\d{4}/', $script);
+        $this->assertMatchesRegularExpression('/const FALLBACK_POLL_MS = 5000;/', $script);
     }
 
     private function makeUser(string $email, bool $verified = true): User

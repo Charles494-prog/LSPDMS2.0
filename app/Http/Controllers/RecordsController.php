@@ -6,6 +6,9 @@ use Carbon\Carbon;
 use App\Models\Purok;
 use App\Models\Record;
 use App\Models\GlobalVariable;
+use App\Models\MonthlyMovementSession;
+use App\Models\MonthlySessionActivity;
+use App\Models\MonthlySessionMovement;
 use App\Services\R210Eligibility;
 use App\Support\Role;
 use Illuminate\Http\JsonResponse;
@@ -168,8 +171,9 @@ class RecordsController extends Controller
             'kapisanan' => ['sometimes', 'nullable', 'string', 'max:50'],
             'purok' => ['prohibited'],
             'grupo' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:999'],
-            'date_of_baptism' => ['sometimes', 'nullable', 'date', 'before_or_equal:today'],
-            'date_of_birth' => ['sometimes', 'nullable', 'date', 'before_or_equal:today'],
+            // "Today" is the Manila date; the app timezone is UTC, which lags it until 08:00.
+            'date_of_baptism' => ['sometimes', 'nullable', 'date', 'before_or_equal:'.now('Asia/Manila')->toDateString()],
+            'date_of_birth' => ['sometimes', 'nullable', 'date', 'before_or_equal:'.now('Asia/Manila')->toDateString()],
             'is_married' => ['sometimes', 'required', 'boolean'],
             'evangelist' => ['sometimes', 'nullable', 'string', 'max:150'],
         ], [
@@ -253,9 +257,10 @@ class RecordsController extends Controller
                     ? $attributes['date_of_birth']
                     : $lockedRecord->date_of_birth?->format('Y-m-d');
                 if ($isMarried || $birthday) {
+                    // Age is counted against Manila's date, not the UTC app clock.
                     $attributes['kapisanan'] = $isMarried
                         ? 'B'
-                        : (Carbon::parse($birthday)->age < 18 ? 'binhi' : 'K');
+                        : (Carbon::parse($birthday)->addYears(18)->isAfter(Carbon::parse(Carbon::now('Asia/Manila')->toDateString())) ? 'binhi' : 'K');
                 } elseif (array_key_exists('kapisanan', $validated)) {
                     $attributes['kapisanan'] = $this->storeKapisanan($validated['kapisanan']);
                 }
@@ -277,15 +282,40 @@ class RecordsController extends Controller
 
     public function destroy(Record $record): JsonResponse
     {
-        if (mb_strtolower(trim((string) $record->status)) !== 'inactive') {
-            return response()->json([
-                'message' => 'You can only delete this record after changing its status to Inactive in Form Generator > Monthly > Deliberation.',
-            ], 422);
-        }
+        return DB::transaction(function () use ($record): JsonResponse {
+            $lockedRecord = Record::query()->lockForUpdate()->find($record->getKey());
+            if (! $lockedRecord) {
+                return response()->json(['message' => 'This record was already deleted.'], 404);
+            }
+            if (mb_strtolower(trim((string) $lockedRecord->status)) !== 'inactive') {
+                return response()->json([
+                    'message' => 'You can only delete this record after changing its status to Inactive in Form Generator > Monthly > Deliberation.',
+                ], 422);
+            }
 
-        $record->delete();
+            // A pending monthly code or active-session log entry means finishing the session still needs this row
+            // for permanent_history and the snapshot, and undo still needs it to restore the member.
+            $activeSessionIds = MonthlyMovementSession::query()->where('active_key', 'active')->pluck('id');
+            $inActiveSession = $activeSessionIds->isNotEmpty() && (
+                MonthlySessionActivity::query()
+                    ->whereIn('session_id', $activeSessionIds)
+                    ->where('record_id', $lockedRecord->id)
+                    ->exists()
+                || MonthlySessionMovement::query()
+                    ->whereIn('session_id', $activeSessionIds)
+                    ->where('record_id', $lockedRecord->id)
+                    ->exists()
+            );
+            if (trim((string) $lockedRecord->monthly_code) !== '' || $inActiveSession) {
+                return response()->json([
+                    'message' => 'This record has a movement in the active Monthly Session. Finish the session first, then delete it.',
+                ], 422);
+            }
 
-        return response()->json(['message' => 'Inactive record deleted.']);
+            $lockedRecord->delete();
+
+            return response()->json(['message' => 'Inactive record deleted.']);
+        });
     }
 
     private function present(

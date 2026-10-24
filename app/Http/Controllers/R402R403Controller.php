@@ -36,10 +36,11 @@ class R402R403Controller extends Controller
             $report = $this->r401ReportBuilder->build($selection, $selectedStatus, $this->reportSession());
             $rows = $report['rows'];
             // One group per Purok segment, numbered from 1, each posting its own segment token to storeR402().
+            // Each row carries the key storeR402() checks, so a list that changed before saving is caught.
             $purokGroups = array_map(fn (array $segment): array => [
                 'number' => $segment['token'],
                 'name' => $segment['purok_name'],
-                'rows' => $segment['rows'],
+                'rows' => array_map(fn (array $row): array => [...$row, 'row_key' => self::rowKey($row)], $segment['rows']),
             ], $report['segments']);
             $warnings = $this->r401ReportBuilder->outsideRangeWarnings($report['outside_range']);
         }
@@ -71,6 +72,8 @@ class R402R403Controller extends Controller
             'purok' => ['required'],
             'kalagayan' => ['required', Rule::in(['MS', 'UWP'])],
             'selection' => ['required', 'string', 'max:5000'],
+            // "number:key" pairs for the selected rows, as displayed by the generator (see rowKey()).
+            'row_keys' => ['required', 'string', 'max:60000'],
             'split_codes' => ['sometimes', 'boolean'],
             'hakbang_code' => [
                 'nullable',
@@ -94,7 +97,7 @@ class R402R403Controller extends Controller
         $segmentId = $segmentIds[0];
         $purokNumber = (int) Purok::query()->whereKey($segmentId)->value('purok_number');
 
-        // Rebuild exactly the list the generator displayed for this segment so row numbers map to the same people.
+        // Rebuild the segment's list from live data; row_keys below proves it still matches what the generator displayed.
         $segment = collect($this->r401ReportBuilder
             ->build($selection, $validated['kalagayan'], $this->reportSession())['segments'])
             ->firstWhere('purok_id', $segmentId);
@@ -110,6 +113,16 @@ class R402R403Controller extends Controller
             throw ValidationException::withMessages([
                 'selection' => 'A selected row number is outside the displayed R4-01 list.',
             ]);
+        }
+        // Records can be added, moved or recoded by other secretaries between viewing and saving, which renumbers
+        // the list. Refuse to save unless every selected number still points at the person that was displayed.
+        $postedKeys = $this->parseRowKeys($validated['row_keys']);
+        foreach ($selectedNumbers as $number) {
+            if (($postedKeys[$number] ?? null) !== self::rowKey($rows[$number - 1])) {
+                throw ValidationException::withMessages([
+                    'selection' => 'The R4-01 list changed since you opened it, so row numbers may now point to different members. Reload the page, check the list and select the rows again.',
+                ]);
+            }
         }
 
         $assignments = $this->codeAssignments(
@@ -262,6 +275,35 @@ class R402R403Controller extends Controller
             ->orderByDesc('period_month')
             ->orderByDesc('id')
             ->first();
+    }
+
+    /**
+     * Identity of one displayed R4-01 row: the record id, or (for monthly movements whose record is gone) a hash of
+     * the name, registry and purok-grupo. Keys never contain ":" or ",", so they can be posted as "3:r12,4:r15".
+     */
+    public static function rowKey(array $row): string
+    {
+        if (($row['record_id'] ?? null) !== null && $row['record_id'] !== '') {
+            return 'r'.(int) $row['record_id'];
+        }
+
+        return 'h'.substr(sha1(implode('|', [
+            mb_strtolower(trim((string) ($row['name'] ?? ''))),
+            trim((string) ($row['registry'] ?? '')),
+            trim((string) ($row['purok_grupo'] ?? '')),
+        ])), 0, 16);
+    }
+
+    private function parseRowKeys(string $input): array
+    {
+        $keys = [];
+        foreach (explode(',', $input) as $pair) {
+            if (preg_match('/^\s*(\d+):([rh][0-9a-f]+)\s*$/', $pair, $matches) === 1) {
+                $keys[(int) $matches[1]] = $matches[2];
+            }
+        }
+
+        return $keys;
     }
 
     private function parseRowNumbers(string $input): array

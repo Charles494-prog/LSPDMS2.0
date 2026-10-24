@@ -61,8 +61,11 @@ Route::middleware(['login.session', 'no-store'])->group(function () {
     // Tasks the Head Secretary assigns to secretaries (Tasks page in the sidebar).
     Route::get('/tasks', [AssignedTaskController::class, 'page'])->name('tasks');
     Route::get('/assigned-tasks', [AssignedTaskController::class, 'index'])->middleware('throttle:120,1')->name('assigned-tasks.index');
+    Route::get('/assigned-tasks/completed', [AssignedTaskController::class, 'completed'])->middleware('throttle:60,1')->name('assigned-tasks.completed');
+    Route::get('/assigned-tasks/activity', [AssignedTaskController::class, 'activity'])->middleware('throttle:120,1')->name('assigned-tasks.activity');
     Route::get('/assigned-tasks/unseen', [AssignedTaskController::class, 'unseen'])->middleware('throttle:120,1')->name('assigned-tasks.unseen');
     Route::post('/assigned-tasks/seen', [AssignedTaskController::class, 'markSeenRequest'])->middleware('throttle:60,1')->name('assigned-tasks.seen');
+    Route::get('/assigned-tasks/people', [AssignedTaskController::class, 'people'])->middleware('throttle:60,1')->name('assigned-tasks.people');
     Route::get('/assigned-tasks/secretaries', [AssignedTaskController::class, 'secretaries'])->name('assigned-tasks.secretaries');
     Route::post('/assigned-tasks', [AssignedTaskController::class, 'store'])->middleware('throttle:30,1')->name('assigned-tasks.store');
     Route::put('/assigned-tasks/{task}', [AssignedTaskController::class, 'update'])->middleware('throttle:30,1')->name('assigned-tasks.update');
@@ -70,13 +73,14 @@ Route::middleware(['login.session', 'no-store'])->group(function () {
     Route::post('/assigned-tasks/{task}/comments', [AssignedTaskController::class, 'comment'])->middleware('throttle:60,1')->name('assigned-tasks.comment');
     Route::post('/assigned-tasks/{task}/reactions', [AssignedTaskController::class, 'react'])->middleware('throttle:120,1')->name('assigned-tasks.react');
     Route::post('/assigned-tasks/{task}/complete', [AssignedTaskController::class, 'complete'])->middleware('throttle:30,1')->name('assigned-tasks.complete');
+    Route::post('/assigned-tasks/{task}/undo-complete', [AssignedTaskController::class, 'undoComplete'])->middleware('throttle:30,1')->name('assigned-tasks.undo-complete');
     Route::post('/assigned-tasks/{task}/reopen', [AssignedTaskController::class, 'reopen'])->middleware('throttle:30,1')->name('assigned-tasks.reopen');
     Route::post('/assigned-tasks/{task}/confirm', [AssignedTaskController::class, 'confirm'])->middleware('throttle:30,1')->name('assigned-tasks.confirm');
     Route::post('/messages/broadcasting/auth', BroadcastAuthController::class)->name('broadcasting.auth');
     Route::get('/messages', [MessageController::class, 'index'])->name('messages.index');
     Route::get('/messages/assistant', [BuiltInHelpChatbotController::class, 'index'])->name('messages.assistant');
     Route::post('/messages/assistant', [BuiltInHelpChatbotController::class, 'reply'])
-        ->middleware('throttle:10,1')
+        ->middleware('throttle:30,1')
         ->name('messages.assistant.reply');
     Route::get('/messages/unread-count', [MessageController::class, 'unreadCount'])->name('messages.unread-count');
     Route::get('/messages/accounts', [MessageController::class, 'accounts'])->name('messages.accounts');
@@ -84,6 +88,7 @@ Route::middleware(['login.session', 'no-store'])->group(function () {
     Route::post('/messages/conversations', [MessageController::class, 'createConversation'])->middleware('throttle:20,1')->name('messages.conversations.create');
     Route::get('/messages/conversations/{conversation}/messages', [MessageController::class, 'messages'])->name('messages.list');
     Route::post('/messages/conversations/{conversation}/messages', [MessageController::class, 'send'])->middleware('throttle:60,1')->name('messages.send');
+    Route::post('/messages/conversations/{conversation}/messages/read', [MessageController::class, 'markConversationRead'])->middleware('throttle:120,1')->name('messages.conversation-read');
     Route::post('/messages/conversations/{conversation}/typing', [MessageController::class, 'typing'])->middleware('throttle:30,1')->name('messages.typing');
     Route::post('/messages/{message}/delivered', [MessageController::class, 'delivered'])->middleware('throttle:120,1')->name('messages.delivered');
     Route::post('/messages/{message}/read', [MessageController::class, 'read'])->middleware('throttle:120,1')->name('messages.read');

@@ -12,6 +12,7 @@ class AssignedTaskMember extends Model
         'user_id',
         'can_comment',
         'can_complete',
+        'done_at',
     ];
 
     protected function casts(): array
@@ -19,6 +20,7 @@ class AssignedTaskMember extends Model
         return [
             'can_comment' => 'boolean',
             'can_complete' => 'boolean',
+            'done_at' => 'datetime',
         ];
     }
 

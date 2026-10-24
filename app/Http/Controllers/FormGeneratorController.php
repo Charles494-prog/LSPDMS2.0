@@ -365,8 +365,10 @@ class FormGeneratorController extends Controller
             ->orderByDesc('id')
             ->value('period_month')
             ?? now()->startOfMonth()->toDateString();
-        $selectedMonth = Carbon::parse($defaultMonth)->format('Y-m');
-        $report = $resumenReport->generate(Carbon::createFromFormat('Y-m', $selectedMonth));
+        // startOfMonth() on the parsed date: createFromFormat('Y-m') borrows today's day and overflows on the 29th-31st.
+        $month = Carbon::parse($defaultMonth)->startOfMonth();
+        $selectedMonth = $month->format('Y-m');
+        $report = $resumenReport->generate($month);
         $globalVariables = GlobalVariable::query()->first();
 
         return [
@@ -476,13 +478,18 @@ class FormGeneratorController extends Controller
         return response()->json($this->recordPayload($record->refresh()));
     }
 
-    public function deleteNote(Record $record, int $noteIndex): JsonResponse
+    public function deleteNote(Request $request, Record $record, int $noteIndex): JsonResponse
     {
-        $record = DB::transaction(function () use ($record, $noteIndex): Record {
+        // The page sends the note text it showed, so a list changed by someone else can't delete a different note.
+        $validated = $request->validate(['note' => ['required', 'string']]);
+        $expected = trim($validated['note']);
+
+        $record = DB::transaction(function () use ($record, $noteIndex, $expected): Record {
             $lockedRecord = Record::query()->whereKey($record->getKey())->lockForUpdate()->firstOrFail();
             $notes = $this->parseNotes((string) $lockedRecord->log_section);
 
-            abort_unless(array_key_exists($noteIndex, $notes), 404);
+            abort_unless(array_key_exists($noteIndex, $notes), 409, 'The notes for this record changed since the page loaded. Reload and try again.');
+            abort_unless($notes[$noteIndex] === $expected, 409, 'The notes for this record changed since the page loaded. Reload and try again.');
             array_splice($notes, $noteIndex, 1);
             $lockedRecord->log_section = $notes === [] ? null : implode(', ', $notes);
             $lockedRecord->save();
@@ -507,7 +514,9 @@ class FormGeneratorController extends Controller
     }
 
     /**
-     * New notes are comma-separated entries beginning with DD/MM/YYYY.
+     * Notes are comma-separated entries beginning with a date: DD/MM/YYYY (Add note), MM/DD/YYYY (older
+     * stored notes) or DD-MM-YYYY (Monthly Session log entries). Every format must split here, or a
+     * dash-dated system entry is merged into the note before it and deleted along with it.
      * Older imported text is preserved as-is until an individual dated entry is added.
      *
      * @return list<string>
@@ -519,7 +528,7 @@ class FormGeneratorController extends Controller
             return [];
         }
 
-        $notes = preg_split('/,\s*(?=\d{2}\/\d{2}\/\d{4}\s*:)/u', $logSection) ?: [];
+        $notes = preg_split('/,\s*(?=\d{1,2}([\/-])\d{1,2}\1\d{4}\s*:)/u', $logSection) ?: [];
 
         return array_values(array_filter(array_map('trim', $notes), fn (string $note): bool => $note !== ''));
     }
