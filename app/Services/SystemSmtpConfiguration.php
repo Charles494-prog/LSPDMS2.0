@@ -12,6 +12,8 @@ class SystemSmtpConfiguration
 {
     public const RESEND_COOLDOWN_SECONDS = 60;
 
+    public const TIMEOUT_SECONDS = 10;
+
     /**
      * Email delivery is ready when the saved database account has been verified,
      * or when the .env SMTP settings are complete.
@@ -177,6 +179,8 @@ class SystemSmtpConfiguration
             'mail.mailers.smtp.port' => SystemSmtpSetting::PORT,
             'mail.mailers.smtp.username' => $email,
             'mail.mailers.smtp.password' => $password,
+            // Sends happen inside the request, so a stalled Gmail connection must give up quickly.
+            'mail.mailers.smtp.timeout' => (float) (config('mail.mailers.smtp.timeout') ?: self::TIMEOUT_SECONDS),
             'mail.from.address' => $email,
         ]);
         Mail::purge('smtp');

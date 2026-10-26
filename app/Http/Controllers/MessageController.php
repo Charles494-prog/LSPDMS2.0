@@ -9,6 +9,7 @@ use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\User;
 use App\Services\FileStore;
+use App\Support\SafeBroadcast;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -303,15 +304,7 @@ class MessageController extends Controller
 
     private function broadcastSafely(object $event): void
     {
-        if (config('broadcasting.default') !== 'reverb') {
-            return;
-        }
-
-        try {
-            broadcast($event);
-        } catch (Throwable $exception) {
-            report($exception);
-        }
+        SafeBroadcast::send($event);
     }
 
     private function authorizeMessageParticipant(Request $request, Message $message): User

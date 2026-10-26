@@ -31,6 +31,8 @@ class ResumenDocxExporter
             $xml = $template['word/document.xml']->getContent();
             $updatedXml = $this->populateDocument($xml, $report, $locale, $lcode, $signatories);
             $output = new PharData($outputPath, 0, null, Phar::ZIP);
+            // Buffer the entries and deflate them in one write so the DOCX is not stored uncompressed.
+            $output->startBuffering();
             $prefix = 'phar://'.str_replace('\\', '/', $templatePath).'/';
             foreach (new RecursiveIteratorIterator($template) as $entry) {
                 $entryPath = str_replace('\\', '/', $entry->getPathName());
@@ -43,6 +45,8 @@ class ResumenDocxExporter
                     $relativePath === 'word/document.xml' ? $updatedXml : $entry->getContent()
                 );
             }
+            $output->compressFiles(Phar::GZ);
+            $output->stopBuffering();
             unset($output, $template);
         } catch (Throwable $exception) {
             unset($output, $template);

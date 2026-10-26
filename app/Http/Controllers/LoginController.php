@@ -6,6 +6,7 @@ use App\Mail\LoginVerificationCodeMail;
 use App\Models\GlobalVariable;
 use App\Services\SecurityPolicy;
 use App\Services\SystemSmtpConfiguration;
+use App\Support\IdleTimeout;
 use App\Support\PasswordVerifier;
 use App\Support\SessionUser;
 use Illuminate\Http\Request;
@@ -38,8 +39,14 @@ class LoginController extends Controller
     /** Consecutive failures => lockout seconds, highest threshold first. */
     private const PROGRESSIVE_LOCKOUTS = [15 => 900, 10 => 300, 5 => 60];
 
-    public function showLogin()
+    public function showLogin(Request $request)
     {
+        // After an idle sign-out every open tab lands here; a query flag (not a shared flash)
+        // lets each of them show the notice.
+        if ($request->boolean('idle') && ! $request->session()->has('status')) {
+            $request->session()->now('status', IdleTimeout::notice());
+        }
+
         $globalVariables = GlobalVariable::query()->first();
 
         return view('welcome', [
@@ -186,6 +193,8 @@ class LoginController extends Controller
         }
 
         $request->session()->put('login_user', SessionUser::fromRow($freshUser));
+        // The idle sign-out countdown starts with the sign-in itself.
+        $request->session()->put(IdleTimeout::SESSION_KEY, now()->timestamp);
 
         $request->session()->forget('pending_login_user');
 

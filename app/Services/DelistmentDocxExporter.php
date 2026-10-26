@@ -14,9 +14,13 @@ class DelistmentDocxExporter
         $outputPath = ExportTempFiles::path('R2-10');
         try {
             $archive = new PharData($outputPath, 0, null, Phar::ZIP);
+            // Buffer the entries and deflate them in one write so the DOCX is not stored uncompressed.
+            $archive->startBuffering();
             $archive->addFromString('[Content_Types].xml', $this->contentTypes());
             $archive->addFromString('_rels/.rels', $this->packageRelationships());
             $archive->addFromString('word/document.xml', $this->document($title, $members, $history));
+            $archive->compressFiles(Phar::GZ);
+            $archive->stopBuffering();
             unset($archive);
         } catch (Throwable $exception) {
             unset($archive);

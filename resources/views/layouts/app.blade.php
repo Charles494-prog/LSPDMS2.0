@@ -106,6 +106,8 @@
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
         <meta name="csrf-token" content="{{ csrf_token() }}">
         <meta name="lspdms-user" content="{{ (int) ($authenticatedUser['id'] ?? 0) }}:{{ (int) ($authenticatedUser['auth_version'] ?? 0) }}">
+        {{-- Idle sign-out (resources/js/idle-session.js): limit in seconds and its endpoints. --}}
+        <meta name="lspdms-idle" content="{{ \App\Support\IdleTimeout::seconds() }}" data-heartbeat-url="{{ route('session.heartbeat') }}" data-logout-url="{{ route('session.idle-logout') }}" data-signed-out-url="{{ route('session.signed-out') }}">
         <title>@yield('title', 'Dashboard') - {{ config('app.name', 'LSPDMS') }}</title>
         @include('components.brand-meta')
         {{-- Apply the saved sidebar state before first paint so the layout never jumps on load. --}}
@@ -1020,7 +1022,7 @@
                         if (document.hidden || !navigator.onLine) return;
                         checking = true;
                         try {
-                            const response = await fetch(unseenUrl, { headers: { Accept: 'application/json' }, cache: 'no-store', credentials: 'same-origin' });
+                            const response = await fetch(unseenUrl, { headers: { Accept: 'application/json', 'X-LSPDMS-Background': '1' }, cache: 'no-store', credentials: 'same-origin' });
                             if (!response.ok) return;
                             const { count, title, message, due_soon: dueSoon = [] } = await response.json();
                             showBadge(count);
@@ -1083,7 +1085,8 @@
                     checking = true;
                     try {
                         const response = await fetch(@json(route('session.status')), {
-                            headers: { 'Accept': 'application/json' },
+                            // A background check: it never counts as activity for idle sign-out.
+                            headers: { 'Accept': 'application/json', 'X-LSPDMS-Background': '1' },
                             cache: 'no-store',
                             credentials: 'same-origin',
                         });
@@ -1091,6 +1094,12 @@
                         else if (!response.ok) {
                             if (loggingOut) return;
                             const result = await response.json().catch(() => ({}));
+                            // Idle sign-out: every tab goes to the sign-in page with the inactivity notice.
+                            if (result.reason === 'idle') {
+                                if (window.lspdmsIdle) window.lspdmsIdle.signedOut();
+                                else window.location.assign(@json(route('session.signed-out')));
+                                return;
+                            }
                             // Only a disabled account is "revoked"; a logout (here or in another tab) just returns to sign-in.
                             const target = {
                                 account_disabled: '/login?access=revoked',
@@ -1099,11 +1108,14 @@
                             window.location.assign(target);
                         }
                         else {
-                            const { permissions, user_id: userId, auth_version: authVersion } = await response.json();
+                            const { permissions, user_id: userId, auth_version: authVersion, idle_remaining: idleRemaining } = await response.json();
                             // The browser now belongs to another login (or a fresh one): reload instead of acting on stale data.
                             if (userId !== undefined && `${userId}:${authVersion}` !== rendered) {
                                 window.location.reload();
                                 return;
+                            }
+                            if (idleRemaining !== null && idleRemaining !== undefined) {
+                                window.dispatchEvent(new CustomEvent('lspdms:idle-remaining', { detail: idleRemaining }));
                             }
                             document.querySelectorAll('[data-feature]').forEach(link => {
                                 const allowed = Boolean(permissions[link.dataset.feature]);

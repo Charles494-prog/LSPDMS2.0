@@ -1,5 +1,7 @@
 import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
+import { BACKGROUND_HEADERS } from './background-request';
+import './idle-session';
 
 window.Pusher = Pusher;
 
@@ -53,7 +55,7 @@ if (root) {
         forceTLS: (import.meta.env.VITE_REVERB_SCHEME || 'http') === 'https',
         enabledTransports: ['ws', 'wss'],
         authEndpoint: root.dataset.authUrl,
-        auth: { headers: { 'X-CSRF-TOKEN': csrf, Accept: 'application/json' } },
+        auth: { headers: { 'X-CSRF-TOKEN': csrf, Accept: 'application/json', ...BACKGROUND_HEADERS } },
     }) : null;
 
     function setRealtimeStatus(message, connected = false) {
@@ -85,7 +87,7 @@ if (root) {
         const data = response.status === 204 ? null : await response.json().catch(() => ({}));
         if (response.redirected || (response.status === 401 && data?.session_invalid)) {
             // The chat runs inside an iframe: send the whole window to the login page.
-            (window.top || window).location.assign('/login');
+            (window.top || window).location.assign(data?.reason === 'idle' ? '/session/signed-out' : '/login');
             throw new Error('Your session has expired. Please sign in again.');
         }
         if (!response.ok) {
@@ -192,8 +194,8 @@ if (root) {
         });
     }
 
-    async function loadConversations() {
-        const items = await request(root.dataset.conversationsUrl);
+    async function loadConversations(background = false) {
+        const items = await request(root.dataset.conversationsUrl, background ? { headers: BACKGROUND_HEADERS } : {});
         renderConversationList(items);
         return items;
     }
@@ -360,19 +362,20 @@ if (root) {
         showNotice(`New message from ${message.sender_name || 'your contact'}`);
 
         try {
-            await request(endpoint(root.dataset.deliveredUrl, message.id), { method: 'POST', body: '{}' });
+            // Receipts for a message that arrived by itself are background work, not activity.
+            await request(endpoint(root.dataset.deliveredUrl, message.id), { method: 'POST', body: '{}', headers: BACKGROUND_HEADERS });
             if (selected === Number(message.conversation_id)
                 && isMessagesViewVisible()
                 && document.visibilityState === 'visible'
                 && document.hasFocus()) {
-                await request(endpoint(root.dataset.readUrl, message.id), { method: 'POST', body: '{}' });
+                await request(endpoint(root.dataset.readUrl, message.id), { method: 'POST', body: '{}', headers: BACKGROUND_HEADERS });
             }
         } catch (error) {
             showError(error.message);
         }
 
         if (selected === Number(message.conversation_id)) appendMessage(message);
-        loadConversations()
+        loadConversations(true)
             .then(items => {
                 const conversation = items.find(item => Number(item.id) === Number(message.conversation_id));
                 if (conversation) subscribeConversation(conversation.id);

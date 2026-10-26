@@ -7,6 +7,8 @@
  * All user text is written with textContent (never innerHTML).
  */
 import { createHelpers } from './workspace-helpers';
+import { BACKGROUND_HEADERS } from './background-request';
+import './idle-session';
 
 const root = document.getElementById('workspace');
 
@@ -240,7 +242,7 @@ if (root) {
         // Count for the tab badge without opening the tab.
         async function refreshCount() {
             if (activeTab === 'todo') return;
-            try { setCount('todo', (await request(`${data.todoListUrl}?scope=${scope}`)).length); } catch (error) { /* badge only */ }
+            try { setCount('todo', (await request(`${data.todoListUrl}?scope=${scope}`, { headers: BACKGROUND_HEADERS })).length); } catch (error) { /* badge only */ }
         }
 
         return { load, refreshCount };

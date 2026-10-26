@@ -1,5 +1,6 @@
 import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
+import { BACKGROUND_HEADERS } from './background-request';
 
 window.Pusher = Pusher;
 
@@ -41,7 +42,7 @@ if (widget && launcher && badge) {
         try {
             const response = await fetch(endpoint, {
                 credentials: 'same-origin',
-                headers: { Accept: 'application/json' },
+                headers: { Accept: 'application/json', ...BACKGROUND_HEADERS },
                 cache: 'no-store',
             });
             if (!response.ok) throw new Error(`Unread message count request failed (${response.status}).`);
@@ -98,6 +99,7 @@ if (widget && launcher && badge) {
                 headers: {
                     'X-CSRF-TOKEN': widget.dataset.csrf,
                     Accept: 'application/json',
+                    ...BACKGROUND_HEADERS,
                 },
             },
         });

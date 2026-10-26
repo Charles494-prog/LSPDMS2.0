@@ -3,10 +3,50 @@
 namespace Tests;
 
 use App\Models\User;
+use App\Services\DatabaseBackupService;
+use App\Services\ExportTempFiles;
+use Illuminate\Filesystem\Filesystem;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 
 abstract class TestCase extends BaseTestCase
 {
+    private static bool $processCleanupRegistered = false;
+
+    protected function setUp(): void
+    {
+        // Storage::fake() appends "_test_<token>" to its root only when a parallel-testing token exists.
+        // A per-process token keeps test runs started at the same time out of each other's fake disks.
+        $_SERVER['TEST_TOKEN'] ??= 'p'.getmypid();
+
+        parent::setUp();
+
+        $this->registerProcessCleanup();
+    }
+
+    /** Removes this process's temp export/backup folders and fake disks once the whole run ends. */
+    private function registerProcessCleanup(): void
+    {
+        if (self::$processCleanupRegistered) {
+            return;
+        }
+        self::$processCleanupRegistered = true;
+
+        // Both folders end in this process id (see ExportTempFiles and DatabaseBackupService).
+        $directories = [ExportTempFiles::directory(), app(DatabaseBackupService::class)->backupDirectory()];
+        // Fake disks are only ours to remove when the token is the per-process one set above.
+        $fakeDiskPattern = $_SERVER['TEST_TOKEN'] === 'p'.getmypid()
+            ? storage_path('framework/testing/disks').'/*_test_'.$_SERVER['TEST_TOKEN']
+            : null;
+
+        register_shutdown_function(static function () use ($directories, $fakeDiskPattern): void {
+            $fakeDisks = $fakeDiskPattern !== null ? (glob($fakeDiskPattern, GLOB_ONLYDIR) ?: []) : [];
+            $files = new Filesystem;
+            foreach ([...$directories, ...$fakeDisks] as $directory) {
+                $files->deleteDirectory($directory);
+            }
+        });
+    }
+
     public function withSession(array $data): static
     {
         $sessionUser = $data['login_user'] ?? null;

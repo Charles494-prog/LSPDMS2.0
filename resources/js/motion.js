@@ -1,5 +1,7 @@
 import Lenis from 'lenis';
 import '../css/motion.css';
+// Idle sign-out warning + activity heartbeat (every signed-in page).
+import './idle-session';
 
 /*
  * LSPDMS motion layer (loaded on every signed-in page by layouts/app.blade.php):

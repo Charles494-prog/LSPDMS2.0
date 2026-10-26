@@ -441,11 +441,14 @@ class DatabaseBackupService
         ]);
     }
 
-    /** Private folder for backups; tests use a temp folder so they never touch real backups. */
+    /**
+     * Private folder for backups; tests use a temp folder so they never touch real backups.
+     * The test folder is per process so test runs started at the same time never share or empty it.
+     */
     public function backupDirectory(): string
     {
         return app()->runningUnitTests()
-            ? rtrim(sys_get_temp_dir(), '\\/').DIRECTORY_SEPARATOR.'lspdms-database-backups-tests'
+            ? rtrim(sys_get_temp_dir(), '\\/').DIRECTORY_SEPARATOR.'lspdms-database-backups-tests-'.getmypid()
             : storage_path('app/private/database-backups');
     }
 

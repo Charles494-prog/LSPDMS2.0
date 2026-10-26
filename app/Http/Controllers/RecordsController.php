@@ -110,9 +110,37 @@ class RecordsController extends Controller
             ];
         }
 
+        // The edit distance is at least the length difference, so only names whose
+        // lengths alone can still reach 90% are compared. Records are grouped by name
+        // length once, and each record is compared only with the later records in the
+        // length groups it can match, in the same order as a full pairwise scan.
+        $indexesByLength = [];
+        foreach ($namedRecords as $index => $namedRecord) {
+            $indexesByLength[$namedRecord['length']][] = $index;
+        }
+        $candidateLengths = [];
+        foreach (array_keys($indexesByLength) as $length) {
+            foreach (array_keys($indexesByLength) as $otherLength) {
+                $longest = max($length, $otherLength);
+                if ((int) round((1 - abs($length - $otherLength) / $longest) * 100) >= 90) {
+                    $candidateLengths[$length][] = $otherLength;
+                }
+            }
+        }
+
         $namedCount = count($namedRecords);
         for ($left = 0; $left < $namedCount; $left++) {
-            for ($right = $left + 1; $right < $namedCount; $right++) {
+            $candidates = [];
+            foreach ($candidateLengths[$namedRecords[$left]['length']] as $length) {
+                foreach ($indexesByLength[$length] as $right) {
+                    if ($right > $left) {
+                        $candidates[] = $right;
+                    }
+                }
+            }
+            sort($candidates);
+
+            foreach ($candidates as $right) {
                 $leftName = $namedRecords[$left]['letters'];
                 $rightName = $namedRecords[$right]['letters'];
                 $leftSuffix = $namedRecords[$left]['suffix'];
@@ -123,14 +151,6 @@ class RecordsController extends Controller
                 }
 
                 if ($leftName === $rightName) {
-                    continue;
-                }
-
-                // The edit distance is at least the length difference, so pairs whose
-                // lengths alone keep them under 90% are skipped without changing results.
-                $longest = max($namedRecords[$left]['length'], $namedRecords[$right]['length']);
-                $lengthGap = abs($namedRecords[$left]['length'] - $namedRecords[$right]['length']);
-                if ((int) round((1 - $lengthGap / $longest) * 100) < 90) {
                     continue;
                 }
 
@@ -457,6 +477,14 @@ class RecordsController extends Controller
 
     private function nameSimilarity(string $left, string $right): int
     {
+        // PHP's built-in levenshtein() counts bytes, which equals counting letters
+        // when both names are plain ASCII (nearly every name); others use the loop below.
+        if (! preg_match('/[^\x00-\x7F]/', $left.$right)) {
+            $longest = max(strlen($left), strlen($right));
+
+            return $longest === 0 ? 100 : (int) round((1 - levenshtein($left, $right) / $longest) * 100);
+        }
+
         $leftLetters = mb_str_split($left);
         $rightLetters = mb_str_split($right);
         $leftLength = count($leftLetters);

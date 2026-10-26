@@ -5,6 +5,7 @@
  */
 import { createHelpers } from './workspace-helpers';
 import { createMentions } from './mentions';
+import { BACKGROUND_HEADERS } from './background-request';
 
 const root = document.getElementById('tasksApp');
 
@@ -907,10 +908,10 @@ if (root) {
     }
 
     /* ---------- Recent activity (side column) ---------- */
-    async function loadActivity() {
+    async function loadActivity(options = {}) {
         if (!activityEl) return;
         let items = [];
-        try { items = await request(data.taskActivityUrl); } catch (error) { return; }
+        try { items = await request(data.taskActivityUrl, options); } catch (error) { return; }
         activityEl.replaceChildren();
         const head = el('div', 'ws-side-head plain');
         head.append(icon(['M3 12h4l3-8 4 16 3-8h4']), el('h2', '', 'Recent activity'));
@@ -962,7 +963,9 @@ if (root) {
         loading = true;
         if (!quiet && !state.tasks.length) feed.replaceChildren(el('div', 'ws-loading', 'Loading tasks…'));
         try {
-            const result = await request(data.taskListUrl);
+            // Quiet reloads (timer, live updates, tab shown again) are background work, not activity.
+            const background = quiet ? { headers: BACKGROUND_HEADERS } : {};
+            const result = await request(data.taskListUrl, background);
             // Don't redraw under someone typing a comment.
             const typing = document.activeElement?.classList?.contains('ws-comment-input') && document.activeElement.value.trim();
             // "New" marks stay for this visit; the server has now recorded them as seen.
@@ -972,11 +975,11 @@ if (root) {
             completedCount = result.completed_count || 0;
             if (!typing) render();
             else setCount('tasks', result.attention);
-            loadActivity();
+            loadActivity(background);
             say('');
             // Everything this page just showed counts as seen (POST: CSRF-protected).
             if (!document.hidden && result.tasks.length) {
-                request(data.taskSeenUrl, { method: 'POST', body: JSON.stringify({ ids: result.tasks.map(task => task.id), as_of: result.as_of }) })
+                request(data.taskSeenUrl, { method: 'POST', body: JSON.stringify({ ids: result.tasks.map(task => task.id), as_of: result.as_of }), ...background })
                     .then(() => window.dispatchEvent(new CustomEvent('lspdms:tasks-seen')))
                     .catch(() => { /* the reminder simply stays until the next load */ });
             }

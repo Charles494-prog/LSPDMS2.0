@@ -32,9 +32,24 @@ return [
     |
     */
 
-    'lifetime' => (int) env('SESSION_LIFETIME', 120),
+    // Kept at least 30 minutes past the idle limit below, so an idle session still
+    // exists when it ends and the sign-in page can say why.
+    'lifetime' => max((int) env('SESSION_LIFETIME', 120), (int) env('SESSION_IDLE_MINUTES', 120) + 30),
 
     'expire_on_close' => env('SESSION_EXPIRE_ON_CLOSE', true),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Idle Sign-Out
+    |--------------------------------------------------------------------------
+    |
+    | A signed-in user is signed out after this many minutes without real
+    | activity (typing, clicking, scrolling, page loads). Background polling
+    | does not count. The browser warns five minutes before. 0 turns it off.
+    |
+    */
+
+    'idle_timeout' => (int) env('SESSION_IDLE_MINUTES', 120),
 
     /*
     |--------------------------------------------------------------------------

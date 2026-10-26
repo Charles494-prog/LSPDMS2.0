@@ -29,6 +29,8 @@ class R401DocxExporter
             $documentXml = $template['word/document.xml']->getContent();
             $updatedXml = $this->populateDocument($documentXml, $header, $rows);
             $output = new PharData($outputPath, 0, null, Phar::ZIP);
+            // Buffer the entries and deflate them in one write so the DOCX is not stored uncompressed.
+            $output->startBuffering();
             $prefix = 'phar://'.str_replace('\\', '/', $templatePath).'/';
 
             foreach (new RecursiveIteratorIterator($template) as $entry) {
@@ -40,6 +42,8 @@ class R401DocxExporter
                 $content = $relativePath === 'word/document.xml' ? $updatedXml : $entry->getContent();
                 $output->addFromString($relativePath, $content);
             }
+            $output->compressFiles(Phar::GZ);
+            $output->stopBuffering();
             unset($output, $template);
         } catch (Throwable $exception) {
             unset($output, $template);

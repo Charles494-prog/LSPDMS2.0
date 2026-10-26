@@ -1,3 +1,6 @@
+// Typing here counts as activity for idle sign-out (also inside the chat window).
+import './idle-session';
+
 const root = document.getElementById('builtInHelpChatbot');
 
 if (root) {

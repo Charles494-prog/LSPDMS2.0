@@ -32,8 +32,8 @@ class FilterBnhHelperController extends Controller
 
     public function matrix(Request $request): JsonResponse
     {
-        [$puroks, $records] = $this->filteredData($request);
-        $rows = $this->matrixRows($puroks, $records);
+        [$puroks, $records, $purokIndex] = $this->filteredData($request);
+        $rows = $this->matrixRows($puroks, $records, $purokIndex);
         $totals = $this->countTotals($records);
 
         return response()->json([
@@ -56,20 +56,21 @@ class FilterBnhHelperController extends Controller
             'status_ids' => ['nullable', 'array'],
             'status_ids.*' => ['string', 'distinct', Rule::in(['MS', 'UWP', 'MK'])],
         ]);
+        $allPuroks = $this->allPuroks();
         $puroks = ($validated['purok_selection'] ?? null) === 'selected'
-            ? $this->selectedPuroks($validated['purok_ids'] ?? [])
-            : $this->selectedPuroks($validated['purok_id'] ?? 'all');
-        $records = $this->recordsFor($puroks, $this->selectedStatuses($validated, $request))
+            ? $this->selectedPuroks($validated['purok_ids'] ?? [], $allPuroks)
+            : $this->selectedPuroks($validated['purok_id'] ?? 'all', $allPuroks);
+        $purokIndex = $this->purokIndex($allPuroks);
+        $records = $this->recordsFor($puroks, $this->selectedStatuses($validated, $request), $purokIndex)
             ->filter(fn (Record $record): bool => (! isset($validated['grupo']) || (int) $record->grupo === (int) $validated['grupo'])
                 && ($validated['gender'] === 'all' || $this->normalizeGender($record->gender) === $validated['gender']))
             ->sortBy(fn (Record $record): string => mb_strtolower((string) $record->full_name))
             ->values();
-        $allPuroks = Purok::query()->orderBy('purok_number')->orderBy('grupo_start')->orderBy('id')->get();
 
         return response()->json([
             'count' => $records->count(),
-            'records' => $records->map(function (Record $record) use ($allPuroks): array {
-                $purok = $this->resolvePurok($record, $allPuroks);
+            'records' => $records->map(function (Record $record) use ($purokIndex): array {
+                $purok = $this->resolvePurok($record, $purokIndex);
 
                 return [
                     'name' => $record->full_name ?: 'Unnamed record',
@@ -82,12 +83,11 @@ class FilterBnhHelperController extends Controller
 
     public function bnhRecords(Request $request): JsonResponse
     {
-        [$puroks, $records] = $this->filteredData($request);
+        [, $records, $purokIndex] = $this->filteredData($request);
         $page = max(1, (int) $request->query('page', 1));
         $perPage = 100;
-        $allPuroks = Purok::query()->orderBy('purok_number')->orderBy('grupo_start')->orderBy('id')->get();
         $resolved = $this->searchBnhRecords($records, (string) $request->query('q', ''))
-            ->map(fn (Record $record): array => $this->bnhRecord($record, $allPuroks))
+            ->map(fn (Record $record): array => $this->bnhRecord($record, $purokIndex))
             ->sortBy(fn (array $row): array => $this->bnhRecordSortKey($row))
             ->values();
         $total = $resolved->count();
@@ -125,12 +125,12 @@ class FilterBnhHelperController extends Controller
 
     public function qualifiedCounts(Request $request): JsonResponse
     {
-        [$puroks, $records] = $this->filteredData($request);
+        [$puroks, $records, $purokIndex] = $this->filteredData($request);
         $qualified = $records->filter(fn (Record $record): bool => $record->is_valid1 && $record->is_valid2);
         $minuses = $records->reject(fn (Record $record): bool => $record->is_valid1 && $record->is_valid2);
 
         return response()->json([
-            'rows' => $this->resumenRows($puroks, $qualified, $minuses),
+            'rows' => $this->resumenRows($puroks, $qualified, $minuses, $purokIndex),
             'totals' => $this->countTotals($qualified),
             'minuses_totals' => $this->countTotals($minuses),
         ]);
@@ -138,10 +138,9 @@ class FilterBnhHelperController extends Controller
 
     public function downloadBnhWord(Request $request): StreamedResponse
     {
-        [, $records] = $this->filteredData($request);
-        $allPuroks = Purok::query()->orderBy('purok_number')->orderBy('grupo_start')->orderBy('id')->get();
+        [, $records, $purokIndex] = $this->filteredData($request);
         $rows = $this->searchBnhRecords($records, (string) $request->query('q', ''))
-            ->map(fn (Record $record): array => $this->bnhRecord($record, $allPuroks))
+            ->map(fn (Record $record): array => $this->bnhRecord($record, $purokIndex))
             ->sortBy(fn (array $row): array => $this->bnhRecordSortKey($row))
             ->values()
             ->all();
@@ -162,12 +161,12 @@ class FilterBnhHelperController extends Controller
         $showMinuses = (bool) ($display['show_minuses'] ?? true);
         abort_if(! $showQualified && ! $showMinuses, 422, 'Select at least one count to include in the Resumen.');
 
-        [$puroks, $records] = $this->filteredData($request);
+        [$puroks, $records, $purokIndex] = $this->filteredData($request);
         $qualified = $records->filter(fn (Record $record): bool => $record->is_valid1 && $record->is_valid2);
         $minuses = $records->reject(fn (Record $record): bool => $record->is_valid1 && $record->is_valid2);
 
         return $this->wordDownload('BNH Helper Form Resumen', 'bnh-helper-form-resumen.doc', 'filter-bnh-helper.word-counts', [
-            'rows' => $this->resumenRows($puroks, $qualified, $minuses),
+            'rows' => $this->resumenRows($puroks, $qualified, $minuses, $purokIndex),
             'showQualified' => $showQualified,
             'showMinuses' => $showMinuses,
             'filters' => $this->filterLabels($request),
@@ -175,7 +174,7 @@ class FilterBnhHelperController extends Controller
     }
 
     /**
-     * @return array{0: Collection<int, Purok>, 1: Collection<int, Record>}
+     * @return array{0: Collection<int, Purok>, 1: Collection<int, Record>, 2: Collection<int, Collection<int, Purok>>}
      */
     private function filteredData(Request $request): array
     {
@@ -191,12 +190,40 @@ class FilterBnhHelperController extends Controller
             'page' => ['nullable', 'integer', 'min:1'],
             'q' => ['nullable', 'string', 'max:150'],
         ]);
+        $allPuroks = $this->allPuroks();
         $puroks = ($validated['purok_selection'] ?? null) === 'selected'
-            ? $this->selectedPuroks($validated['purok_ids'] ?? [])
-            : $this->selectedPuroks($validated['purok_id'] ?? 'all');
-        $records = $this->recordsFor($puroks, $this->selectedStatuses($validated, $request));
+            ? $this->selectedPuroks($validated['purok_ids'] ?? [], $allPuroks)
+            : $this->selectedPuroks($validated['purok_id'] ?? 'all', $allPuroks);
+        $purokIndex = $this->purokIndex($allPuroks);
+        $records = $this->recordsFor($puroks, $this->selectedStatuses($validated, $request), $purokIndex);
 
-        return [$puroks, $records];
+        return [$puroks, $records, $purokIndex];
+    }
+
+    /**
+     * Every Purok setting in Purok-list order, loaded once per request.
+     *
+     * @return Collection<int, Purok>
+     */
+    private function allPuroks(): Collection
+    {
+        return Purok::query()
+            ->orderBy('purok_number')
+            ->orderBy('grupo_start')
+            ->orderBy('id')
+            ->get();
+    }
+
+    /**
+     * The Purok settings grouped by Purok number, in Purok-list order, so a record's
+     * Purok is resolved without scanning all settings (see resolvePurok()).
+     *
+     * @param  Collection<int, Purok>  $allPuroks  from allPuroks()
+     * @return Collection<int, Collection<int, Purok>>
+     */
+    private function purokIndex(Collection $allPuroks): Collection
+    {
+        return $allPuroks->groupBy(fn (Purok $purok): int => (int) $purok->purok_number);
     }
 
     /**
@@ -246,40 +273,39 @@ class FilterBnhHelperController extends Controller
         ))->values();
     }
 
-    private function selectedPuroks(string|array $purokId): Collection
+    /**
+     * @param  Collection<int, Purok>  $allPuroks  from allPuroks()
+     * @return Collection<int, Purok>
+     */
+    private function selectedPuroks(string|array $purokId, Collection $allPuroks): Collection
     {
-        $query = Purok::query()
-            ->orderBy('purok_number')
-            ->orderBy('grupo_start')
-            ->orderBy('id');
-
         if (is_array($purokId)) {
-            return $query->whereIn('id', $purokId)->get();
+            $ids = array_flip(array_map('intval', $purokId));
+
+            return $allPuroks->filter(fn (Purok $purok): bool => isset($ids[(int) $purok->id]))->values();
         }
 
         if ($purokId !== 'all') {
             abort_unless(ctype_digit($purokId), 422, 'Choose a valid Purok.');
-            $query->whereKey((int) $purokId);
+
+            return $allPuroks->filter(fn (Purok $purok): bool => (int) $purok->id === (int) $purokId)->values();
         }
 
-        return $query->get();
+        return $allPuroks;
     }
 
     /**
      * @param  Collection<int, Purok>  $puroks
+     * @param  Collection<int, Collection<int, Purok>>  $purokIndex
      * @return Collection<int, Record>
      */
-    private function recordsFor(Collection $puroks, string|array $status): Collection
+    private function recordsFor(Collection $puroks, string|array $status, Collection $purokIndex): Collection
     {
         if ($puroks->isEmpty() || $status === []) {
             return collect();
         }
 
-        $allPuroks = Purok::query()
-            ->orderBy('purok_number')
-            ->orderBy('grupo_start')
-            ->orderBy('id')
-            ->get();
+        $selectedPurokIds = array_flip($puroks->map(fn (Purok $purok): int => (int) $purok->id)->all());
 
         return Record::query()
             ->whereRaw("UPPER(TRIM(COALESCE(status, ''))) != 'INACTIVE'")
@@ -300,10 +326,10 @@ class FilterBnhHelperController extends Controller
                 'is_valid1',
                 'is_valid2',
             ])
-            ->filter(function (Record $record) use ($puroks, $allPuroks): bool {
-                $resolved = $this->resolvePurok($record, $allPuroks);
+            ->filter(function (Record $record) use ($selectedPurokIds, $purokIndex): bool {
+                $resolved = $this->resolvePurok($record, $purokIndex);
 
-                return $resolved !== null && $puroks->contains(fn (Purok $purok): bool => (int) $purok->id === (int) $resolved->id);
+                return $resolved !== null && isset($selectedPurokIds[(int) $resolved->id]);
             })
             ->values();
     }
@@ -311,34 +337,35 @@ class FilterBnhHelperController extends Controller
     /**
      * @param  Collection<int, Purok>  $puroks
      * @param  Collection<int, Record>  $records
+     * @param  Collection<int, Collection<int, Purok>>  $purokIndex
      * @return list<array{type: string, id: string, purok_id: int|null, grupo: int|null, label: string, male: int, female: int, total: int}>
      */
-    private function matrixRows(Collection $puroks, Collection $records): array
+    private function matrixRows(Collection $puroks, Collection $records, Collection $purokIndex): array
     {
-        $allPuroks = Purok::query()
-            ->orderBy('purok_number')
-            ->orderBy('grupo_start')
-            ->orderBy('id')
-            ->get();
-        $resolvedRecords = $records->map(fn (Record $record): array => [
-            'record' => $record,
-            'purok_id' => $this->resolvePurok($record, $allPuroks)?->id,
-        ]);
+        // Gender counts per resolved Purok and Grupo, counted in one pass over the records.
+        $groupCounts = [];
+        foreach ($records as $record) {
+            $purokId = (int) $this->resolvePurok($record, $purokIndex)?->id;
+            $grupo = (int) $record->grupo;
+            $groupCounts[$purokId][$grupo] ??= ['male' => 0, 'female' => 0, 'total' => 0];
+            $gender = $this->normalizeGender($record->gender);
+            if ($gender !== null) {
+                $groupCounts[$purokId][$grupo][$gender]++;
+            }
+            $groupCounts[$purokId][$grupo]['total']++;
+        }
         $rows = [];
         foreach ($puroks as $purok) {
             $purokMale = 0;
             $purokFemale = 0;
             $purokTotal = 0;
             for ($grupo = (int) $purok->grupo_start; $grupo <= (int) $purok->grupo_end; $grupo++) {
-                $members = $resolvedRecords
-                    ->filter(fn (array $item): bool => (int) $item['purok_id'] === (int) $purok->id
-                        && (int) $item['record']->grupo === $grupo)
-                    ->pluck('record');
-                $male = $members->filter(fn (Record $record): bool => $this->normalizeGender($record->gender) === 'male')->count();
-                $female = $members->filter(fn (Record $record): bool => $this->normalizeGender($record->gender) === 'female')->count();
+                $counts = $groupCounts[(int) $purok->id][$grupo] ?? ['male' => 0, 'female' => 0, 'total' => 0];
+                $male = $counts['male'];
+                $female = $counts['female'];
                 $purokMale += $male;
                 $purokFemale += $female;
-                $purokTotal += $members->count();
+                $purokTotal += $counts['total'];
 
                 $rows[] = [
                     'type' => 'group',
@@ -348,7 +375,7 @@ class FilterBnhHelperController extends Controller
                     'label' => $this->shortPurokName($purok).'-'.$grupo,
                     'male' => $male,
                     'female' => $female,
-                    'total' => $members->count(),
+                    'total' => $counts['total'],
                 ];
             }
             $rows[] = [
@@ -379,14 +406,15 @@ class FilterBnhHelperController extends Controller
      * @param  Collection<int, Purok>  $puroks
      * @param  Collection<int, Record>  $qualified
      * @param  Collection<int, Record>  $minuses
+     * @param  Collection<int, Collection<int, Purok>>  $purokIndex
      * @return list<array<string, mixed>>
      */
-    private function resumenRows(Collection $puroks, Collection $qualified, Collection $minuses): array
+    private function resumenRows(Collection $puroks, Collection $qualified, Collection $minuses, Collection $purokIndex): array
     {
-        $qualifiedRows = $this->matrixRows($puroks, $qualified);
+        $qualifiedRows = $this->matrixRows($puroks, $qualified, $purokIndex);
         $minusesById = [];
 
-        foreach ($this->matrixRows($puroks, $minuses) as $row) {
+        foreach ($this->matrixRows($puroks, $minuses, $purokIndex) as $row) {
             $minusesById[$row['id']] = $row;
         }
 
@@ -432,16 +460,16 @@ class FilterBnhHelperController extends Controller
     }
 
     /**
-     * @param  Collection<int, Purok>  $allPuroks
+     * @param  Collection<int, Collection<int, Purok>>  $purokIndex  from purokIndex()
      */
-    private function resolvePurok(Record $record, Collection $allPuroks): ?Purok
+    private function resolvePurok(Record $record, Collection $purokIndex): ?Purok
     {
         $number = $this->normalizePurokNumber($record->purok);
         if ($number === null) {
             return null;
         }
 
-        $matches = $allPuroks->where('purok_number', $number)->values();
+        $matches = $purokIndex->get($number, collect());
         if ($matches->count() <= 1) {
             return $matches->first();
         }
@@ -453,12 +481,12 @@ class FilterBnhHelperController extends Controller
     }
 
     /**
-     * @param  Collection<int, Purok>  $puroks
+     * @param  Collection<int, Collection<int, Purok>>  $purokIndex
      * @return array<string, mixed>
      */
-    private function bnhRecord(Record $record, Collection $puroks): array
+    private function bnhRecord(Record $record, Collection $purokIndex): array
     {
-        $purok = $this->resolvePurok($record, $puroks);
+        $purok = $this->resolvePurok($record, $purokIndex);
         $isValid1 = (bool) $record->is_valid1;
         $isValid2 = (bool) $record->is_valid2;
 

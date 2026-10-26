@@ -55,15 +55,18 @@ class FormGeneratorController extends Controller
 
     public function r401(Request $request)
     {
-        $data = $this->r401ReportData($request);
+        $data = $this->r401ReportData($request, GlobalVariable::query()->first(), $this->latestPeriodSession());
 
         return view('forms.monthly-r4-01', $data);
     }
 
     public function monthlyGenerators(Request $request, MonthlyResumenReport $resumenReport)
     {
-        $resumenData = $this->resumenReportData($resumenReport);
-        $r401Data = $this->r401ReportData($request);
+        // Both reports read the same settings row and latest session, so they are loaded once.
+        $globalVariables = GlobalVariable::query()->first();
+        $latestSession = $this->latestPeriodSession();
+        $resumenData = $this->resumenReportData($resumenReport, $globalVariables, $latestSession);
+        $r401Data = $this->r401ReportData($request, $globalVariables, $latestSession);
 
         return view('forms.monthly-generators', array_merge($resumenData, $r401Data, [
             'embedded' => true,
@@ -76,7 +79,7 @@ class FormGeneratorController extends Controller
 
     public function resumen(Request $request, MonthlyResumenReport $resumenReport)
     {
-        $data = $this->resumenReportData($resumenReport);
+        $data = $this->resumenReportData($resumenReport, GlobalVariable::query()->first(), $this->latestPeriodSession());
 
         return view('forms.monthly-resumen', $data);
     }
@@ -85,7 +88,7 @@ class FormGeneratorController extends Controller
         MonthlyResumenReport $resumenReport,
         ResumenDocxExporter $exporter
     ): BinaryFileResponse {
-        $data = $this->resumenReportData($resumenReport);
+        $data = $this->resumenReportData($resumenReport, GlobalVariable::query()->first(), $this->latestPeriodSession());
         $generatedPath = $exporter->generate(
             $data['report'],
             $data['locale'],
@@ -105,7 +108,7 @@ class FormGeneratorController extends Controller
             'purok' => ['required', 'string', 'max:'.PurokSelection::MAX_LENGTH],
             'kalagayan' => ['required', 'string', 'in:MS,UWP'],
         ]);
-        $data = $this->r401ReportData($request);
+        $data = $this->r401ReportData($request, GlobalVariable::query()->first(), $this->latestPeriodSession());
         abort_if($data['reportRows'] === [], 404, 'No records match the selected Purok and Kalagayan.');
         $globalVariables = $data['globalVariables'];
         $kalihim = $data['kalihimName'];
@@ -357,19 +360,26 @@ class FormGeneratorController extends Controller
             ->with('error', 'The saved file for "'.$snapshot->file_name.'" is not on this server, so it cannot be downloaded.');
     }
 
-    private function resumenReportData(MonthlyResumenReport $resumenReport): array
+    /** The session with the latest period month (the month the monthly forms report on). */
+    private function latestPeriodSession(): ?MonthlyMovementSession
     {
-        $defaultMonth = MonthlyMovementSession::query()
+        return MonthlyMovementSession::query()
             ->whereNotNull('period_month')
             ->orderByDesc('period_month')
             ->orderByDesc('id')
-            ->value('period_month')
-            ?? now()->startOfMonth()->toDateString();
+            ->first();
+    }
+
+    private function resumenReportData(
+        MonthlyResumenReport $resumenReport,
+        ?GlobalVariable $globalVariables,
+        ?MonthlyMovementSession $latestSession
+    ): array {
+        $defaultMonth = $latestSession?->period_month ?? now()->startOfMonth()->toDateString();
         // startOfMonth() on the parsed date: createFromFormat('Y-m') borrows today's day and overflows on the 29th-31st.
         $month = Carbon::parse($defaultMonth)->startOfMonth();
         $selectedMonth = $month->format('Y-m');
         $report = $resumenReport->generate($month);
-        $globalVariables = GlobalVariable::query()->first();
 
         return [
             'report' => $report,
@@ -384,8 +394,11 @@ class FormGeneratorController extends Controller
         ];
     }
 
-    private function r401ReportData(Request $request): array
-    {
+    private function r401ReportData(
+        Request $request,
+        ?GlobalVariable $globalVariables,
+        ?MonthlyMovementSession $session
+    ): array {
         $validated = $request->validate([
             'purok' => ['nullable', 'string', 'max:'.PurokSelection::MAX_LENGTH],
             'kalagayan' => ['nullable', 'string', 'in:MS,UWP'],
@@ -394,11 +407,6 @@ class FormGeneratorController extends Controller
         $selection = isset($validated['purok'])
             ? PurokSelection::fromRequestValue($validated['purok'])
             : null;
-        $session = MonthlyMovementSession::query()
-            ->whereNotNull('period_month')
-            ->orderByDesc('period_month')
-            ->orderByDesc('id')
-            ->first();
         $month = Carbon::parse($session?->period_month ?? now())->startOfMonth();
         $puroks = Purok::selectionOptions();
         $selectedPurok = $validated['purok'] ?? null;
@@ -406,7 +414,6 @@ class FormGeneratorController extends Controller
         $report = $selection !== null && $selectedStatus !== null
             ? $this->r401ReportBuilder->build($selection, $selectedStatus, $session)
             : ['rows' => [], 'pages' => [], 'outside_range' => []];
-        $globalVariables = GlobalVariable::query()->first();
         $usePurokSecretary = (bool) ($globalVariables?->r401_use_purok_secretary ?? false);
         $globalKalihimName = $this->r401ReportBuilder->globalKalihimName($globalVariables, $selectedStatus);
         $reportPages = $this->r401ReportBuilder->withKalihimNames($report['pages'], $globalVariables, $selectedStatus);

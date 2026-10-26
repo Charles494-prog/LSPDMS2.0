@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\IdleTimeout;
 use App\Support\SessionUser;
 use Closure;
 use Illuminate\Http\Request;
@@ -80,7 +81,7 @@ class EnsureUserIsLoggedIn
     /** Background fetches (session poll, chat, widgets) get JSON instead of a login-page redirect. */
     private function wantsJson(Request $request): bool
     {
-        return $request->routeIs('session.status') || $request->expectsJson();
+        return $request->expectsJson() || IdleTimeout::isBackground($request);
     }
 
     private function invalidSessionResponse(string $reason): Response
@@ -117,6 +118,7 @@ class EnsureUserIsLoggedIn
 
         $request->session()->regenerate();
         $request->session()->put('login_user', SessionUser::fromRow($user));
+        $request->session()->put(IdleTimeout::SESSION_KEY, now()->timestamp);
 
         return true;
     }

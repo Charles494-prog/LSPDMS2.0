@@ -166,6 +166,8 @@ class MonthlySessionSnapshotExporter
         }
 
         $output = new PharData($outputPath, 0, null, Phar::ZIP);
+        // Buffer the entries and deflate them in one write; a stored (uncompressed) DOCX is ~40x larger.
+        $output->startBuffering();
         $prefix = 'phar://'.str_replace('\\', '/', $documentPaths[0]).'/';
         foreach (new \RecursiveIteratorIterator($baseDocument) as $entry) {
             $entryPath = str_replace('\\', '/', $entry->getPathName());
@@ -178,6 +180,8 @@ class MonthlySessionSnapshotExporter
                 $relativePath === 'word/document.xml' ? $mergedXml : $entry->getContent()
             );
         }
+        $output->compressFiles(Phar::GZ);
+        $output->stopBuffering();
         unset($output, $baseDocument);
     }
 }

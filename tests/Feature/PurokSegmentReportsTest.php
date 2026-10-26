@@ -8,12 +8,17 @@ use App\Models\R402GeneratedForm;
 use App\Models\R402Hakbang;
 use App\Models\Record;
 use App\Models\User;
+use App\Services\DatabaseBackupService;
+use App\Services\DelistmentDocxExporter;
 use App\Services\ExportTempFiles;
+use App\Services\MonthlyResumenReport;
 use App\Services\MonthlySessionSnapshotExporter;
 use App\Services\PurokSelection;
 use App\Services\R401ReportBuilder;
+use App\Services\ResumenDocxExporter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
@@ -178,9 +183,6 @@ class PurokSegmentReportsTest extends TestCase
 
     public function test_r401_download_contains_only_the_selected_segment(): void
     {
-        $storageDirectory = storage_path('app/monthly-forms');
-        $before = glob($storageDirectory.'/*.docx') ?: [];
-
         $download = $this->asSecretary()
             ->get(route('forms.monthly.r4-01.download', ['purok' => '2:4', 'kalagayan' => 'MS']))
             ->assertOk()
@@ -191,6 +193,7 @@ class PurokSegmentReportsTest extends TestCase
             $archive = new \ZipArchive;
             $this->assertTrue($archive->open($path));
             $document = (string) $archive->getFromName('word/document.xml');
+            $this->assertDocxEntriesAreDeflated($archive);
             $archive->close();
             $this->assertStringContainsString('Ben Segment', $document);
             $this->assertStringContainsString('Dan Segment', $document);
@@ -199,7 +202,6 @@ class PurokSegmentReportsTest extends TestCase
         } finally {
             @unlink($path);
         }
-        $this->assertSame($before, glob($storageDirectory.'/*.docx') ?: []);
     }
 
     public function test_temp_directory_is_outside_storage_while_testing(): void
@@ -210,6 +212,15 @@ class PurokSegmentReportsTest extends TestCase
         $this->assertStringStartsWith(rtrim(sys_get_temp_dir(), '\\/'), $directory);
         $this->assertStringNotContainsString(str_replace('\\', '/', storage_path()), str_replace('\\', '/', $directory));
         $this->assertMatchesRegularExpression('/R4-01-[0-9a-f]{24}\.docx$/', ExportTempFiles::path('R4-01'));
+
+        // Per-process folders and fake disks: test runs started at the same time never share or empty them.
+        $this->assertStringEndsWith('-'.getmypid(), $directory);
+        $backupDirectory = app(DatabaseBackupService::class)->backupDirectory();
+        $this->assertStringStartsWith(rtrim(sys_get_temp_dir(), '\\/'), $backupDirectory);
+        $this->assertStringEndsWith('-'.getmypid(), $backupDirectory);
+        $fakeRoot = str_replace('\\', '/', Storage::fake('local')->path(''));
+        $this->assertStringContainsString('/framework/testing/disks/local_test_', $fakeRoot);
+        $this->assertStringNotContainsString('/app/private', $fakeRoot);
     }
 
     public function test_outside_range_records_raise_a_non_blocking_warning_without_changing_rows(): void
@@ -456,8 +467,6 @@ class PurokSegmentReportsTest extends TestCase
             'started_by' => 'Secretary Example',
             'started_at' => '2026-10-01 09:00:00',
         ]);
-        $storageDirectory = storage_path('app/monthly-forms');
-        $before = glob($storageDirectory.'/*.docx') ?: [];
         $tempBefore = glob(ExportTempFiles::directory().'/*.docx') ?: [];
 
         $export = app(MonthlySessionSnapshotExporter::class)->generate($session);
@@ -465,8 +474,54 @@ class PurokSegmentReportsTest extends TestCase
         $this->assertNotSame('', $export['contents']);
         $this->assertStringContainsString('SNAPA SECRETARY', $export['preview']);
         $this->assertStringContainsString('GLOBAL MS KALIHIM', $export['preview']);
-        $this->assertSame($before, glob($storageDirectory.'/*.docx') ?: []);
         $this->assertSame($tempBefore, glob(ExportTempFiles::directory().'/*.docx') ?: [], 'Snapshot exporter must clean up its temp files.');
+
+        // The stored snapshot is the merged DOCX itself, so it must be compressed too (it ends up in every backup).
+        $snapshotPath = ExportTempFiles::path('SNAPSHOT-CHECK');
+        file_put_contents($snapshotPath, $export['contents']);
+        try {
+            $archive = new \ZipArchive;
+            $this->assertTrue($archive->open($snapshotPath));
+            $this->assertStringContainsString('Ben Segment', (string) $archive->getFromName('word/document.xml'));
+            $this->assertDocxEntriesAreDeflated($archive);
+            $archive->close();
+        } finally {
+            @unlink($snapshotPath);
+        }
+    }
+
+    public function test_resumen_and_r210_docx_exports_are_deflated_and_readable(): void
+    {
+        $paths = [
+            app(ResumenDocxExporter::class)->generate(
+                app(MonthlyResumenReport::class)->generate(now()->startOfMonth()),
+                'Sample Local',
+                'ABC-12'
+            ),
+            app(DelistmentDocxExporter::class)->generate('Not eligible', [[
+                'name' => 'Ana Segment',
+                'registry' => '0000000000001',
+                'kalagayan' => 'MS',
+                'eligible' => false,
+                'endorsed' => false,
+                'reported' => false,
+            ]]),
+        ];
+        try {
+            foreach ($paths as $path) {
+                $archive = new \ZipArchive;
+                $this->assertTrue($archive->open($path));
+                $this->assertNotFalse($archive->getFromName('[Content_Types].xml'));
+                $this->assertStringContainsString('<w:body>', (string) $archive->getFromName('word/document.xml'));
+                $this->assertDocxEntriesAreDeflated($archive);
+                $archive->close();
+            }
+            $this->assertStringContainsString('Ana Segment', (new \PharData($paths[1]))['word/document.xml']->getContent());
+        } finally {
+            foreach ($paths as $path) {
+                @unlink($path);
+            }
+        }
     }
 
     public function test_builder_accepts_legacy_strings_and_selection_objects(): void
@@ -496,6 +551,18 @@ class PurokSegmentReportsTest extends TestCase
             ->viewData('purokGroups'))->firstWhere('number', $token);
 
         return collect($numbers)->map(fn (int $n): string => $n.':'.$group['rows'][$n - 1]['row_key'])->implode(',');
+    }
+
+    /** Generated DOCX files must be deflated, not stored: stored copies are ~40x larger in snapshots and backups. */
+    private function assertDocxEntriesAreDeflated(\ZipArchive $archive): void
+    {
+        $this->assertSame(\ZipArchive::CM_DEFLATE, $archive->statName('word/document.xml')['comp_method']);
+        for ($index = 0; $index < $archive->numFiles; $index++) {
+            $entry = $archive->statIndex($index);
+            if ($entry['size'] > 0) {
+                $this->assertSame(\ZipArchive::CM_DEFLATE, $entry['comp_method'], $entry['name'].' is stored uncompressed.');
+            }
+        }
     }
 
     private function asSecretary(): static

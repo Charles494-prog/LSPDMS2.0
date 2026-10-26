@@ -210,37 +210,12 @@
                         </tr>
                     </thead>
                     <tbody id="tarhetaRows">
-                        @foreach ($records as $record)
-                            <tr class="tk-row" data-record-id="{{ $record['id'] }}" data-status="{{ $record['status'] }}" data-tarheta-status="{{ $record['tarheta_status'] }}" data-filing-status="{{ $record['filing_status'] }}" data-filing-number="{{ $record['filing_number'] }}" data-matched="{{ $record['matched'] ? '1' : '0' }}" @if ($record['matched']) hidden @endif>
-                                <td class="tk-name" data-label="Name">{{ $record['name'] }}</td>
-                                <td class="tk-status" data-label="Status"><span class="tk-badge tk-status-badge">{{ $record['status'] ?: 'Not set' }}</span></td>
-                                <td class="tk-field" data-label="Tarheta status">
-                                    <select class="tarheta-choice" aria-label="Tarheta status for {{ $record['name'] }}">
-                                        <option value="">Not set</option>
-                                        @foreach (['MS', 'UWP', 'MK', 'INACTIVE'] as $status)
-                                            <option value="{{ $status }}" @selected($record['tarheta_status'] === $status)>{{ $status }}</option>
-                                        @endforeach
-                                    </select>
-                                </td>
-                                <td class="tk-field" data-label="Filing status">
-                                    <select class="filing-status-choice" aria-label="Filing status for {{ $record['name'] }}">
-                                        <option value="">Not set</option>
-                                        @foreach (['MS', 'UWP', 'MK', 'INACTIVE'] as $status)
-                                            <option value="{{ $status }}" @selected($record['filing_status'] === $status)>{{ $status }}</option>
-                                        @endforeach
-                                    </select>
-                                </td>
-                                <td class="tk-num" data-label="Filing number">
-                                    <div>
-                                        <input class="filing-number-input" type="text" maxlength="100" value="{{ $record['filing_number'] }}" aria-label="Filing number for {{ $record['name'] }}" placeholder="Enter filing number">
-                                        <div class="tk-msg tarheta-message" role="status" aria-live="polite"></div>
-                                    </div>
-                                </td>
-                                <td class="tk-result" data-label="Result">
-                                    <span class="tk-res">Matched</span>
-                                </td>
-                            </tr>
-                        @endforeach
+{{-- Every record is rendered (the script pages through them), so each row is written without
+     indentation or line breaks between tags: with 600+ records the whitespace alone was about
+     half of the page. The whitespace removed here is never displayed. --}}
+@foreach ($records as $record)
+<tr class="tk-row" data-record-id="{{ $record['id'] }}" data-status="{{ $record['status'] }}" data-tarheta-status="{{ $record['tarheta_status'] }}" data-filing-status="{{ $record['filing_status'] }}" data-filing-number="{{ $record['filing_number'] }}" data-matched="{{ $record['matched'] ? '1' : '0' }}" @if ($record['matched']) hidden @endif><td class="tk-name" data-label="Name">{{ $record['name'] }}</td><td class="tk-status" data-label="Status"><span class="tk-badge tk-status-badge">{{ $record['status'] ?: 'Not set' }}</span></td><td class="tk-field" data-label="Tarheta status"><select class="tarheta-choice" aria-label="Tarheta status for {{ $record['name'] }}"><option value="">Not set</option>@foreach (['MS', 'UWP', 'MK', 'INACTIVE'] as $status)<option value="{{ $status }}" @selected($record['tarheta_status'] === $status)>{{ $status }}</option>@endforeach</select></td><td class="tk-field" data-label="Filing status"><select class="filing-status-choice" aria-label="Filing status for {{ $record['name'] }}"><option value="">Not set</option>@foreach (['MS', 'UWP', 'MK', 'INACTIVE'] as $status)<option value="{{ $status }}" @selected($record['filing_status'] === $status)>{{ $status }}</option>@endforeach</select></td><td class="tk-num" data-label="Filing number"><div><input class="filing-number-input" type="text" maxlength="100" value="{{ $record['filing_number'] }}" aria-label="Filing number for {{ $record['name'] }}" placeholder="Enter filing number"><div class="tk-msg tarheta-message" role="status" aria-live="polite"></div></div></td><td class="tk-result" data-label="Result"><span class="tk-res">Matched</span></td></tr>
+@endforeach
                     </tbody>
                 </table>
             </div>

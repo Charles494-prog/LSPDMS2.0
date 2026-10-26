@@ -10,6 +10,7 @@ use App\Models\AssignedTaskMention;
 use App\Models\AssignedTaskReaction;
 use App\Models\User;
 use App\Support\Role;
+use App\Support\SafeBroadcast;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,7 +19,6 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
-use Throwable;
 
 /**
  * Tasks the Head Secretary assigns to secretaries.
@@ -56,12 +56,12 @@ class AssignedTaskController extends Controller
         $asOf = now();
 
         $tasks = $this->visibleTasks($user, $isHead)
-            ->with(self::RELATIONS)
             ->orderByRaw('done_at IS NULL')   // awaiting confirmation first
             ->orderByRaw('due_date IS NULL')
             ->orderBy('due_date')
             ->orderByDesc('created_at')
             ->get();
+        $this->loadRelations($tasks);
 
         $reads = $this->readsFor($user, $tasks->pluck('id'));
         $mentionedIn = $this->mentionsReady()
@@ -620,6 +620,36 @@ class AssignedTaskController extends Controller
 
     private const RELATIONS = ['author', 'doneBy', 'members.user', 'reactions.user', 'comments.user'];
 
+    /**
+     * Loads RELATIONS on a list of tasks. Every relation ends at a user, so the users are read
+     * in one query and shared, instead of one query per relation (often for the same people).
+     *
+     * @param  \Illuminate\Database\Eloquent\Collection<int, AssignedTask>  $tasks
+     */
+    private function loadRelations(\Illuminate\Database\Eloquent\Collection $tasks): void
+    {
+        $tasks->load(['members', 'reactions', 'comments']);
+        $userIds = $tasks->flatMap(fn (AssignedTask $task): array => [
+            $task->created_by,
+            $task->done_by,
+            ...$task->members->pluck('user_id'),
+            ...$task->reactions->pluck('user_id'),
+            ...$task->comments->pluck('user_id'),
+        ])->filter(fn ($id): bool => $id !== null)->map(fn ($id): int => (int) $id)->unique()->values();
+        $users = $userIds->isEmpty() ? collect() : User::query()->whereKey($userIds->all())->get()->keyBy('id');
+        $userFor = fn ($id): ?User => $id === null ? null : $users->get((int) $id);
+
+        foreach ($tasks as $task) {
+            $task->setRelation('author', $userFor($task->created_by));
+            $task->setRelation('doneBy', $userFor($task->done_by));
+            foreach (['members', 'reactions', 'comments'] as $relation) {
+                foreach ($task->{$relation} as $child) {
+                    $child->setRelation('user', $userFor($child->user_id));
+                }
+            }
+        }
+    }
+
     /** Due dates are calendar days in Manila; "today" there is the earliest allowed. */
     private function assertDueDateNotPast(?string $dueDate): void
     {
@@ -684,11 +714,7 @@ class AssignedTaskController extends Controller
             return;
         }
 
-        try {
-            broadcast(new TaskFeedUpdated($recipientIds, (int) $task->id, $kind, (string) $task->title, trim((string) $actor->full_name) ?: null));
-        } catch (Throwable $exception) {
-            report($exception);
-        }
+        SafeBroadcast::send(new TaskFeedUpdated($recipientIds, (int) $task->id, $kind, (string) $task->title, trim((string) $actor->full_name) ?: null));
     }
 
     private function validateTask(Request $request): array

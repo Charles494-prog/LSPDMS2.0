@@ -53,7 +53,7 @@ class PasswordResetController extends Controller
         // Same response for every email (known, unknown, or a failed send), so
         // the page never reveals which addresses have accounts.
         RateLimiter::hit($this->rateLimitKey($email), self::RESEND_COOLDOWN_SECONDS);
-        $this->sendResetLink($email);
+        $this->sendResetLink($request, $email);
 
         return redirect()->route('password.request', ['sent' => 1]);
     }
@@ -71,7 +71,7 @@ class PasswordResetController extends Controller
         }
 
         RateLimiter::hit($this->rateLimitKey($email), self::RESEND_COOLDOWN_SECONDS);
-        $this->sendResetLink($email);
+        $this->sendResetLink($request, $email);
 
         return redirect()->route('password.request', ['sent' => 1]);
     }
@@ -135,7 +135,7 @@ class PasswordResetController extends Controller
      * are logged and switch the email features off; the caller shows the same
      * page either way.
      */
-    private function sendResetLink(string $email): void
+    private function sendResetLink(Request $request, string $email): void
     {
         $user = DB::table('login_user')
             ->whereRaw('LOWER(TRIM(gmail)) = ?', [$email])
@@ -151,11 +151,16 @@ class PasswordResetController extends Controller
             ['email' => $email],
             ['token' => Hash::make($token), 'created_at' => now()]
         );
-        $url = URL::temporarySignedRoute(
-            'password.reset.form',
-            now()->addMinutes((int) config('auth.passwords.users.expire', 60)),
-            ['token' => $token, 'email' => $email]
-        );
+        URL::forceRootUrl($this->trustedRoot($request));
+        try {
+            $url = URL::temporarySignedRoute(
+                'password.reset.form',
+                now()->addMinutes((int) config('auth.passwords.users.expire', 60)),
+                ['token' => $token, 'email' => $email]
+            );
+        } finally {
+            URL::forceRootUrl(null);
+        }
 
         try {
             app(SystemSmtpConfiguration::class)->apply();
@@ -164,6 +169,30 @@ class PasswordResetController extends Controller
             DB::table('password_reset_tokens')->where('email', $email)->delete();
             app(SecurityPolicy::class)->reportDeliveryFailure($exception, 'password_reset');
         }
+    }
+
+    /**
+     * Scheme and host for the emailed link. The Host header comes from the
+     * client, so a forged one would otherwise mail a genuine reset link that
+     * opens someone else's site. It is kept only when it names this server
+     * (APP_URL's host, loopback, or this PC's own name or addresses, so LAN
+     * users get a link that opens for them) on the port the server listens on;
+     * anything else falls back to APP_URL.
+     */
+    private function trustedRoot(Request $request): string
+    {
+        $appUrl = rtrim((string) config('app.url'), '/');
+        $host = trim(strtolower($request->getHost()), '[]');
+        $machine = strtolower((string) gethostname());
+        $trustedHosts = array_merge(
+            [trim(strtolower((string) parse_url($appUrl, PHP_URL_HOST)), '[]'), 'localhost', '127.0.0.1', '::1', $machine],
+            $machine === '' ? [] : (gethostbynamel($machine) ?: []),
+        );
+        $samePort = (string) $request->getPort() === (string) $request->server('SERVER_PORT');
+
+        return $host !== '' && $samePort && in_array($host, array_filter($trustedHosts), true)
+            ? $request->getSchemeAndHttpHost()
+            : $appUrl;
     }
 
     private function rateLimitKey(string $email): string

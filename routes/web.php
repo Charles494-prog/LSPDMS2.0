@@ -19,10 +19,12 @@ use App\Http\Controllers\R402R403Controller;
 use App\Http\Controllers\RecordsController;
 use App\Http\Controllers\RegistrationController;
 use App\Http\Controllers\SecretaryTodoController;
+use App\Http\Controllers\SessionActivityController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\SuperadminController;
 use App\Http\Controllers\SystemSmtpSettingsController;
 use App\Http\Controllers\TarhetaStatusController;
+use App\Support\IdleTimeout;
 use App\Support\Role;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -53,7 +55,9 @@ Route::post('/password/reset', [PasswordResetController::class, 'reset'])->middl
 Route::get('/verify-code', [LoginController::class, 'showVerificationForm'])->name('verify-code');
 Route::post('/verify-code', [LoginController::class, 'verifyCode'])->middleware('throttle:10,1');
 Route::post('/verify-code/resend', [LoginController::class, 'resendCode'])->middleware('throttle:3,1')->name('verify-code.resend');
-Route::middleware(['login.session', 'no-store'])->group(function () {
+// Where every open tab lands after an idle sign-out: the sign-in page with the notice.
+Route::get('/session/signed-out', [SessionActivityController::class, 'signedOut'])->middleware('throttle:30,1')->name('session.signed-out');
+Route::middleware(['login.session', 'idle.timeout', 'no-store'])->group(function () {
     Route::get('/secretary-todos', [SecretaryTodoController::class, 'index'])->name('secretary-todos.index');
     Route::post('/secretary-todos', [SecretaryTodoController::class, 'store'])->middleware('throttle:60,1')->name('secretary-todos.store');
     Route::patch('/secretary-todos/{todo}', [SecretaryTodoController::class, 'update'])->middleware('throttle:60,1')->name('secretary-todos.update');
@@ -247,7 +251,10 @@ Route::middleware(['login.session', 'no-store'])->group(function () {
             ->middleware('throttle:10,1')
             ->name('superadmin.reset-bnh-helper-checks');
     });
-    Route::post('/logout', [LoginController::class, 'logout']);
+    Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
+    // Idle sign-out (resources/js/idle-session.js): activity heartbeat and the end of the countdown.
+    Route::post('/session/heartbeat', [SessionActivityController::class, 'heartbeat'])->middleware('throttle:30,1')->name('session.heartbeat');
+    Route::post('/session/idle-logout', [SessionActivityController::class, 'idleLogout'])->middleware('throttle:10,1')->name('session.idle-logout');
     Route::get('/session/status', function (Request $request) {
         $user = $request->session()->get('login_user', []);
         $isHeadSecretary = Role::isHeadSecretary($user['tungkulin'] ?? '');
@@ -256,6 +263,8 @@ Route::middleware(['login.session', 'no-store'])->group(function () {
             // Identity lets an open tab notice that the browser now belongs to another login.
             'user_id' => (int) ($user['id'] ?? 0),
             'auth_version' => (int) ($user['auth_version'] ?? 0),
+            // Seconds before idle sign-out, so open tabs follow activity the server saw.
+            'idle_remaining' => IdleTimeout::enabled() ? IdleTimeout::remaining($request) : null,
             'permissions' => [
                 'head_secretary' => $isHeadSecretary,
                 'dashboard_allow' => $isHeadSecretary || (bool) ($user['dashboard_allow'] ?? false),

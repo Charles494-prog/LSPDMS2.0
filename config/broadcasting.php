@@ -13,8 +13,15 @@ return [
                 'port' => env('REVERB_PORT', 8080),
                 'scheme' => env('REVERB_SCHEME', 'http'),
                 'useTLS' => env('REVERB_SCHEME', 'http') === 'https',
+                // The Pusher client sends this per request, overriding the Guzzle default below.
+                'timeout' => (float) env('REVERB_TIMEOUT', 3),
             ],
-            'client_options' => [],
+            // Broadcasts run inside the request (ShouldBroadcastNow) and Reverb is on this PC,
+            // so a hung Reverb must not hold the request for the 10 s / 30 s library defaults.
+            'client_options' => [
+                'connect_timeout' => (float) env('REVERB_CONNECT_TIMEOUT', 2),
+                'timeout' => (float) env('REVERB_TIMEOUT', 3),
+            ],
         ],
         'log' => ['driver' => 'log'],
         'null' => ['driver' => 'null'],

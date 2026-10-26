@@ -270,6 +270,44 @@ class AuthenticationPolicyTest extends TestCase
         Mail::assertSent(PasswordResetLinkMail::class, 2);
     }
 
+    public function test_password_reset_link_ignores_a_forged_host_header(): void
+    {
+        GlobalVariable::query()->create(['allow_forgot_password' => true]);
+        $this->verifiedSmtpAccount();
+        $user = $this->verifiedUser('forged-host@example.test');
+        Mail::fake();
+
+        $this->post('http://attacker.example'.route('password.email', [], false), ['email' => $user->gmail])
+            ->assertRedirect();
+
+        Mail::assertSent(PasswordResetLinkMail::class, function (PasswordResetLinkMail $mail): bool {
+            return ! str_contains($mail->url, 'attacker.example')
+                && str_starts_with($mail->url, rtrim((string) config('app.url'), '/').'/password/reset/');
+        });
+    }
+
+    public function test_password_reset_link_keeps_this_servers_own_address(): void
+    {
+        GlobalVariable::query()->create(['allow_forgot_password' => true]);
+        $this->verifiedSmtpAccount();
+        $user = $this->verifiedUser('own-host@example.test');
+        Mail::fake();
+
+        $this->post('http://127.0.0.1:8000'.route('password.email', [], false), ['email' => $user->gmail])
+            ->assertRedirect();
+
+        $resetUrl = null;
+        Mail::assertSent(PasswordResetLinkMail::class, function (PasswordResetLinkMail $mail) use (&$resetUrl): bool {
+            $resetUrl = $mail->url;
+
+            return str_starts_with($mail->url, 'http://127.0.0.1:8000/password/reset/');
+        });
+        // The link opens on the same address and its signature still verifies there.
+        $this->get($resetUrl)
+            ->assertOk()
+            ->assertSee('Choose a new password');
+    }
+
     public function test_logout_invalidates_other_active_sessions_for_the_account(): void
     {
         $user = $this->verifiedUser('logout-all@example.test', [

@@ -36,8 +36,23 @@ class DashboardController extends Controller
             ])
             ->get();
 
-        $statusLabels = $records
-            ->map(fn (Record $record): string => mb_strtoupper(trim((string) $record->status)))
+        // Each record's raw values are read and trimmed once. The reports below walk
+        // these rows (grouped by Purok where they need it) instead of filtering every
+        // record again for each Purok, status and field.
+        $rows = [];
+        foreach ($records as $key => $record) {
+            $attributes = $record->getAttributes();
+            $trimmedStatus = trim((string) $attributes['status']);
+            $rows[$key] = [
+                'id' => $record->id,
+                'attributes' => $attributes,
+                'trimmedStatus' => $trimmedStatus,
+                'status' => mb_strtoupper($trimmedStatus),
+                'purok' => trim((string) $attributes['purok']),
+            ];
+        }
+
+        $statusLabels = collect(array_column($rows, 'status'))
             ->filter()
             ->unique()
             ->sortBy(fn (string $status): array => [
@@ -50,13 +65,13 @@ class DashboardController extends Controller
             ->all();
 
         $statusCounts = array_fill_keys($statusLabels, 0);
-        $hasUnspecifiedStatus = false;
-        foreach ($records as $record) {
-            $status = mb_strtoupper(trim((string) $record->status));
+        $unspecifiedStatusCount = 0;
+        foreach ($rows as $row) {
+            $status = $row['status'];
             if ($status !== '' && array_key_exists($status, $statusCounts)) {
                 $statusCounts[$status]++;
             } elseif ($status === '') {
-                $hasUnspecifiedStatus = true;
+                $unspecifiedStatusCount++;
             }
         }
         $statusChart = array_map(fn (string $status): array => [
@@ -64,18 +79,19 @@ class DashboardController extends Controller
             'label' => $status,
             'count' => $statusCounts[$status],
         ], $statusLabels);
-        if ($hasUnspecifiedStatus) {
+        if ($unspecifiedStatusCount > 0) {
             $statusChart[] = [
                 'code' => 'UNSPECIFIED',
                 'label' => 'Unspecified',
-                'count' => $records->filter(fn (Record $record): bool => trim((string) $record->status) === '')->count(),
+                'count' => $unspecifiedStatusCount,
             ];
         }
 
         $activeStatuses = array_values(array_filter($statusLabels, fn (string $status): bool => $status !== 'INACTIVE'));
-        $activeRecords = $records->filter(fn (Record $record): bool => trim((string) $record->status) !== ''
-            && mb_strtoupper(trim((string) $record->status)) !== 'INACTIVE');
-        $activeTotal = $activeRecords->count();
+        $activeRows = array_filter($rows, fn (array $row): bool => $row['trimmedStatus'] !== ''
+            && $row['status'] !== 'INACTIVE');
+        $activeRecords = $records->filter(fn (Record $record, int $key): bool => isset($activeRows[$key]));
+        $activeTotal = count($activeRows);
         $inactiveTotal = $statusCounts['INACTIVE'] ?? 0;
 
         $purokSettings = Purok::query()
@@ -96,26 +112,34 @@ class DashboardController extends Controller
 
             return $value;
         };
+        $activeRowsByPurok = [];
+        foreach ($activeRows as $row) {
+            $activeRowsByPurok[$normalizePurok($row['attributes']['purok'])][] = $row;
+        }
         $puroks = $purokSettings->map(function (Purok $purok) use (
-            $activeRecords,
+            $activeRowsByPurok,
             $activeStatuses,
-            $normalizePurok,
             $purokSettingsByNumber
         ): array {
             $purokNumber = (string) $purok->purok_number;
             $isSplitHeader = $purokSettingsByNumber->get($purokNumber)->count() > 1;
-            $members = $activeRecords->filter(
-                fn (Record $record): bool => $normalizePurok($record->purok) === $purokNumber
-                    && (! $isSplitHeader || $purok->full_purok || (
-                        is_numeric($record->grupo)
-                        && (int) $record->grupo >= $purok->grupo_start
-                        && (int) $record->grupo <= $purok->grupo_end
-                    ))
-            );
+            $members = [];
+            foreach ($activeRowsByPurok[$purokNumber] ?? [] as $row) {
+                $grupo = $row['attributes']['grupo'];
+                if (! $isSplitHeader || $purok->full_purok || (
+                    is_numeric($grupo)
+                    && (int) $grupo >= $purok->grupo_start
+                    && (int) $grupo <= $purok->grupo_end
+                )) {
+                    $members[] = $row;
+                }
+            }
             $name = trim((string) $purok->purok_name) ?: 'Purok '.$purokNumber;
-            $counts = [];
-            foreach ($activeStatuses as $status) {
-                $counts[$status] = $members->filter(fn (Record $record): bool => mb_strtoupper(trim((string) $record->status)) === $status)->count();
+            $counts = array_fill_keys($activeStatuses, 0);
+            foreach ($members as $row) {
+                if (array_key_exists($row['status'], $counts)) {
+                    $counts[$row['status']]++;
+                }
             }
 
             return [
@@ -124,7 +148,7 @@ class DashboardController extends Controller
                 'name' => $name,
                 'counts' => $counts,
                 'total' => array_sum($counts),
-                'recordTotal' => $members->count(),
+                'recordTotal' => count($members),
             ];
         })->all();
 
@@ -133,15 +157,15 @@ class DashboardController extends Controller
         foreach (['female' => 'B', 'male' => 'L'] as $gender => $code) {
             $genderCounts[$gender] = array_fill_keys($activeStatuses, 0);
             $genderRecords[$gender] = [];
-            foreach ($activeRecords as $record) {
-                if (mb_strtoupper(trim((string) $record->gender)) === $code) {
-                    $status = mb_strtoupper(trim((string) $record->status));
+            foreach ($activeRows as $row) {
+                if (mb_strtoupper(trim((string) $row['attributes']['gender'])) === $code) {
+                    $status = $row['status'];
                     $genderCounts[$gender][$status]++;
                     $genderRecords[$gender][] = [
-                        'id' => $record->id,
-                        'name' => trim((string) $record->full_name) ?: 'Unnamed record',
+                        'id' => $row['id'],
+                        'name' => trim((string) $row['attributes']['full_name']) ?: 'Unnamed record',
                         'status' => $status,
-                        'purok' => trim((string) $record->purok) ?: 'Unassigned',
+                        'purok' => $row['purok'] ?: 'Unassigned',
                     ];
                 }
             }
@@ -151,13 +175,13 @@ class DashboardController extends Controller
         $groupStatuses = ['MS', 'MK', 'UWP'];
         $groupCounts = array_fill_keys($groupStatuses, array_fill_keys($groupLabels, 0));
         $groupRecords = array_fill_keys($groupStatuses, array_fill_keys($groupLabels, []));
-        foreach ($activeRecords as $record) {
-            $status = mb_strtoupper(trim((string) $record->status));
+        foreach ($activeRows as $row) {
+            $status = $row['status'];
             if (! array_key_exists($status, $groupCounts)) {
                 continue;
             }
 
-            $group = match (mb_strtolower(trim((string) $record->kapisanan))) {
+            $group = match (mb_strtolower(trim((string) $row['attributes']['kapisanan']))) {
                 'binhi' => 'Binhi',
                 'k', 'kadiwa' => 'Kadiwa',
                 'b', 'buklod' => 'Buklod',
@@ -166,8 +190,8 @@ class DashboardController extends Controller
             if ($group !== null) {
                 $groupCounts[$status][$group]++;
                 $groupRecords[$status][$group][] = [
-                    'id' => $record->id,
-                    'name' => trim((string) $record->full_name) ?: 'Unnamed record',
+                    'id' => $row['id'],
+                    'name' => trim((string) $row['attributes']['full_name']) ?: 'Unnamed record',
                     'status' => $status,
                 ];
             }
@@ -236,23 +260,21 @@ class DashboardController extends Controller
         $movementPuroks = $configured->concat($legacy)->values()->all();
 
         $registryStatuses = ['MS', 'UWP', 'MK'];
-        $registryRecords = $records->filter(fn (Record $record): bool => in_array(
-            mb_strtoupper(trim((string) $record->status)),
-            $registryStatuses,
-            true
-        ));
-        $registryPurokKeys = $registryRecords
-            ->map(fn (Record $record): string => trim((string) $record->purok) ?: 'Unassigned')
+        $registryRows = array_filter($rows, fn (array $row): bool => in_array($row['status'], $registryStatuses, true));
+        $registryRecords = $records->filter(fn (Record $record, int $key): bool => isset($registryRows[$key]));
+        $registryPurokKeys = collect(array_map(fn (array $row): string => $row['purok'] ?: 'Unassigned', $registryRows))
             ->unique()
             ->sort(fn (string $left, string $right): int => $left === 'Unassigned'
                 ? 1
                 : ($right === 'Unassigned' ? -1 : strnatcasecmp($left, $right)))
             ->values();
+        $registryRowsByPurok = [];
+        foreach ($registryRows as $key => $row) {
+            $registryRowsByPurok[$row['purok'] ?: 'Unassigned'][$key] = $row;
+        }
         $registryPuroks = $registryPurokKeys->map(fn (string $purok): array => [
             'id' => $purok,
-            'recordTotal' => $registryRecords->filter(
-                fn (Record $record): bool => (trim((string) $record->purok) ?: 'Unassigned') === $purok
-            )->count(),
+            'recordTotal' => count($registryRowsByPurok[$purok]),
         ])->all();
         $registryFields = [
             'Registry' => 'registry',
@@ -264,48 +286,66 @@ class DashboardController extends Controller
             'Evangelist' => 'evangelist',
             'Birthday' => 'date_of_birth',
         ];
+        // A record's Grupo range comes from its Purok setting; it is looked up once per record.
+        $grupoRanges = [];
+        $grupoRange = function (int $key, array $row) use (&$grupoRanges, $purokSettingsByNumber): array {
+            if (! isset($grupoRanges[$key])) {
+                $grupo = $row['attributes']['grupo'];
+                preg_match('/\d+/', $row['purok'], $purokNumber);
+                $matchingPurokSettings = isset($purokNumber[0])
+                    ? $purokSettingsByNumber->get((string) (int) $purokNumber[0])
+                    : null;
+                $purokSettingsForRecord = $matchingPurokSettings?->first(
+                    fn (Purok $setting): bool => $setting->full_purok
+                        || (is_numeric($grupo)
+                            && (int) $grupo >= $setting->grupo_start
+                            && (int) $grupo <= $setting->grupo_end)
+                ) ?? $matchingPurokSettings?->first();
+                $grupoRanges[$key] = [
+                    $purokSettingsForRecord?->grupo_start ?? 1,
+                    $purokSettingsForRecord?->grupo_end ?? 24,
+                ];
+            }
+
+            return $grupoRanges[$key];
+        };
         $registryReport = [];
         foreach ($registryFields as $label => $column) {
-            $isMissing = fn (Record $record): bool => $column === 'registry'
-                ? in_array(mb_strtoupper(trim((string) $record->{$column})), ['', 'RFID'], true)
-                : trim((string) $record->{$column}) === '';
-            $fieldDetails = $registryPurokKeys->map(fn (string $purok): array => $registryRecords
-                ->filter(fn (Record $record): bool => (trim((string) $record->purok) ?: 'Unassigned') === $purok
-                    && $isMissing($record))
-                ->map(function (Record $record) use ($column, $purokSettingsByNumber): array {
-                    $recordPurok = trim((string) $record->purok);
-                    preg_match('/\d+/', $recordPurok, $purokNumber);
-                    $matchingPurokSettings = isset($purokNumber[0])
-                        ? $purokSettingsByNumber->get((string) (int) $purokNumber[0])
-                        : null;
-                    $purokSettingsForRecord = $matchingPurokSettings?->first(
-                        fn (Purok $setting): bool => $setting->full_purok
-                            || (is_numeric($record->grupo)
-                                && (int) $record->grupo >= $setting->grupo_start
-                                && (int) $record->grupo <= $setting->grupo_end)
-                    ) ?? $matchingPurokSettings?->first();
+            $missing = [];
+            $details = [];
+            foreach ($registryPurokKeys as $purok) {
+                $fieldDetails = [];
+                foreach ($registryRowsByPurok[$purok] as $key => $row) {
+                    // Dates are read raw: a stored date is never blank, just like its cast value.
+                    $value = trim((string) $row['attributes'][$column]);
+                    $isMissing = $column === 'registry'
+                        ? in_array(mb_strtoupper($value), ['', 'RFID'], true)
+                        : $value === '';
+                    if (! $isMissing) {
+                        continue;
+                    }
 
-                    return [
-                        'id' => $record->id,
-                        'name' => trim((string) $record->full_name) ?: 'Unnamed record',
-                        'status' => mb_strtoupper(trim((string) $record->status)),
+                    $recordPurok = $row['purok'];
+                    [$grupoMin, $grupoMax] = $grupoRange($key, $row);
+                    $fieldDetails[] = [
+                        'id' => $row['id'],
+                        'name' => trim((string) $row['attributes']['full_name']) ?: 'Unnamed record',
+                        'status' => $row['status'],
                         'field' => $column,
                         'purok_id' => $recordPurok ?: 'Unassigned',
                         'purok' => $recordPurok ?: 'Unassigned',
                         'can_edit_grupo' => $recordPurok !== '' && $recordPurok !== 'Unassigned',
-                        'grupo_min' => $purokSettingsForRecord?->grupo_start ?? 1,
-                        'grupo_max' => $purokSettingsForRecord?->grupo_end ?? 24,
+                        'grupo_min' => $grupoMin,
+                        'grupo_max' => $grupoMax,
                     ];
-                })
-                ->values()
-                ->all());
+                }
+                $missing[] = count($fieldDetails);
+                $details[] = $fieldDetails;
+            }
             $registryReport[] = [
                 'label' => $label,
-                'missing' => $registryPurokKeys->map(fn (string $purok): int => $registryRecords
-                    ->filter(fn (Record $record): bool => (trim((string) $record->purok) ?: 'Unassigned') === $purok
-                        && $isMissing($record))
-                    ->count())->all(),
-                'details' => $fieldDetails->all(),
+                'missing' => $missing,
+                'details' => $details,
             ];
         }
         $reportFieldsCount = count($registryFields);

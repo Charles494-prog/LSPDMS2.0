@@ -66,6 +66,7 @@ $UseOpcache   = $true    # start the web server with PHP OPcache on (php.ini is 
 $WarmCaches   = $true    # compiled-assets mode: pre-compile Blade views + the event list (php artisan view:cache / event:cache)
 $BackupBeforeMigrate = $true   # mysqldump the database to storage\app\manual-backups before NEW migrations run (they are skipped if the backup fails)
 $KeepBackups  = 10       # how many launcher backups (pre-migrate-*.sql) are kept; older ones are deleted
+$SecureDatabase = $true  # at startup (when .env DB_HOST is this PC): MariaDB listens on 127.0.0.1 only (bind-address in its my.ini, restarted once), inbound firewall Allow rules for mysqld / port 3306 are switched off (not deleted), and LSPDMS logs in with its own account instead of root (password made once, saved in .env)
 $Scheduler    = 'auto'   # 'auto' = use the Windows task below when it exists, else run "php artisan schedule:work" while LSPDMS runs | 'task' = create the Windows task when it is missing | 'work' = always schedule:work | 'off'
 $SchedulerTask = 'LSPDMS Scheduler'   # Windows Task Scheduler task that runs scripts\windows\run-scheduler.vbs every minute (daily message cleanup, monthly DB backup)
 $AsciiUi      = $false   # $true = plain ASCII screen for old consoles that show boxes as '?'. Also: run with the argument  ascii
@@ -447,14 +448,16 @@ function Prog-End {
 }
 
 # ------------------------------ system helpers ------------------------------
-function Test-Port($p) {
-    # fast loopback connect (Get-NetTCPConnection is slow and made waits crawl)
-    $c = New-Object Net.Sockets.TcpClient
+function Test-Port($p, $addr = '127.0.0.1') {
+    # fast loopback connect (Get-NetTCPConnection is slow and made waits crawl). $addr '::1' = the IPv6 loopback
+    if ($addr -like '*:*') { $c = New-Object Net.Sockets.TcpClient([Net.Sockets.AddressFamily]::InterNetworkV6) } else { $c = New-Object Net.Sockets.TcpClient }
     $ok = $false
-    try { $a = $c.BeginConnect('127.0.0.1', [int]$p, $null, $null); $ok = ($a.AsyncWaitHandle.WaitOne(250) -and $c.Connected) } catch { $ok = $false }
+    try { $a = $c.BeginConnect($addr, [int]$p, $null, $null); $ok = ($a.AsyncWaitHandle.WaitOne(250) -and $c.Connected) } catch { $ok = $false }
     try { $c.Close() } catch {}
     [bool]$ok
 }
+# a Vite dev server started by hand may listen on 127.0.0.1 or, with host 'localhost', only on ::1 - both count
+function Test-VitePort { (Test-Port $VitePort) -or (Test-Port $VitePort '::1') }
 # the processes listening on a TCP port (any address)
 function Get-PortOwners($p) {
     @(Get-NetTCPConnection -LocalPort ([int]$p) -State Listen -ErrorAction SilentlyContinue | ForEach-Object { [int]$_.OwningProcess } | Where-Object { $_ -gt 4 } | Select-Object -Unique)
@@ -1189,7 +1192,7 @@ function Wait-NpmInstall {
 # build     = compiled assets; public\hot is removed (a hot file with no Vite behind it breaks every page)
 function Get-FrontEndPlan {
     if ($LanMode) { return 'build' }   # other devices cannot load from a Vite dev server on this PC
-    $viteUp = Test-Port $VitePort
+    $viteUp = Test-VitePort
     # a hot file team mode moved aside comes back while its Vite dev server still runs, else it is dropped
     $moved = Join-Path $StateDir 'hot.moved'
     if (Test-Path -LiteralPath $moved) {
@@ -1242,7 +1245,7 @@ function Invoke-FrontEnd {
         $p = Start-Tracked 'vite' 'node' ('"' + $vj + '" --host 127.0.0.1 --port ' + $VitePort + ' --strictPort') (Join-Path $Logs 'vite.log')
         Add-BgJob 'vite' $script:CurStep 40 {
             param($j, $final)
-            if ((Test-Port $VitePort) -and (Test-Path -LiteralPath (Join-Path $Project 'public\hot'))) { return (Res 'ok' ('Vite dev server :' + $VitePort + ' (live reload)')) }
+            if ((Test-VitePort) -and (Test-Path -LiteralPath (Join-Path $Project 'public\hot'))) { return (Res 'ok' ('Vite dev server :' + $VitePort + ' (live reload)')) }
             if ($j.Data.Proc.HasExited -or $final) { $script:FailLog = Join-Path $Logs 'vite.log'; return (Res 'fail' 'Vite dev server did not start') }
             $null
         } @{ Proc = $p }
@@ -1253,7 +1256,7 @@ function Invoke-FrontEnd {
     # (other devices cannot load from it) and the next this-PC launch puts it back while that Vite still runs
     $hotNote = ''
     if (Test-Path -LiteralPath $hot) {
-        if (-not (Test-Port $VitePort)) { Remove-Item -LiteralPath $hot -Force -ErrorAction SilentlyContinue }
+        if (-not (Test-VitePort)) { Remove-Item -LiteralPath $hot -Force -ErrorAction SilentlyContinue }
         elseif ($LanMode) {
             try {
                 New-Item -ItemType Directory -Force $StateDir | Out-Null
@@ -1392,6 +1395,402 @@ function Backup-Database($label = 'pre-migrate') {
     Res 'ok' ([IO.Path]::GetFileName($file) + ' (' + $mb + ' MB)')
 }
 
+# ---- database security: MariaDB answers this PC only, its inbound firewall rules are off, LSPDMS has its own DB account ----
+# Runs on every launch before migrate. Each part first checks (about 0.3 s together) and changes nothing that is already done.
+# Passwords only travel in environment variables of one child process; they are never shown or logged.
+$script:DbSecNote = ''
+function Test-LocalDbHost($h) {
+    $h = ([string]$h).Trim().ToLower()
+    (-not $h) -or $h -eq '127.0.0.1' -or $h -eq 'localhost' -or $h -eq '::1'
+}
+# the account name: lspdms_app for the usual database, one per database otherwise (two installs never share one)
+function Get-DbAppUser($db) {
+    if (-not $db -or $db -eq 'lspdms') { return 'lspdms_app' }
+    $u = 'lspdms_app_' + ($db -replace '[^A-Za-z0-9_]', '_')
+    if ($u.Length -gt 80) { $u = $u.Substring(0, 80) }
+    $u
+}
+# 32 letters / digits from the crypto RNG (about 190 bits): safe unquoted in .env and on any command line
+function New-DbPassword($len = 32) {
+    $set = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+    $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+    $buf = New-Object byte[] 64
+    $sb = New-Object Text.StringBuilder
+    try {
+        while ($sb.Length -lt $len) {
+            $rng.GetBytes($buf)
+            foreach ($b in $buf) { if ($b -lt 248 -and $sb.Length -lt $len) { [void]$sb.Append($set[$b % 62]) } }   # 248 = 4 x 62: no bias
+        }
+    } finally { $rng.Dispose() }
+    $sb.ToString()
+}
+# .env is written to a temporary file first and swapped in with File.Replace, so it is never left half-written
+function Write-EnvAtomic($envf, $txt) {
+    $tmp = $envf + '.lspdms-tmp'
+    for ($try = 1; $try -le 3; $try++) {
+        try {
+            [IO.File]::WriteAllText($tmp, $txt, (New-Object Text.UTF8Encoding($false)))
+            if (Test-Path -LiteralPath $envf) { [IO.File]::Replace($tmp, $envf, [NullString]::Value) } else { [IO.File]::Move($tmp, $envf) }
+            return $true
+        } catch { Start-Sleep -Milliseconds 150 }
+    }
+    Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+    $false
+}
+function Save-EnvLogin($user, $pw) {
+    $envf = Join-Path $Project '.env'
+    if (-not (Test-Path -LiteralPath $envf)) { return $false }
+    try { $txt = [IO.File]::ReadAllText($envf) } catch { return $false }
+    $nl = "`n"; if ($txt -match "`r`n") { $nl = "`r`n" }
+    $txt = Set-EnvLine $txt 'DB_USERNAME' $user $nl
+    $txt = Set-EnvLine $txt 'DB_PASSWORD' $pw $nl
+    Write-EnvAtomic $envf $txt
+}
+# storage\logs\launcher\dbsec.log: what went wrong and how to fix it (shown by "Open log")
+function Write-DbSecLog($lines) {
+    $f = Join-Path $Logs 'dbsec.log'
+    try { Set-Content -LiteralPath $f -Value (@((Get-Date -Format 'yyyy-MM-dd HH:mm:ss')) + @($lines)) -Encoding UTF8 } catch {}
+    $script:FailLog = $f
+    Write-LaunchLog ('database security: ' + (@($lines)[0]))
+}
+# one PHP/PDO run (the same driver Laravel uses). mode check = log in with a login and report who / bind-address / database access;
+# mode provision = log in as root and (re)create the app account. Returns the parsed JSON answer ({ ok, ... })
+function Invoke-DbPhp($vars) {
+    $code = @'
+<?php
+$h = (string)getenv("LSP_H"); $p = (int)getenv("LSP_P"); $d = (string)getenv("LSP_D"); $mode = (string)getenv("LSP_MODE");
+$opt = [PDO::ATTR_TIMEOUT => 5, PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION];
+$dsn = "mysql:host=$h;port=$p";
+$fail = function (Throwable $e, string $stage) {
+  $m = $e->getMessage();
+  foreach (["LSP_W", "LSP_AW"] as $k) { $s = (string)getenv($k); if ($s !== "") { $m = str_replace($s, "***", $m); } }
+  $c = preg_match('/\[(\d{4})\]/', $m, $x) ? (int)$x[1] : (int)$e->getCode();
+  echo json_encode(["ok" => false, "stage" => $stage, "code" => $c, "err" => $m]); exit(1);
+};
+if ($mode === "check") {
+  try { $pdo = new PDO($dsn, (string)getenv("LSP_U"), (string)getenv("LSP_W"), $opt); } catch (Throwable $e) { $fail($e, "login"); }
+  try {
+    $r = $pdo->query("SELECT CURRENT_USER(), @@bind_address")->fetch(PDO::FETCH_NUM);
+    $s = $pdo->prepare("SELECT COUNT(*) FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ?"); $s->execute([$d]);
+    $db = (int)$s->fetchColumn() > 0; $use = false;
+    if ($db) { try { $pdo->exec("USE `" . str_replace("`", "``", $d) . "`"); $use = true; } catch (Throwable $e) {} }
+    echo json_encode(["ok" => true, "user" => (string)$r[0], "bind" => $r[1], "db" => $db, "use" => $use]); exit(0);
+  } catch (Throwable $e) { $fail($e, "check"); }
+}
+if ($mode === "provision") {
+  $app = (string)getenv("LSP_AU"); $aw = (string)getenv("LSP_AW");
+  if (!preg_match('/^[A-Za-z0-9_$]{1,64}$/', $d)) { $fail(new RuntimeException("DB_DATABASE may only use letters, digits, _ and $ for the launcher's own account"), "input"); }
+  if (!preg_match('/^[A-Za-z0-9_]{1,80}$/', $app) || !preg_match('/^[A-Za-z0-9]{24,}$/', $aw)) { $fail(new RuntimeException("invalid account name or password"), "input"); }
+  $roots = json_decode((string)base64_decode((string)getenv("LSP_ROOTS")), true);
+  $pdo = null; $last = new RuntimeException("no root login to try");
+  foreach (is_array($roots) ? $roots : [] as $c) {
+    try { $pdo = new PDO($dsn, (string)($c["u"] ?? ""), (string)($c["w"] ?? ""), $opt); break; } catch (Throwable $e) { $last = $e; }
+  }
+  if (!$pdo) { $fail($last, "root"); }
+  try {
+    $who = (string)$pdo->query("SELECT CURRENT_USER()")->fetchColumn();
+    $pdo->exec("CREATE DATABASE IF NOT EXISTS `$d` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+    // in GRANT, _ and % in a database name are wildcards: escaped so only this database is meant
+    $g = "`" . str_replace(["_", "%"], ["\\_", "\\%"], $d) . "`";
+    // what LSPDMS does on its own database: app reads/writes, migrations (tables, indexes, foreign keys), the backup import
+    // (DELETE + INSERT), and mysqldump --single-transaction --routines --triggers (LOCK TABLES, SHOW VIEW, TRIGGER, EVENT, routines)
+    $priv = "SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES, CREATE TEMPORARY TABLES, LOCK TABLES, CREATE VIEW, SHOW VIEW, TRIGGER, EVENT, CREATE ROUTINE, ALTER ROUTINE, EXECUTE";
+    foreach (["localhost", "127.0.0.1", "::1"] as $host) {
+      $a = $pdo->quote($app) . "@" . $pdo->quote($host);
+      $pdo->exec("CREATE USER IF NOT EXISTS $a IDENTIFIED BY " . $pdo->quote($aw));
+      $pdo->exec("ALTER USER $a IDENTIFIED BY " . $pdo->quote($aw));
+      $pdo->exec("REVOKE ALL PRIVILEGES, GRANT OPTION FROM $a");
+      $pdo->exec("GRANT $priv ON $g.* TO $a");
+    }
+    echo json_encode(["ok" => true, "root" => $who]); exit(0);
+  } catch (Throwable $e) { $fail($e, "grant"); }
+}
+echo json_encode(["ok" => false, "stage" => "input", "code" => 0, "err" => "unknown mode"]); exit(1);
+'@
+    $php = Join-Path $Logs 'dbsec.php'
+    $log = Join-Path $Logs 'dbsec-run.log'
+    $out = ''
+    try {
+        foreach ($k in $vars.Keys) { [Environment]::SetEnvironmentVariable([string]$k, [string]$vars[$k], 'Process') }
+        Set-Content -LiteralPath $php -Value $code -Encoding ASCII
+        Remove-Item -LiteralPath $log, "$log.err" -Force -ErrorAction SilentlyContinue
+        $p = Start-Hidden 'php' ('"' + $php + '"') $log
+        Wait-Proc $p 45
+        $out = ([string](Get-Content -LiteralPath $log -Raw)).Trim()
+        if (-not $out) { $out = ([string](Get-Content -LiteralPath "$log.err" -Raw)).Trim() }
+    } catch { $out = $_.Exception.Message }
+    finally {
+        foreach ($k in $vars.Keys) { [Environment]::SetEnvironmentVariable([string]$k, $null, 'Process') }
+        Remove-Item -LiteralPath $php, $log, "$log.err" -Force -ErrorAction SilentlyContinue
+    }
+    try { $o = $out | ConvertFrom-Json -ErrorAction Stop; if ($o -and $o.PSObject.Properties['ok']) { return $o } } catch {}
+    if (-not $out) { $out = 'no answer from PHP' }
+    [pscustomobject]@{ ok = $false; stage = 'php'; code = 0; err = (Fit (($out -replace '\s+', ' ').Trim()) 200) }
+}
+function Get-DbLoginCheck($h, $p, $u, $w) {
+    Invoke-DbPhp @{ LSP_MODE = 'check'; LSP_H = $h; LSP_P = $p; LSP_U = $u; LSP_W = $w; LSP_D = (Get-EnvValue 'DB_DATABASE') }
+}
+# (re)creates LSPDMS's own account through root, saves its new password in .env and proves the new login works.
+# root itself is never written to .env. Returns @{ State = 'ok' | 'fail'; Detail; User; Check }
+function Ensure-AppDbAccount($h, $p) {
+    $db = Get-EnvValue 'DB_DATABASE'
+    if (-not $db) { return @{ State = 'fail'; Detail = 'DB_DATABASE is empty in .env' } }
+    $user = Get-DbAppUser $db
+    # root logins to try: the one in .env (when .env still uses root), then the usual local defaults
+    $roots = @()
+    $eu = Get-EnvValue 'DB_USERNAME'
+    if (-not $eu -or $eu -eq 'root') { $roots += [pscustomobject]@{ u = 'root'; w = (Get-EnvValue 'DB_PASSWORD') } }
+    foreach ($dw in @('', 'root')) { if (@($roots | Where-Object { $_.w -eq $dw }).Count -eq 0) { $roots += [pscustomobject]@{ u = 'root'; w = $dw } } }
+    $pw = New-DbPassword
+    $rj = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes((ConvertTo-Json -InputObject @($roots) -Compress)))
+    $r = Invoke-DbPhp @{ LSP_MODE = 'provision'; LSP_H = $h; LSP_P = $p; LSP_D = $db; LSP_AU = $user; LSP_AW = $pw; LSP_ROOTS = $rj }
+    if (-not $r.ok) {
+        if ([string]$r.stage -eq 'root') {
+            Write-DbSecLog @('The database login in .env does not work, and root could not log in to make LSPDMS''s own account either.',
+                ('MySQL said: ' + [string]$r.err),
+                'Fix: put the MariaDB root login in .env once (DB_USERNAME=root and DB_PASSWORD=<the root password>), then start the launcher again.',
+                ('The launcher then creates the account ' + $user + ', saves its new password in .env and stops using root.'))
+            return @{ State = 'fail'; Detail = 'DB login refused, root login too' }
+        }
+        Write-DbSecLog @(('Creating the database account ' + $user + ' failed (' + [string]$r.stage + '): ' + [string]$r.err), '.env was not changed.')
+        return @{ State = 'fail'; Detail = ('could not create DB account ' + $user) }
+    }
+    if (-not (Save-EnvLogin $user $pw)) {
+        Write-DbSecLog @(('The account ' + $user + ' was made, but .env could not be written (is it read-only or open in another program?).'), 'Close the program that holds .env, then start the launcher again.')
+        return @{ State = 'fail'; Detail = 'could not save the DB login in .env' }
+    }
+    $chk = Get-DbLoginCheck $h $p $user $pw
+    if (-not $chk.ok -or -not $chk.use) {
+        Write-DbSecLog @(('The new account ' + $user + ' was saved in .env but cannot open the database: ' + [string]$chk.err))
+        return @{ State = 'fail'; Detail = ('new DB account ' + $user + ' cannot log in') }
+    }
+    Write-LaunchLog ('database: own account ' + $user + ' (re)created by ' + [string]$r.root + ' with rights on ' + $db + ' only; its password is in .env (never shown). .env no longer uses root')
+    @{ State = 'ok'; Detail = 'own account'; User = $user; Check = $chk }
+}
+# true when $port is in a firewall port list such as "80,3306" or "3000-4000" ("*" / Any never counts)
+function Test-PortListed($ports, $port) {
+    foreach ($t in ([string]$ports).Split(',')) {
+        $t = $t.Trim()
+        if ($t -match '^\d+$' -and [int]$t -eq [int]$port) { return $true }
+        if ($t -match '^(\d+)-(\d+)$' -and [int]$Matches[1] -le [int]$port -and [int]$Matches[2] -ge [int]$port) { return $true }
+    }
+    $false
+}
+# enabled inbound Allow rules that let other devices reach the database (mysqld.exe / mariadbd.exe, or TCP to its port),
+# plus node.exe ones (only reported). Read through the firewall COM API: about 0.1 s instead of several seconds
+function Get-DbFirewallRules($port) {
+    $r = @{ Db = @(); Node = @(); Error = '' }
+    try {
+        $fw = New-Object -ComObject HNetCfg.FwPolicy2
+        foreach ($x in @($fw.Rules)) {
+            if ($x.Direction -ne 1 -or $x.Action -ne 1 -or -not $x.Enabled) { continue }   # 1 = inbound, 1 = allow
+            $app = [string]$x.ApplicationName
+            $leaf = ''; try { if ($app) { $leaf = [IO.Path]::GetFileName($app).ToLower() } } catch {}
+            $o = [pscustomobject]@{ Name = [string]$x.Name; Program = $app; Ports = [string]$x.LocalPorts }
+            if ($leaf -match '^(mysqld|mariadbd)(-nt)?\.exe$' -or (($x.Protocol -eq 6 -or $x.Protocol -eq 256) -and (Test-PortListed $x.LocalPorts $port))) { $r.Db += $o }
+            elseif ($leaf -eq 'node.exe') { $r.Node += $o }
+        }
+    } catch { $r.Error = $_.Exception.Message }
+    $r
+}
+# switches those database rules off (Disable-NetFirewallRule: reversible, nothing is deleted). Rules with the same name that
+# are not database Allow rules are never touched. Returns @{ Done; Errors } (descriptions of the rules)
+function Disable-DbFirewallRules($names, $port) {
+    $done = @(); $errs = @()
+    foreach ($rule in @(Get-NetFirewallRule -DisplayName @($names) -ErrorAction SilentlyContinue)) {
+        Pump   # these firewall cmdlets are slow (a few seconds in all, first launch only): keep the screen moving
+        if ([string]$rule.Direction -ne 'Inbound' -or [string]$rule.Action -ne 'Allow' -or [string]$rule.Enabled -ne 'True') { continue }
+        $prog = [string](($rule | Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue).Program)
+        $pf = $rule | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue
+        $lp = (@($pf.LocalPort) | ForEach-Object { [string]$_ }) -join ','
+        $leaf = ''; try { if ($prog -and $prog -ne 'Any') { $leaf = [IO.Path]::GetFileName($prog).ToLower() } } catch {}
+        $tcp = ([string]$pf.Protocol -eq 'TCP' -or [string]$pf.Protocol -eq 'Any')
+        if (-not ($leaf -match '^(mysqld|mariadbd)(-nt)?\.exe$') -and -not ($tcp -and (Test-PortListed $lp $port))) { continue }
+        $what = '"' + $rule.DisplayName + '" (' + $prog + ', ' + [string]$pf.Protocol + ' ' + $lp + ', ' + [string]$rule.Profile + ')'
+        try {
+            Disable-NetFirewallRule -Name $rule.Name -ErrorAction Stop
+            $done += $what
+            Write-LaunchLog ('firewall: disabled inbound Allow rule ' + $what + ' - not deleted; it can be switched on again in Windows Defender Firewall')
+        } catch {
+            $errs += $what
+            Write-LaunchLog ('firewall: could not disable ' + $what + ': ' + $_.Exception.Message)
+        }
+    }
+    @{ Done = $done; Errors = $errs }
+}
+function Protect-DbFirewall($port) {
+    $f = Get-DbFirewallRules $port
+    if ($f.Error) { Write-LaunchLog ('firewall could not be read: ' + $f.Error); return (Res 'warn' 'firewall could not be read') }
+    # node.exe Allow rules are only reported (once per change): other programs may need them
+    $sig = (@($f.Node | ForEach-Object { $_.Program } | Sort-Object -Unique)) -join ';'
+    $st = Read-State 'dbsec'
+    if ($sig -ne (Get-StateValue $st 'node')) {
+        if ($sig) { Write-LaunchLog ('firewall note (not changed): node.exe may accept connections from other devices through ' + @($f.Node).Count + ' inbound Allow rule(s), e.g. "' + $f.Node[0].Name + '" (' + $f.Node[0].Program + '). The launcher keeps its Vite dev server on this PC; remove the rule in Windows Defender Firewall if no other program needs it.') }
+        Save-State 'dbsec' ([pscustomobject]@{ node = $sig })
+    }
+    if (@($f.Db).Count -eq 0) { return (Res 'ok' 'no inbound database rule') }
+    if (-not (Test-Admin)) { return (Res 'warn' 'firewall: run as Administrator') }
+    $d = Disable-DbFirewallRules @($f.Db | ForEach-Object { $_.Name } | Select-Object -Unique) $port
+    if (@($d.Errors).Count -gt 0) { return (Res 'warn' ('firewall: ' + @($d.Errors).Count + ' rule(s) still open')) }
+    Res 'ok' (([string]@($d.Done).Count) + ' inbound rule(s) disabled')
+}
+# makes the [mysqld] bind-address 127.0.0.1 in this my.ini: an active bind-address line in a server section is corrected,
+# otherwise one line is added under [mysqld] (after its port line). A dated backup copy is kept next to it.
+# Read and written byte for byte (Latin-1), so every other line stays exactly as it was. Returns @{ Changed; Backup; Error }
+function Set-IniBindAddress($cfg) {
+    $r = @{ Changed = $false; Backup = ''; Error = '' }
+    $enc = [Text.Encoding]::GetEncoding(28591)
+    try { $txt = $enc.GetString([IO.File]::ReadAllBytes($cfg)) } catch { $r.Error = 'cannot read ' + $cfg; return $r }   # (ReadAllText would drop a BOM)
+    $nl = "`n"; if ($txt -match "`r`n") { $nl = "`r`n" }
+    $lines = New-Object Collections.Generic.List[string]
+    foreach ($l in ($txt -split "\r?\n")) { $lines.Add($l) }
+    $sec = ''; $found = $false; $edit = $false; $mysqld = -1; $portAt = -1
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        $hm = [regex]::Match($lines[$i], '^(?:ï»¿)?\s*\[([^\]]+)\]')
+        if ($hm.Success) { $sec = $hm.Groups[1].Value.Trim().ToLower(); if ($sec -eq 'mysqld' -and $mysqld -lt 0) { $mysqld = $i }; continue }
+        if ($sec -notmatch '^(mysqld|mariadb|mariadbd|server)(-[0-9.]+)?$') { continue }
+        if ($sec -eq 'mysqld' -and $portAt -lt 0 -and $mysqld -ge 0 -and $lines[$i] -match '^\s*port\s*=') { $portAt = $i }
+        $bm = [regex]::Match($lines[$i], '^(\s*)bind[-_]address\s*=\s*(.*)$', 'IgnoreCase')
+        if (-not $bm.Success) { continue }
+        $found = $true
+        $v = ($bm.Groups[2].Value -replace '\s+#.*$', '').Trim().Trim('"', "'")
+        if ($v -ne '127.0.0.1') { $lines[$i] = $bm.Groups[1].Value + 'bind-address=127.0.0.1'; $edit = $true }
+    }
+    if (-not $found) {
+        if ($portAt -ge 0) { $lines.Insert($portAt + 1, 'bind-address=127.0.0.1') }
+        elseif ($mysqld -ge 0) { $lines.Insert($mysqld + 1, 'bind-address=127.0.0.1') }
+        else {
+            $at = $lines.Count; if ($at -gt 0 -and $lines[$at - 1] -eq '') { $at-- }
+            $lines.Insert($at, '[mysqld]'); $lines.Insert($at + 1, 'bind-address=127.0.0.1')
+        }
+        $edit = $true
+    }
+    if (-not $edit) { return $r }
+    $bak = $cfg + '.lspdms-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.bak'
+    $tmp = $cfg + '.lspdms-tmp'
+    try {
+        Copy-Item -LiteralPath $cfg -Destination $bak -Force -ErrorAction Stop
+        [IO.File]::WriteAllText($tmp, ($lines -join $nl), $enc)
+        [IO.File]::Replace($tmp, $cfg, [NullString]::Value)
+    } catch {
+        Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+        $r.Error = 'cannot write ' + $cfg + ': ' + $_.Exception.Message
+        return $r
+    }
+    $r.Changed = $true; $r.Backup = $bak
+    $r
+}
+# restarts the database so it reads my.ini again: the Windows service (Restart-Service in a background job, so the
+# screen keeps moving), or the mysqld the launcher itself started. Returns 'OK' or 'ERR: why'
+function Restart-DbService($name) {
+    $j = Start-Job -ScriptBlock { param($n) try { Restart-Service -Name $n -Force -ErrorAction Stop; 'OK' } catch { 'ERR: ' + $_.Exception.Message } } -ArgumentList $name
+    $t = Get-Date
+    while ($j.State -eq 'Running' -and ((Get-Date) - $t).TotalSeconds -lt 180) { Pump }
+    $o = 'ERR: the service did not restart within 3 minutes'
+    if ($j.State -ne 'Running') { $o = [string](@(Receive-Job $j -ErrorAction SilentlyContinue)[-1]) } else { Stop-Job $j }
+    Remove-Job $j -Force -ErrorAction SilentlyContinue
+    $o
+}
+function Restart-DbServer($m) {
+    if ($m.Service) { return (Restart-DbService $m.Service) }
+    Stop-TrackedName 'mysql'
+    $t = Get-Date
+    while ((Test-Port $MySQLPort) -and ((Get-Date) - $t).TotalSeconds -lt 30) { Pump }
+    # its rows are not this step's: the background start reports to nobody, this step checks the port itself
+    $cs = $script:CurStep; $script:CurStep = $null
+    try { [void](Start-Database); Wait-BgJobs @('db') } finally { $script:CurStep = $cs }
+    if (Test-Port $MySQLPort) { return 'OK' }
+    'ERR: MySQL did not start again - see mysql.log'
+}
+# (a) the database must listen on 127.0.0.1 only. $chk = a login check that already ran ($u / $w = the .env login)
+function Ensure-DbLocalOnly($h, $p, $chk, $u, $w) {
+    if ([string]$chk.bind -eq '127.0.0.1') { return (Res 'ok' 'localhost only') }
+    $was = [string]$chk.bind; if (-not $was) { $was = 'every address' }
+    $m = Find-MySqld
+    if (-not $m) { Write-DbSecLog @('The database listens on ' + $was + ', but its program (mysqld.exe) was not found, so bind-address was not changed.'); return (Res 'warn' 'NOT localhost-only (no mysqld)') }
+    # only the my.ini of the program that really serves the port is edited
+    foreach ($id in (Get-PortOwners $p)) {
+        $pr = Get-Process -Id $id -ErrorAction SilentlyContinue
+        $pp = ''; try { $pp = [IO.Path]::GetFullPath([string]$pr.Path) } catch {}
+        if ($pp -and $m.Exe -and $pp -ne [IO.Path]::GetFullPath([string]$m.Exe)) {
+            Write-DbSecLog @(('Port ' + $p + ' is served by ' + $pp + ', not by ' + $m.Exe + ', so bind-address was not changed.'), 'Set bind-address=127.0.0.1 under [mysqld] in that server''s my.ini and restart it.')
+            return (Res 'warn' 'NOT localhost-only (other MySQL)')
+        }
+    }
+    if (-not $m.Service -and -not (Get-TrackedProc 'mysql')) {
+        Write-DbSecLog @('The database was started by another program (not the launcher, not a Windows service), so it was not restarted.', 'Stop it and start LSPDMS again; the launcher then starts it on 127.0.0.1 only.')
+        return (Res 'warn' 'NOT localhost-only (restart it)')
+    }
+    $ini = $null
+    if ($m.Cfg -and (Test-Path -LiteralPath $m.Cfg)) {
+        $ini = Set-IniBindAddress $m.Cfg
+        if ($ini.Error) { Write-DbSecLog @('bind-address could not be set: ' + $ini.Error); return (Res 'warn' 'NOT localhost-only (my.ini)') }
+        if ($ini.Changed) { Write-LaunchLog ('database: bind-address=127.0.0.1 written to ' + $m.Cfg + ' (old file kept as ' + $ini.Backup + ')') }
+    } elseif ($m.Service) {
+        Write-DbSecLog @('The database service ' + $m.Service + ' has no --defaults-file, so its my.ini is unknown and bind-address was not changed.')
+        return (Res 'warn' 'NOT localhost-only (no my.ini)')
+    }
+    $rs = Restart-DbServer $m
+    $up = ($rs -eq 'OK') -and (Wait-Port $p 60)
+    Write-LaunchLog ('database: restarted to apply bind-address (' + $rs + ', port ' + $p + ' up: ' + $up + ')')
+    if (-not $up) {
+        if ($ini -and $ini.Changed) {
+            Copy-Item -LiteralPath $ini.Backup -Destination $m.Cfg -Force -ErrorAction SilentlyContinue
+            [void](Restart-DbServer $m); [void](Wait-Port $p 60)
+            Write-DbSecLog @(('The database did not start again after bind-address=127.0.0.1 was added (' + $rs + '). The old my.ini was put back and the database restarted.'), ('Check the database error log; the edited file is not kept, the original is ' + $m.Cfg + '.'))
+            return (Res 'warn' 'restart failed - my.ini restored')
+        }
+        Write-DbSecLog @('The database did not start again: ' + $rs)
+        return (Res 'warn' 'database restart failed')
+    }
+    $c2 = Get-DbLoginCheck $h $p $u $w
+    if ($c2.ok -and [string]$c2.bind -eq '127.0.0.1') {
+        Write-LaunchLog ('database: now listens on 127.0.0.1 only (was ' + $was + ')')
+        return (Res 'ok' 'localhost only')
+    }
+    $now = [string]$c2.bind; if (-not $c2.ok) { $now = 'unknown (' + [string]$c2.err + ')' } elseif (-not $now) { $now = 'every address' }
+    Write-DbSecLog @('After the restart the database still listens on ' + $now + '. Another option (service command line, another my.ini section) may set bind-address.')
+    Res 'warn' 'NOT localhost-only - see log'
+}
+# the deploy step: firewall, own account, localhost only. Fails only when the app could not log in at all
+function Invoke-DbSecurity {
+    $script:DbSecNote = ''
+    $conn = (Get-EnvValue 'DB_CONNECTION').ToLower()
+    if ($conn -ne 'mysql' -and $conn -ne 'mariadb') { return (Res 'ok' 'skipped (database is not MySQL)') }
+    $dbh = Get-EnvValue 'DB_HOST'; if (-not $dbh) { $dbh = '127.0.0.1' }
+    $dbp = Get-EnvValue 'DB_PORT'; if (-not $dbp) { $dbp = '3306' }
+    if (-not (Test-LocalDbHost $dbh)) {
+        Write-LaunchLog ('database security skipped: DB_HOST in .env is ' + $dbh + ', not this PC (bind-address, firewall and DB account left as they are)')
+        return (Res 'warn' 'skipped: DB_HOST is not this PC')
+    }
+    Wait-BgJobs @('db')
+    if (-not (Test-Port $dbp)) { return (Res 'warn' 'database is not running - skipped') }
+    $warns = @()
+    # (b) no inbound firewall rule may let other devices reach the database
+    $fw = Protect-DbFirewall ([int]$dbp)
+    if ($fw.State -ne 'ok') { $warns += $fw.Detail }
+    # (c) LSPDMS's own account: a working non-root login in .env is kept as it is
+    $u = Get-EnvValue 'DB_USERNAME'; $w = Get-EnvValue 'DB_PASSWORD'
+    $chk = Get-DbLoginCheck $dbh $dbp $u $w
+    $refused = (-not $chk.ok) -and [string]$chk.stage -eq 'login' -and (@(1044, 1045, 1698) -contains [int]$chk.code)
+    if (-not $chk.ok -and -not $refused) {
+        # not a wrong login (no answer, PHP problem...): nothing is changed
+        Write-DbSecLog @('The database could not be checked: ' + [string]$chk.err)
+        return (Res 'warn' 'database could not be checked')
+    }
+    if ($refused -or -not $u -or $u -eq 'root') {
+        $a = Ensure-AppDbAccount $dbh $dbp
+        if ($a.State -ne 'ok') { return (Res 'fail' $a.Detail) }
+        $chk = $a.Check; $u = Get-EnvValue 'DB_USERNAME'; $w = Get-EnvValue 'DB_PASSWORD'
+    }
+    # (a) localhost only
+    $b = Ensure-DbLocalOnly $dbh $dbp $chk $u $w
+    if ($b.State -ne 'ok') { $warns = @($b.Detail) + $warns }
+    if ($warns.Count -gt 0) { return (Res 'warn' ('own account; ' + ($warns -join ', '))) }
+    $script:DbSecNote = 'localhost only'
+    Res 'ok' 'localhost only, own account'
+}
+
 # ---- services ----
 function Get-ServerScript {
     $own = Join-Path $Project 'server.php'
@@ -1528,7 +1927,7 @@ function Invoke-HealthCheck {
     if ($UseReverb -and -not (Test-Port $ReverbPort)) { $warn += 'live chat' }
     if ($UseMySQL -and -not (Test-Port $MySQLPort)) { $warn += 'database' }
     if ($Scheduler -ne 'off' -and -not (Test-SchedulerUp)) { $warn += 'scheduler' }
-    if ($script:FePlan -ne 'build' -and -not (Test-Port $VitePort)) { $warn += 'Vite' }
+    if ($script:FePlan -ne 'build' -and -not (Test-VitePort)) { $warn += 'Vite' }
     Write-LaunchLog ('health: ' + ($bits -join ', '))
     if ($warn.Count -gt 0) {
         $script:FailLog = Join-Path $Logs 'serve.log'
@@ -1795,8 +2194,8 @@ function Build-Steps {
         # someone started by hand (npx vite) is left running - in compiled-assets mode its hot file is handled by the front-end step
         if ($script:FePlan -eq 'start-dev' -or ($script:FePlan -eq 'build' -and $n -gt 0)) {
             $t = Get-Date
-            while ((Test-Port $VitePort) -and ((Get-Date) - $t).TotalSeconds -lt 6) { Pump }
-            if ($script:FePlan -eq 'start-dev' -and (Test-Port $VitePort)) { return (Res 'fail' ('port ' + $VitePort + ' is used by another program - close it, then Retry')) }
+            while ((Test-VitePort) -and ((Get-Date) - $t).TotalSeconds -lt 6) { Pump }
+            if ($script:FePlan -eq 'start-dev' -and (Test-VitePort)) { return (Res 'fail' ('port ' + $VitePort + ' is used by another program - close it, then Retry')) }
         }
         if ($warns.Count -gt 0) { return (Res 'warn' ($warns -join '; ')) }
         if ($n -gt 0) { Res 'ok' ("ports free, $n old process(es) stopped") } else { Res 'ok' 'ports free' }
@@ -1813,6 +2212,10 @@ function Build-Steps {
     $l += (Mk 'Front-end assets (Vite)' { Invoke-FrontEnd })
 
     $l += (Mk 'Refresh framework caches' { Invoke-Caches })
+
+    if ($UseMySQL -and $SecureDatabase) {
+        $l += (Mk 'Database security' { Invoke-DbSecurity })
+    }
 
     if ($AutoMigrate) {
         $l += (Mk 'Back up + migrate database' {
@@ -1880,6 +2283,8 @@ function Start-Database {
         $a = "--defaults-file=`"$($m.Cfg)`" --console"
         try { $cfgTxt = [IO.File]::ReadAllText($m.Cfg) } catch {}
     }
+    # the app reaches the database on this PC only: no other device can connect to it (see Invoke-DbSecurity)
+    if ($SecureDatabase -and (Test-LocalDbHost (Get-EnvValue 'DB_HOST'))) { $a += ' --bind-address=127.0.0.1' }
     # where does this MySQL keep its data, and which port does it really use?
     $dataDir = Join-Path (Split-Path -Parent (Split-Path -Parent $m.Exe)) 'data'
     $dm = [regex]::Match($cfgTxt, '(?im)^[ \t]*datadir[ \t]*=[ \t]*"?([^"\r\n]+?)"?[ \t\r]*$')
@@ -2016,7 +2421,7 @@ function Show-Online {
             $stat.web = Test-Port $AppPort
             if ($UseReverb) { $stat.chat = Test-Port $ReverbPort }
             if ($UseMySQL)  { $stat.db   = Test-Port $MySQLPort }
-            if ($script:FePlan -ne 'build') { $stat.vite = Test-Port $VitePort }
+            if ($script:FePlan -ne 'build') { $stat.vite = Test-VitePort }
             $last = Get-Date
         }
         if ($Scheduler -ne 'off' -and ((Get-Date) - $lastSched).TotalSeconds -ge 20) { $stat.sched = Test-SchedulerUp; $lastSched = Get-Date }
@@ -2061,7 +2466,7 @@ function Show-Online {
             else { Row }
             SvcRow 'Web server (Laravel)' $AppPort $stat.web $opcNote
             if ($UseReverb) { SvcRow 'Live chat (Reverb)' $ReverbPort $stat.chat }
-            if ($UseMySQL)  { SvcRow 'Database (MySQL)' $MySQLPort $stat.db }
+            if ($UseMySQL)  { SvcRow 'Database (MySQL)' $MySQLPort $stat.db $script:DbSecNote }
             if ($Scheduler -ne 'off') { SvcRow 'Scheduler (backups)' '' $stat.sched $schedNote }
             if ($script:FePlan -ne 'build') { SvcRow 'Vite dev server' $VitePort $stat.vite 'live reload' }
             Row
@@ -2613,47 +3018,12 @@ function Get-Sha256($t) {
     (($b | ForEach-Object { $_.ToString('x2') }) -join '')
 }
 
-# tries one MySQL login (nothing is changed) - used to repair a wrong DB_USERNAME / DB_PASSWORD in .env
-function Test-DbLogin($h, $p, $u, $w) {
-    $env:LSP_H = [string]$h; $env:LSP_P = [string]$p; $env:LSP_U = [string]$u; $env:LSP_W = [string]$w
-    $code = @(
-        '<?php',
-        'try {',
-        '  $pdo = new PDO("mysql:host=" . getenv("LSP_H") . ";port=" . getenv("LSP_P"), (string)getenv("LSP_U"), (string)getenv("LSP_W"), [PDO::ATTR_TIMEOUT => 5, PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);',
-        '  echo "OK";',
-        '} catch (Throwable $e) { echo "ERR: " . $e->getMessage(); exit(1); }'
-    ) -join "`n"
-    $php = "$Logs\dblogin.php"
-    $log = "$Logs\dblogin.log"
-    $out = ''
-    try {
-        Set-Content -Path $php -Value $code -Encoding ASCII
-        Remove-Item $log, "$log.err" -ErrorAction SilentlyContinue
-        $pr = Start-Hidden 'php' ('"' + $php + '"') $log
-        Wait-Proc $pr 20
-        $out = ([string](Get-Content $log -Raw)).Trim()
-    } catch { $out = 'ERR: ' + $_.Exception.Message }
-    foreach ($n in 'LSP_H', 'LSP_P', 'LSP_U', 'LSP_W') { Remove-Item "Env:\$n" -ErrorAction SilentlyContinue }
-    return ($out -eq 'OK')
-}
-
-# the .env login was refused: try the usual local defaults (Laragon: root with no password) and, if one works, save it in .env
+# the .env login was refused: root is used only to (re)create LSPDMS's own account and reset its password; the new
+# password is saved in .env. root itself is never written to .env. $null = root could not log in either (see dbsec.log)
 function Repair-DbLogin($h, $p) {
-    $envf = "$Project\.env"
-    if (-not (Test-Path $envf)) { return $null }
-    foreach ($c in @(@('root', ''), @('root', 'root'))) {
-        if (Test-DbLogin $h $p $c[0] $c[1]) {
-            $txt = [string](Get-Content $envf -Raw)
-            $nl = "`n"; if ($txt -match "`r`n") { $nl = "`r`n" }
-            $txt = Set-EnvLine $txt 'DB_USERNAME' $c[0] $nl
-            $txt = Set-EnvLine $txt 'DB_PASSWORD' $c[1] $nl
-            try {
-                [IO.File]::WriteAllText($envf, $txt, (New-Object Text.UTF8Encoding($false)))
-                if ($c[1]) { return ("fixed .env login (" + $c[0] + ", password set)") }   # never show the password itself
-                return ("fixed .env login (" + $c[0] + ", no password)")
-            } catch { return $null }
-        }
-    }
+    if (-not (Test-Path -LiteralPath (Join-Path $Project '.env')) -or -not (Test-LocalDbHost $h)) { return $null }
+    $a = Ensure-AppDbAccount $h $p
+    if ($a.State -eq 'ok') { return ('fixed .env login (own account ' + $a.User + ')') }   # never show the password itself
     return $null
 }
 
@@ -2699,7 +3069,7 @@ function Test-DbDep {
     if ($out -match '1045') {
         $fixedNote = Repair-DbLogin $dbh $dbp
         if ($fixedNote) { return (Dep 'Database connection' 'ok' $fixedNote) }
-        return (Dep 'Database connection' 'fail' ('login refused for ' + (Get-EnvValue 'DB_USERNAME') + ' - set DB_PASSWORD in .env'))
+        return (Dep 'Database connection' 'fail' ('login refused, root too - see dbsec.log'))
     }
     if ($out -match '2002|2003|refused') { return (Dep 'Database connection' 'fail' ('MySQL not reachable at ' + $dbh + ':' + $dbp)) }
     if ($out -match '^ERR') { return (Dep 'Database connection' 'fail' ($out -replace '^ERR:\s*(SQLSTATE\[\w+\]\s*)?', '')) }
