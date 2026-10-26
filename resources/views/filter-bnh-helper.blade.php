@@ -326,6 +326,12 @@
                 <label class="fbnh-sr" for="fbnhSearch">Search BNH records</label>
                 <input type="search" class="fbnh-field-input" id="fbnhSearch" maxlength="150" placeholder="Search by member name" autocomplete="off">
             </div>
+            <span class="fbnh-group-text" id="fbnhVerdictLabel">Verdict</span>
+            <div class="fbnh-seg" role="radiogroup" aria-labelledby="fbnhVerdictLabel">
+                <label><input type="radio" name="fbnhVerdict" value="all" checked><span>All</span></label>
+                <label><input type="radio" name="fbnhVerdict" value="qualified"><span>Qualified</span></label>
+                <label><input type="radio" name="fbnhVerdict" value="not_qualified"><span>Not qualified</span></label>
+            </div>
             <button type="button" class="fbnh-btn fbnh-btn-primary" id="fbnhDownloadList"><span class="fbnh-btn-label">Download Word Form</span></button>
         </div>
         <div class="fbnh-status" id="fbnhExportStatus" role="status" aria-live="polite"></div>
@@ -414,6 +420,8 @@
     const statusCheckboxes = Array.from(document.querySelectorAll('.fbnh-status-option'));
     const availableStatusCheckboxes = statusCheckboxes.filter(checkbox => !checkbox.disabled);
     const searchInput = $('fbnhSearch');
+    const verdictRadios = Array.from(document.querySelectorAll('input[name="fbnhVerdict"]'));
+    const verdictFilter = () => verdictRadios.find(radio => radio.checked)?.value || 'all';
     const showQualifiedRadio = $('fbnhShowQualified');
     const showMinusesRadio = $('fbnhShowMinuses');
     const showBothRadio = $('fbnhShowBoth');
@@ -650,7 +658,9 @@
             record.is_valid1 = Boolean(values.is_valid1);
             record.is_valid2 = Boolean(values.is_valid2);
             row.querySelector('[data-verdict]').firstElementChild.replaceWith(verdict(record.is_valid1, record.is_valid2));
-            setRowMessage(row, 'Saved', 'ok');
+            const qualified = record.is_valid1 && record.is_valid2;
+            const leavesView = verdictFilter() !== 'all' && qualified !== (verdictFilter() === 'qualified');
+            setRowMessage(row, leavesView ? 'Saved · hidden by the verdict filter on reload' : 'Saved', 'ok');
             setStatus('fbnhRecordsStatus');
             // The resumen depends on these checks; it reloads the next time it is opened.
             stale.resumen = true;
@@ -679,7 +689,7 @@
         $('fbnhPrevious').disabled = true;
         $('fbnhNext').disabled = true;
         try {
-            const data = await requestJson(`${app.dataset.bnhUrl}?${query({ page: currentPage, q: searchInput.value.trim() })}`, { signal });
+            const data = await requestJson(`${app.dataset.bnhUrl}?${query({ page: currentPage, q: searchInput.value.trim(), verdict: verdictFilter() })}`, { signal });
             lastPage = data.last_page;
             clear(body);
             $('fbnhPageInfo').textContent = `Page ${data.page} of ${data.last_page} · ${data.total} records`;
@@ -687,7 +697,7 @@
             $('fbnhNext').disabled = data.page >= data.last_page;
             if (!data.records.length) {
                 const searching = searchInput.value.trim() !== '';
-                messageRow(body, 4, 'No matching records', searching ? 'No active records match that name. Try a different search.' : 'No active records match the selected filters.');
+                messageRow(body, 4, 'No matching records', searching ? 'No active records match that name. Try a different search.' : 'No active records match the selected filters and verdict.');
                 return;
             }
             for (const record of data.records) {
@@ -879,7 +889,7 @@
     }
 
     $('fbnhDownloadList').addEventListener('click', () => download(
-        $('fbnhDownloadList'), `${app.dataset.wordUrl}?${query({ q: searchInput.value.trim() })}`, 'BNH-Form.docx', 'fbnhExportStatus'));
+        $('fbnhDownloadList'), `${app.dataset.wordUrl}?${query({ q: searchInput.value.trim(), verdict: verdictFilter() })}`, 'BNH-Form.docx', 'fbnhExportStatus'));
     $('fbnhDownloadCounts').addEventListener('click', () => download(
         $('fbnhDownloadCounts'), `${app.dataset.countsWordUrl}?${query({
             show_qualified: countsMode() !== 'minuses' ? '1' : '0',
@@ -1100,6 +1110,7 @@
 
     [showQualifiedRadio, showMinusesRadio, showBothRadio].forEach(radio => radio.addEventListener('change', renderCounts));
 
+    verdictRadios.forEach(radio => radio.addEventListener('change', () => { currentPage = 1; stale.list = false; loadBnhRecords(); }));
     searchInput.addEventListener('input', () => {
         window.clearTimeout(searchTimer);
         searchTimer = window.setTimeout(() => { currentPage = 1; stale.list = false; loadBnhRecords(); }, 250);

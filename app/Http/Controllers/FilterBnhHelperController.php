@@ -16,6 +16,12 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class FilterBnhHelperController extends Controller
 {
+    private const VERDICT_LABELS = [
+        'all' => 'All',
+        'qualified' => 'Qualified for BNH',
+        'not_qualified' => 'Not Qualified for BNH',
+    ];
+
     public function index(Request $request): View
     {
         $canViewMk = $this->canViewMk($request);
@@ -83,13 +89,11 @@ class FilterBnhHelperController extends Controller
 
     public function bnhRecords(Request $request): JsonResponse
     {
+        $verdict = $this->verdictFilter($request);
         [, $records, $purokIndex] = $this->filteredData($request);
         $page = max(1, (int) $request->query('page', 1));
         $perPage = 100;
-        $resolved = $this->searchBnhRecords($records, (string) $request->query('q', ''))
-            ->map(fn (Record $record): array => $this->bnhRecord($record, $purokIndex))
-            ->sortBy(fn (array $row): array => $this->bnhRecordSortKey($row))
-            ->values();
+        $resolved = $this->bnhRows($records, $purokIndex, (string) $request->query('q', ''), $verdict);
         $total = $resolved->count();
 
         return response()->json([
@@ -138,16 +142,23 @@ class FilterBnhHelperController extends Controller
 
     public function downloadBnhWord(Request $request): StreamedResponse
     {
+        $verdict = $this->verdictFilter($request);
         [, $records, $purokIndex] = $this->filteredData($request);
-        $rows = $this->searchBnhRecords($records, (string) $request->query('q', ''))
-            ->map(fn (Record $record): array => $this->bnhRecord($record, $purokIndex))
-            ->sortBy(fn (array $row): array => $this->bnhRecordSortKey($row))
+        // One entry per Purok-Grupo in list order; groups without a matching member are left out.
+        $groups = $this->bnhRows($records, $purokIndex, (string) $request->query('q', ''), $verdict)
+            ->groupBy('location')
+            ->map(fn (Collection $rows, int|string $location): array => [
+                'label' => (string) $location,
+                'qualified' => $rows->where('qualified', true)->values()->all(),
+                'not_qualified' => $rows->where('qualified', false)->values()->all(),
+            ])
             ->values()
             ->all();
 
         return $this->wordDownload('BNH Form Helper', 'bnh-form-helper.doc', 'filter-bnh-helper.word-list', [
-            'rows' => $rows,
-            'filters' => $this->filterLabels($request),
+            'groups' => $groups,
+            'verdict' => $verdict,
+            'filters' => $this->filterLabels($request) + ['verdict' => self::VERDICT_LABELS[$verdict]],
         ]);
     }
 
@@ -171,6 +182,33 @@ class FilterBnhHelperController extends Controller
             'showMinuses' => $showMinuses,
             'filters' => $this->filterLabels($request),
         ]);
+    }
+
+    /**
+     * BNH rows matching the name search and verdict, sorted by Purok, Grupo, then name.
+     *
+     * @param  Collection<int, Record>  $records
+     * @param  Collection<int, Collection<int, Purok>>  $purokIndex
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function bnhRows(Collection $records, Collection $purokIndex, string $search, string $verdict): Collection
+    {
+        return $this->searchBnhRecords($records, $search)
+            ->map(fn (Record $record): array => $this->bnhRecord($record, $purokIndex))
+            ->when($verdict !== 'all', fn (Collection $rows): Collection => $rows
+                ->filter(fn (array $row): bool => $row['qualified'] === ($verdict === 'qualified')))
+            ->sortBy(fn (array $row): array => $this->bnhRecordSortKey($row))
+            ->values();
+    }
+
+    /** The BNH Form Helper verdict filter: all, qualified or not_qualified. */
+    private function verdictFilter(Request $request): string
+    {
+        $validated = $request->validate([
+            'verdict' => ['nullable', Rule::in(array_keys(self::VERDICT_LABELS))],
+        ]);
+
+        return $validated['verdict'] ?? 'all';
     }
 
     /**

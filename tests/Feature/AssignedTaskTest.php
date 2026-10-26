@@ -358,6 +358,7 @@ class AssignedTaskTest extends TestCase
 
     public function test_due_date_cannot_be_in_the_past_but_an_existing_one_can_stay(): void
     {
+        config(['session.idle_timeout' => 0]); // the clock jumps days ahead within one signed-in session
         $this->travelTo(now('Asia/Manila')->setTime(10, 0)->utc());
         $head = $this->makeUser('Head Secretary');
         $ana = $this->makeUser('Secretary', 'Ana');

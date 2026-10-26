@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\EncryptedOrNull;
 use Illuminate\Database\Eloquent\Model;
 
 class SystemSmtpSetting extends Model
@@ -21,8 +22,9 @@ class SystemSmtpSetting extends Model
     protected function casts(): array
     {
         return [
-            'app_password' => 'encrypted',
-            'pending_app_password' => 'encrypted',
+            // Unreadable after an APP_KEY change: reads as null so the account can be saved again.
+            'app_password' => EncryptedOrNull::class,
+            'pending_app_password' => EncryptedOrNull::class,
             'pending_saved_at' => 'datetime',
             'verified_at' => 'datetime',
             'verification_expires_at' => 'datetime',
@@ -66,7 +68,7 @@ class SystemSmtpSetting extends Model
 
     public function hasPendingAccount(): bool
     {
-        return filled($this->pending_email) && filled($this->getAttributes()['pending_app_password'] ?? null);
+        return filled($this->pending_email) && filled($this->pending_app_password);
     }
 
     /**

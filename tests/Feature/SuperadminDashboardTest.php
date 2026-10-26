@@ -9,7 +9,9 @@ use App\Models\Record;
 use App\Models\RecordAuditLog;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Encryption\Encrypter;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
@@ -63,6 +65,38 @@ class SuperadminDashboardTest extends TestCase
             file_get_contents(resource_path('views/superadmin-dashboard.blade.php'))
         );
         $this->assertFalse(Route::has('superadmin.monthly-session.start-debug'));
+    }
+
+    public function test_dashboard_opens_when_the_saved_smtp_password_was_encrypted_with_another_app_key(): void
+    {
+        $user = User::query()->create([
+            'gmail' => 'head@example.test',
+            'password' => 'secret-password',
+            'first_name' => 'Head',
+            'last_name' => 'Secretary',
+            'tungkulin' => 'Head Secretary',
+            'is_verified' => true,
+        ]);
+        // What a reinstall that generated a new APP_KEY leaves behind.
+        $oldKey = new Encrypter(random_bytes(32), 'AES-256-CBC');
+        DB::table('system_smtp_settings')->insert([
+            'email' => 'sender@gmail.com',
+            'app_password' => $oldKey->encryptString('abcdabcdabcdabcd'),
+            'verified_at' => now(),
+            'verified_fingerprint' => 'old',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        GlobalVariable::query()->create(['require_otp' => true, 'allow_forgot_password' => true]);
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->get(route('superadmin-dashboard'))
+            ->assertOk();
+
+        // Email cannot be sent through an unreadable account, so the features that need it are off.
+        $settings = GlobalVariable::query()->firstOrFail();
+        $this->assertFalse((bool) $settings->require_otp);
+        $this->assertFalse((bool) $settings->allow_forgot_password);
     }
 
     public function test_record_activity_is_visible_in_the_head_secretary_dashboard(): void

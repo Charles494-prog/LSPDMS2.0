@@ -47,10 +47,14 @@ class LoginController extends Controller
             $request->session()->now('status', IdleTimeout::notice());
         }
 
-        $globalVariables = GlobalVariable::query()->first();
+        $allowForgotPassword = (bool) (GlobalVariable::query()->first()?->allow_forgot_password ?? false);
+        // No verified sender (fresh install, or the saved account became unreadable): hide the link and switch it off.
+        if ($allowForgotPassword && app(SecurityPolicy::class)->enforceEmailAvailability('system')) {
+            $allowForgotPassword = false;
+        }
 
         return view('welcome', [
-            'allowForgotPassword' => (bool) ($globalVariables?->allow_forgot_password ?? false),
+            'allowForgotPassword' => $allowForgotPassword,
         ]);
     }
 

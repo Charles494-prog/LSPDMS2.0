@@ -487,6 +487,63 @@ class FilterBnhHelperTest extends TestCase
             ->assertUnprocessable();
     }
 
+    public function test_verdict_filter_narrows_the_list_and_groups_the_word_form_by_purok_grupo(): void
+    {
+        [$purok2a] = $this->makeSplitPuroks();
+        $this->makeRecord(['full_name' => 'Ana Qualified', 'purok' => '2', 'grupo' => '1', 'gender' => 'Female', 'status' => 'MS', 'is_valid1' => true, 'is_valid2' => true]);
+        $this->makeRecord(['full_name' => 'Ben Halfway', 'purok' => '2', 'grupo' => '1', 'gender' => 'Male', 'status' => 'UWP', 'is_valid1' => true, 'is_valid2' => false]);
+        $this->makeRecord(['full_name' => 'Cora Unchecked', 'purok' => '2', 'grupo' => '2', 'gender' => 'Female', 'status' => 'MS']);
+        $session = ['login_user' => ['id' => 9004]];
+        $filters = ['purok_id' => $purok2a->id, 'status' => 'ALL'];
+
+        $this->withSession($session)
+            ->getJson(route('filter-bnh-helper.bnh-records', $filters + ['verdict' => 'qualified']))
+            ->assertOk()
+            ->assertJsonPath('total', 1)
+            ->assertJsonPath('records.0.name', 'Ana Qualified');
+        $this->withSession($session)
+            ->getJson(route('filter-bnh-helper.bnh-records', $filters + ['verdict' => 'not_qualified']))
+            ->assertOk()
+            ->assertJsonPath('total', 2);
+        $this->withSession($session)
+            ->getJson(route('filter-bnh-helper.bnh-records', $filters + ['verdict' => 'maybe']))
+            ->assertUnprocessable();
+
+        // Qualified only: 2a-2 has no qualified member, so it is skipped.
+        $qualified = $this->withSession($session)
+            ->get(route('filter-bnh-helper.bnh-word', $filters + ['verdict' => 'qualified']))
+            ->assertOk()
+            ->streamedContent();
+        $this->assertStringContainsString('<tr class="group"><td colspan="5">2a-1</td></tr>', $qualified);
+        $this->assertStringNotContainsString('2a-2', $qualified);
+        $this->assertStringContainsString('Ana Qualified', $qualified);
+        $this->assertStringNotContainsString('Ben Halfway', $qualified);
+        $this->assertStringNotContainsString('Verdict = ', $qualified);
+        $this->assertStringNotContainsString('PUROK-GRUPO', $qualified);
+
+        $notQualified = $this->withSession($session)
+            ->get(route('filter-bnh-helper.bnh-word', $filters + ['verdict' => 'not_qualified']))
+            ->streamedContent();
+        $this->assertLessThan(strpos($notQualified, '2a-2'), strpos($notQualified, 'Ben Halfway'));
+        $this->assertLessThan(strpos($notQualified, 'Cora Unchecked'), strpos($notQualified, '2a-2'));
+        $this->assertStringNotContainsString('Ana Qualified', $notQualified);
+
+        // All: each group lists its qualified members first, then the rest, each under its own heading.
+        $all = $this->withSession($session)
+            ->get(route('filter-bnh-helper.bnh-word', $filters + ['verdict' => 'all']))
+            ->streamedContent();
+        $order = array_map(fn (string $text): int|false => strpos($all, $text), [
+            '2a-1', 'Verdict = Qualified for BNH', 'Ana Qualified', 'Verdict = Not Qualified for BNH', 'Ben Halfway', '2a-2', 'Cora Unchecked',
+        ]);
+        $this->assertNotContains(false, $order);
+        $sorted = $order;
+        sort($sorted);
+        $this->assertSame($sorted, $order);
+        // 2a-2 has nobody qualified, so only the Not Qualified heading appears there.
+        $this->assertSame(2, substr_count($all, 'Verdict = Not Qualified for BNH'));
+        $this->assertSame(1, substr_count($all, 'Verdict = Qualified for BNH'));
+    }
+
     /**
      * @return array{0: Purok, 1: Purok}
      */

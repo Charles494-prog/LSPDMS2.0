@@ -1080,6 +1080,7 @@ function Invoke-EnvCheck {
     Ensure-StorageDirs
     $notes = @(); $warns = @()
     $rk = Ensure-ReverbKeys
+    Save-EnvKeep
     if ($rk) { $notes += $rk }
     # public\storage -> storage\app\public (profile pictures)
     if (-not (Test-Path -LiteralPath (Join-Path $Project 'public\storage'))) {
@@ -1437,6 +1438,34 @@ function Write-EnvAtomic($envf, $txt) {
     Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
     $false
 }
+# a copy of .env outside the project (per Windows user), so deleting / reinstalling the project folder keeps
+# APP_KEY (saved passwords stay readable) and the DB login. One copy per project folder.
+function Get-EnvKeepFile {
+    $id = (Get-TextSha ([IO.Path]::GetFullPath($Project).TrimEnd('\').ToLowerInvariant())).Substring(0, 16)
+    Join-Path $env:LOCALAPPDATA ('LSPDMS\env-keep\' + $id + '.env')
+}
+function Save-EnvKeep {
+    $envf = Join-Path $Project '.env'
+    try { $txt = [IO.File]::ReadAllText($envf) } catch { return }
+    if ($txt -notmatch '(?m)^APP_KEY=\S+') { return }
+    $keep = Get-EnvKeepFile
+    try {
+        if ((Test-Path -LiteralPath $keep) -and ([IO.File]::ReadAllText($keep) -ceq $txt)) { return }
+        New-Item -ItemType Directory -Force (Split-Path $keep) | Out-Null
+        [void](Write-EnvAtomic $keep $txt)
+    } catch {}
+}
+# .env is missing (fresh download into a folder that had LSPDMS before): bring back the kept copy. Returns $true when restored
+function Restore-EnvKeep {
+    $envf = Join-Path $Project '.env'
+    $keep = Get-EnvKeepFile
+    if ((Test-Path -LiteralPath $envf) -or -not (Test-Path -LiteralPath $keep)) { return $false }
+    try { $txt = [IO.File]::ReadAllText($keep) } catch { return $false }
+    if ($txt -notmatch '(?m)^APP_KEY=\S+') { return $false }
+    if (-not (Write-EnvAtomic $envf $txt)) { return $false }
+    Write-LaunchLog '.env restored from the copy kept by the previous install (same APP_KEY and DB login)'
+    $true
+}
 function Save-EnvLogin($user, $pw) {
     $envf = Join-Path $Project '.env'
     if (-not (Test-Path -LiteralPath $envf)) { return $false }
@@ -1444,7 +1473,9 @@ function Save-EnvLogin($user, $pw) {
     $nl = "`n"; if ($txt -match "`r`n") { $nl = "`r`n" }
     $txt = Set-EnvLine $txt 'DB_USERNAME' $user $nl
     $txt = Set-EnvLine $txt 'DB_PASSWORD' $pw $nl
-    Write-EnvAtomic $envf $txt
+    $ok = Write-EnvAtomic $envf $txt
+    if ($ok) { Save-EnvKeep }
+    $ok
 }
 # storage\logs\launcher\dbsec.log: what went wrong and how to fix it (shown by "Open log")
 function Write-DbSecLog($lines) {
@@ -2987,6 +3018,7 @@ function Install-NodeMods($force = $false) {
 
 function Install-Env {
     $envf = "$Project\.env"
+    $restored = Restore-EnvKeep
     if (-not (Test-Path $envf)) {
         if (Test-Path "$Project\.env.example") { Copy-Item "$Project\.env.example" $envf }
         else { return (Res 'fail' '.env.example not found') }
@@ -3008,7 +3040,11 @@ function Install-Env {
         [IO.File]::WriteAllText($envf, $txt, (New-Object Text.UTF8Encoding($false)))
         $txt = [string](Get-Content $envf -Raw)
     }
-    if ($txt -match '(?m)^APP_KEY=\S+') { return (Res 'ok' 'ready - check DB settings in .env') }
+    if ($txt -match '(?m)^APP_KEY=\S+') {
+        Save-EnvKeep
+        if ($restored) { return (Res 'ok' 'restored from the previous install') }
+        return (Res 'ok' 'ready - check DB settings in .env')
+    }
     Res 'fail' 'could not create the app key'
 }
 

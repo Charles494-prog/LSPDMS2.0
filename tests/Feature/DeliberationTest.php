@@ -166,6 +166,7 @@ class DeliberationTest extends TestCase
 
     public function test_monthly_session_is_available_once_per_period_and_changes_period_after_midmonth(): void
     {
+        config(['session.idle_timeout' => 0]); // the clock jumps days ahead within one signed-in session
         Storage::fake('local');
         $user = User::query()->create([
             'gmail' => 'period.session@example.test',

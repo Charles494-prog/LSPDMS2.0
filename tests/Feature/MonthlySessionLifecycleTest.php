@@ -159,6 +159,7 @@ class MonthlySessionLifecycleTest extends TestCase
 
     public function test_finish_never_writes_started_at_and_a_double_finish_gets_a_friendly_error(): void
     {
+        config(['session.idle_timeout' => 0]); // the clock jumps days ahead within one signed-in session
         Carbon::setTestNow(Carbon::parse('2026-10-23 09:00:00', 'Asia/Manila'));
         $secretary = $this->secretarySession();
         $this->withSession($secretary)->postJson(route('forms.monthly.session.start'))->assertOk();
@@ -198,6 +199,7 @@ class MonthlySessionLifecycleTest extends TestCase
 
     public function test_finish_keeps_activity_changed_at_when_unlinking_movements(): void
     {
+        config(['session.idle_timeout' => 0]); // the clock jumps days ahead within one signed-in session
         Purok::query()->create(['purok_number' => 1, 'purok_name' => 'Central', 'grupo_start' => 1, 'grupo_end' => 5]);
         Carbon::setTestNow(Carbon::parse('2026-10-23 09:00:00', 'Asia/Manila'));
         $secretary = $this->secretarySession();
