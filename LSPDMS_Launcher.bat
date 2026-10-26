@@ -98,7 +98,7 @@ function Get-LanIp {
 $LanIp    = $null
 $BindHost = $AppHost
 $LanUrl   = $null
-$W    = 74
+$W    = 74   # screen width. PowerShell names ignore case: never name a variable $w in code that waits (Pump redraws with $W)
 $SP   = @('|','/','-','\')
 # logs + state live in the project (storage\logs\launcher, storage\app\launcher) once it exists - see Set-LauncherPaths.
 # Until then (first install) they go to ProgramData. Every path here is absolute.
@@ -1311,7 +1311,7 @@ function Invoke-Caches {
     if ($script:FePlan -ne 'build' -or -not $WarmCaches) { return (Res 'ok' 'caches flushed') }
     # compiled-assets mode: pre-compile views + events in the background.
     # Config and routes are NOT cached (staging relies on DB_DATABASE env overrides; routes may hold closures)
-    $w = Start-Hidden 'cmd.exe' '/c php artisan view:cache --no-interaction && php artisan event:cache --no-interaction' (Join-Path $Logs 'warm.log')
+    $warm = Start-Hidden 'cmd.exe' '/c php artisan view:cache --no-interaction && php artisan event:cache --no-interaction' (Join-Path $Logs 'warm.log')
     Add-BgJob 'warm' $script:CurStep 180 {
         param($j, $final)
         $p = $j.Data.Proc
@@ -1319,7 +1319,7 @@ function Invoke-Caches {
         if ($p.HasExited -and ($null -eq $p.ExitCode -or $p.ExitCode -eq 0)) { return (Res 'ok' 'flushed; views + events pre-compiled') }
         if (-not $p.HasExited) { try { taskkill /F /T /PID $p.Id *> $null } catch {} }
         Res 'warn' 'flushed; pre-compile failed (warm.log)'
-    } @{ Proc = $w }
+    } @{ Proc = $warm }
     Res 'bg' 'flushed, pre-compiling views...'
 }
 
@@ -1554,12 +1554,18 @@ echo json_encode(["ok" => false, "stage" => "input", "code" => 0, "err" => "unkn
         foreach ($k in $vars.Keys) { [Environment]::SetEnvironmentVariable([string]$k, $null, 'Process') }
         Remove-Item -LiteralPath $php, $log, "$log.err" -Force -ErrorAction SilentlyContinue
     }
+    # whatever went wrong, a password never reaches the answer (it ends up in launcher / dbsec logs)
+    $secrets = @([string]$vars['LSP_W'], [string]$vars['LSP_AW'])
+    if ($vars['LSP_ROOTS']) {
+        try { $secrets += @((ConvertFrom-Json ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String([string]$vars['LSP_ROOTS'])))) | ForEach-Object { [string]$_.w }) } catch {}
+    }
+    foreach ($secret in $secrets) { if ($secret.Length -ge 4) { $out = $out.Replace($secret, '***') } }
     try { $o = $out | ConvertFrom-Json -ErrorAction Stop; if ($o -and $o.PSObject.Properties['ok']) { return $o } } catch {}
     if (-not $out) { $out = 'no answer from PHP' }
     [pscustomobject]@{ ok = $false; stage = 'php'; code = 0; err = (Fit (($out -replace '\s+', ' ').Trim()) 200) }
 }
-function Get-DbLoginCheck($h, $p, $u, $w) {
-    Invoke-DbPhp @{ LSP_MODE = 'check'; LSP_H = $h; LSP_P = $p; LSP_U = $u; LSP_W = $w; LSP_D = (Get-EnvValue 'DB_DATABASE') }
+function Get-DbLoginCheck($h, $p, $u, $dbPass) {
+    Invoke-DbPhp @{ LSP_MODE = 'check'; LSP_H = $h; LSP_P = $p; LSP_U = $u; LSP_W = $dbPass; LSP_D = (Get-EnvValue 'DB_DATABASE') }
 }
 # (re)creates LSPDMS's own account through root, saves its new password in .env and proves the new login works.
 # root itself is never written to .env. Returns @{ State = 'ok' | 'fail'; Detail; User; Check }
@@ -1733,8 +1739,8 @@ function Restart-DbServer($m) {
     if (Test-Port $MySQLPort) { return 'OK' }
     'ERR: MySQL did not start again - see mysql.log'
 }
-# (a) the database must listen on 127.0.0.1 only. $chk = a login check that already ran ($u / $w = the .env login)
-function Ensure-DbLocalOnly($h, $p, $chk, $u, $w) {
+# (a) the database must listen on 127.0.0.1 only. $chk = a login check that already ran ($u / $dbPass = the .env login)
+function Ensure-DbLocalOnly($h, $p, $chk, $u, $dbPass) {
     if ([string]$chk.bind -eq '127.0.0.1') { return (Res 'ok' 'localhost only') }
     $was = [string]$chk.bind; if (-not $was) { $was = 'every address' }
     $m = Find-MySqld
@@ -1774,7 +1780,7 @@ function Ensure-DbLocalOnly($h, $p, $chk, $u, $w) {
         Write-DbSecLog @('The database did not start again: ' + $rs)
         return (Res 'warn' 'database restart failed')
     }
-    $c2 = Get-DbLoginCheck $h $p $u $w
+    $c2 = Get-DbLoginCheck $h $p $u $dbPass
     if ($c2.ok -and [string]$c2.bind -eq '127.0.0.1') {
         Write-LaunchLog ('database: now listens on 127.0.0.1 only (was ' + $was + ')')
         return (Res 'ok' 'localhost only')
@@ -1801,8 +1807,8 @@ function Invoke-DbSecurity {
     $fw = Protect-DbFirewall ([int]$dbp)
     if ($fw.State -ne 'ok') { $warns += $fw.Detail }
     # (c) LSPDMS's own account: a working non-root login in .env is kept as it is
-    $u = Get-EnvValue 'DB_USERNAME'; $w = Get-EnvValue 'DB_PASSWORD'
-    $chk = Get-DbLoginCheck $dbh $dbp $u $w
+    $u = Get-EnvValue 'DB_USERNAME'; $dbPass = Get-EnvValue 'DB_PASSWORD'
+    $chk = Get-DbLoginCheck $dbh $dbp $u $dbPass
     $refused = (-not $chk.ok) -and [string]$chk.stage -eq 'login' -and (@(1044, 1045, 1698) -contains [int]$chk.code)
     if (-not $chk.ok -and -not $refused) {
         # not a wrong login (no answer, PHP problem...): nothing is changed
@@ -1812,10 +1818,10 @@ function Invoke-DbSecurity {
     if ($refused -or -not $u -or $u -eq 'root') {
         $a = Ensure-AppDbAccount $dbh $dbp
         if ($a.State -ne 'ok') { return (Res 'fail' $a.Detail) }
-        $chk = $a.Check; $u = Get-EnvValue 'DB_USERNAME'; $w = Get-EnvValue 'DB_PASSWORD'
+        $chk = $a.Check; $u = Get-EnvValue 'DB_USERNAME'; $dbPass = Get-EnvValue 'DB_PASSWORD'
     }
     # (a) localhost only
-    $b = Ensure-DbLocalOnly $dbh $dbp $chk $u $w
+    $b = Ensure-DbLocalOnly $dbh $dbp $chk $u $dbPass
     if ($b.State -ne 'ok') { $warns = @($b.Detail) + $warns }
     if ($warns.Count -gt 0) { return (Res 'warn' ('own account; ' + ($warns -join ', '))) }
     $script:DbSecNote = 'localhost only'
