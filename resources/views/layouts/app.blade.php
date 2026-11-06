@@ -51,8 +51,7 @@
     $formMenus = [
         ['key' => 'generate', 'label' => 'Generate Forms', 'icon' => 'file', 'url' => $formsHub.'#generate-forms', 'sections' => [
             ['label' => 'Weekly', 'url' => $formsHub.'#generate-weekly', 'items' => [
-                ['R4-02 Generator', route('forms.weekly.r4-02'), request()->routeIs('forms.weekly.r4-02*')],
-                ['R4-03 Generator', route('forms.weekly.r4-03'), request()->routeIs('forms.weekly.r4-03*')],
+                ['R4-02 & R4-03 Generator', route('forms.weekly.r4-02'), request()->routeIs('forms.weekly.r4-02*', 'forms.weekly.r4-03*')],
             ]],
             ['label' => 'Monthly', 'url' => $formsHub.'#generate-monthly', 'items' => [
                 ['Resumen & R4-01 (This Month)', route('forms.monthly.generators'), request()->routeIs('forms.monthly.generators', 'forms.monthly.resumen*', 'forms.monthly.r4-01', 'forms.monthly.r4-01.download')],

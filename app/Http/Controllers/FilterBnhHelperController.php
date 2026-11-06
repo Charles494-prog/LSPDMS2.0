@@ -185,6 +185,41 @@ class FilterBnhHelperController extends Controller
     }
 
     /**
+     * The members behind the Resumen counts, by Purok-Grupo: who is qualified for
+     * BNH and who is not. Follows the Resumen's Show counts choice.
+     */
+    public function downloadNamesWord(Request $request): StreamedResponse
+    {
+        $display = $request->validate([
+            'show_qualified' => ['sometimes', 'boolean'],
+            'show_minuses' => ['sometimes', 'boolean'],
+        ]);
+        $showQualified = (bool) ($display['show_qualified'] ?? true);
+        $showMinuses = (bool) ($display['show_minuses'] ?? true);
+        abort_if(! $showQualified && ! $showMinuses, 422, 'Select at least one list to include.');
+
+        [, $records, $purokIndex] = $this->filteredData($request);
+        $verdict = $showQualified && $showMinuses ? 'all' : ($showQualified ? 'qualified' : 'not_qualified');
+        // Groups with nobody in the chosen list(s) are left out.
+        $groups = $this->bnhRows($records, $purokIndex, '', $verdict)
+            ->groupBy('location')
+            ->map(fn (Collection $rows, int|string $location): array => [
+                'label' => (string) $location,
+                'qualified' => $rows->where('qualified', true)->pluck('name')->values()->all(),
+                'not_qualified' => $rows->where('qualified', false)->pluck('name')->values()->all(),
+            ])
+            ->values()
+            ->all();
+
+        return $this->wordDownload('BNH Helper Form Resumen - Names', 'bnh-helper-form-resumen-names.doc', 'filter-bnh-helper.word-names', [
+            'groups' => $groups,
+            'showQualified' => $showQualified,
+            'showMinuses' => $showMinuses,
+            'filters' => $this->filterLabels($request),
+        ]);
+    }
+
+    /**
      * BNH rows matching the name search and verdict, sorted by Purok, Grupo, then name.
      *
      * @param  Collection<int, Record>  $records

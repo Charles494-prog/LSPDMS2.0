@@ -117,6 +117,7 @@ Route::middleware(['login.session', 'idle.timeout', 'no-store'])->group(function
         Route::get('/filter-bnh-helper/qualified-counts', [FilterBnhHelperController::class, 'qualifiedCounts'])->name('filter-bnh-helper.qualified-counts');
         Route::get('/filter-bnh-helper/bnh-word', [FilterBnhHelperController::class, 'downloadBnhWord'])->middleware('throttle:20,1')->name('filter-bnh-helper.bnh-word');
         Route::get('/filter-bnh-helper/counts-word', [FilterBnhHelperController::class, 'downloadCountsWord'])->middleware('throttle:20,1')->name('filter-bnh-helper.counts-word');
+        Route::get('/filter-bnh-helper/names-word', [FilterBnhHelperController::class, 'downloadNamesWord'])->middleware('throttle:20,1')->name('filter-bnh-helper.names-word');
         Route::put('/filter-bnh-helper/records/{record}/checks', [FilterBnhHelperController::class, 'updateChecks'])->name('filter-bnh-helper.checks.update');
     });
     Route::middleware('permission:Inquire_Allow')->group(function (): void {

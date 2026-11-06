@@ -79,6 +79,45 @@ class R402R403Test extends TestCase
             ->assertSee('1-8');
     }
 
+    public function test_r402_hakbang_code_is_optional_and_the_r403_button_opens_the_r403(): void
+    {
+        $secretary = $this->makeSecretary();
+        $this->makePurok(1, 'Purok One');
+        R402Hakbang::query()->create(['status' => 'MS', 'code' => '1-7', 'description' => 'Dalaw']);
+        foreach (range(1, 3) as $grupo) {
+            Record::query()->create([
+                'full_name' => "Member {$grupo}",
+                'registry' => sprintf('%013d', $grupo),
+                'purok' => '1',
+                'grupo' => (string) $grupo,
+                'status' => 'MS',
+                'monthly_code' => 'MS: A',
+            ]);
+        }
+        $session = ['login_user' => ['id' => $secretary->id]];
+        $base = ['purok' => 1, 'kalagayan' => 'MS', 'selection' => '1-3', 'row_keys' => $this->displayedRowKeys($secretary, '1', [1, 2, 3])];
+
+        // No code at all: every row is saved with a blank code.
+        $this->withSession($session)->post(route('forms.weekly.r4-02.store'), $base + ['hakbang_code' => ''])->assertRedirect();
+        $this->assertSame(['', '', ''], R402GeneratedForm::query()->latest('id')->firstOrFail()->formRecords()->orderBy('source_row_number')->pluck('hakbang_code')->all());
+
+        // Codes by row with a rule for some rows only: the rest stay blank.
+        $this->withSession($session)->post(route('forms.weekly.r4-02.store'), $base + ['split_codes' => '1', 'code_assignments' => '2=1-7'])->assertRedirect();
+        $this->assertSame(['', '1-7', ''], R402GeneratedForm::query()->latest('id')->firstOrFail()->formRecords()->orderBy('source_row_number')->pluck('hakbang_code')->all());
+
+        // A code that is given must still be configured.
+        $this->withSession($session)->post(route('forms.weekly.r4-02.store'), $base + ['split_codes' => '1', 'code_assignments' => '1=1-2'])
+            ->assertSessionHasErrors('code_assignments');
+        $this->assertDatabaseCount('r4_02_generated_forms', 2);
+
+        // The R4-03 button saves the R4-02, then opens the R4-03 for that Kalagayan.
+        $this->withSession($session)->post(route('forms.weekly.r4-02.store'), $base + ['output' => 'r4-03'])
+            ->assertRedirect(route('forms.weekly.r4-03.print', ['kalagayan' => 'MS']));
+        $this->assertDatabaseCount('r4_02_generated_forms', 3);
+        $this->withSession($session)->post(route('forms.weekly.r4-02.store'), $base + ['output' => 'pdf'])
+            ->assertSessionHasErrors('output');
+    }
+
     public function test_r402_rejects_unconfigured_codes_and_malformed_row_selections(): void
     {
         $secretary = $this->makeSecretary();

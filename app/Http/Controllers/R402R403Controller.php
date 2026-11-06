@@ -74,16 +74,17 @@ class R402R403Controller extends Controller
             'selection' => ['required', 'string', 'max:5000'],
             // "number:key" pairs for the selected rows, as displayed by the generator (see rowKey()).
             'row_keys' => ['required', 'string', 'max:60000'],
+            // The hakbang code is optional: rows without one are saved with a blank code.
             'split_codes' => ['sometimes', 'boolean'],
             'hakbang_code' => [
                 'nullable',
-                'required_unless:split_codes,1',
                 'string',
                 Rule::exists('r4_02_hakbangs', 'code')->where('status', $request->input('kalagayan')),
             ],
-            'code_assignments' => ['nullable', 'required_if:split_codes,1', 'string', 'max:5000'],
+            'code_assignments' => ['nullable', 'string', 'max:5000'],
             'date_of_dalaw' => ['nullable', 'date'],
             'date_of_ulat' => ['nullable', 'date'],
+            'output' => ['nullable', Rule::in(['r4-02', 'r4-03'])],
         ]);
 
         // A saved R4-02 belongs to exactly one Purok segment, so the posted token must resolve to one segment.
@@ -167,6 +168,13 @@ class R402R403Controller extends Controller
 
             return $form;
         });
+
+        // R4-03 summarizes every saved R4-02, so its button saves this one first and then opens the R4-03.
+        if (($validated['output'] ?? 'r4-02') === 'r4-03') {
+            return redirect()
+                ->route('forms.weekly.r4-03.print', ['kalagayan' => $validated['kalagayan']])
+                ->with('status', 'R4-02 saved and included in this R4-03.');
+        }
 
         return redirect()
             ->route('forms.weekly.r4-02.print', $form)
@@ -346,6 +354,7 @@ class R402R403Controller extends Controller
         string $rules,
         string $status
     ): array {
+        // Rows without a code keep a blank one.
         if (! $splitCodes) {
             return array_fill_keys($selectedNumbers, (string) $defaultCode);
         }
@@ -383,12 +392,7 @@ class R402R403Controller extends Controller
             }
         }
 
-        if (array_diff($selectedNumbers, array_keys($assignments)) !== []) {
-            throw ValidationException::withMessages([
-                'code_assignments' => 'Assign a configured hakbang code to every selected row.',
-            ]);
-        }
-
+        $assignments += array_fill_keys($selectedNumbers, '');
         ksort($assignments);
 
         return $assignments;

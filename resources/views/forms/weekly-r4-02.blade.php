@@ -5,8 +5,8 @@
                               Without it, the view falls back to $rows for the first selected Purok.
     POST forms.weekly.r4-02   one request per Purok: purok, kalagayan, selection ("1-10,15"),
                               row_keys ("1:r12,2:r15", each selected row's data-key so a changed list is refused),
-                              hakbang_code OR split_codes + code_assignments, date_of_dalaw, date_of_ulat,
-                              output = "r4-02" | "r4-03" (the controller returns the matching DOCX).
+                              optional hakbang_code OR split_codes + code_assignments (rows without a code stay blank),
+                              date_of_dalaw, date_of_ulat, output = "r4-02" (R4-02 print) | "r4-03" (saves, then the R4-03 print).
 --}}
 @extends('layouts.app')
 
@@ -99,8 +99,26 @@
     .r402-summary-table select.r402-input { max-width:240px; }
     .r402-split { display:flex; align-items:center; gap:.4rem; margin-top:.4rem; color:var(--text-muted); font-size:.75rem; font-weight:500; cursor:pointer; }
     .r402-split input { width:14px; height:14px; }
-    .r402-assign { display:block; width:100%; margin-top:.4rem; }
-    .r402-assign[hidden] { display:none; }
+    .r402-split-note { display:block; margin-top:.35rem; color:var(--text-muted); font-size:.75rem; }
+    .r402-split-note[hidden] { display:none; }
+    .r402-summary-table select.r402-input:disabled { opacity:.45; cursor:not-allowed; }
+    .r402-split-row[hidden] { display:none; }
+    .r402-split-row > td { padding:0 .9rem .9rem; white-space:normal; }
+    .r402-rules { padding:.85rem; border:1px solid var(--border); border-radius:8px; background:var(--hover); }
+    .r402-rules-head { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:.3rem .8rem; margin-bottom:.6rem; }
+    .r402-rules-head strong { font-size:.85rem; }
+    .r402-rule { display:grid; grid-template-columns:minmax(0,180px) minmax(0,280px) max-content; justify-content:start; align-items:center; gap:.5rem; margin-bottom:.5rem; }
+    .r402-rule .r402-input { width:100%; background:var(--bg); }
+    .r402-rule .r402-input[aria-invalid="true"] { border-color:#e5484d; }
+    .r402-rule-msg { grid-column:1 / -1; margin:-.2rem 0 .1rem; color:#e5484d; font-size:.75rem; font-weight:600; }
+    .r402-rule-msg:empty { display:none; }
+    .r402-rule-remove { justify-self:start; min-height:36px; padding:0 .7rem; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--text-muted); font-size:.8rem; cursor:pointer; }
+    .r402-rule-remove:hover { color:var(--text); border-color:var(--text-muted); }
+    .r402-rules-foot { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem .9rem; margin-top:.2rem; }
+    .r402-rule-add { min-height:32px; padding:0 .8rem; border:1px dashed var(--text-muted); border-radius:8px; background:var(--bg); color:var(--text); font-size:.8rem; font-weight:600; cursor:pointer; }
+    .r402-rule-add:hover { border-color:var(--text-muted); }
+    .r402-rule-summary { color:var(--text-muted); font-size:.78rem; }
+    @media (max-width:640px) { .r402-rule { grid-template-columns:1fr; } }
     .r402-actions { display:flex; flex-wrap:wrap; gap:.4rem; }
     .r402-btn { display:inline-flex; align-items:center; justify-content:center; min-height:34px; padding:0 .9rem; border:1px solid var(--border); border-radius:999px; background:transparent; color:var(--text); font-size:.8rem; font-weight:600; white-space:nowrap; cursor:pointer; transition:background-color .12s,border-color .12s,opacity .12s; }
     .r402-btn:hover { background:var(--hover); border-color:color-mix(in srgb,var(--text) 45%,var(--border)); }
@@ -308,7 +326,7 @@
                 <span class="r402-muted">Each Purok downloads separately.</span>
             </div>
             @if ($hakbangList->isEmpty())
-                <p class="r402-error" style="margin:0 0 .8rem">No Hakbang codes are configured for {{ $selectedStatus }}. Ask an administrator to add them in Admin Portal → Mga R4-02 Hakbang.</p>
+                <p class="r402-muted" style="margin:0 0 .8rem">No Hakbang codes are configured for {{ $selectedStatus }}, so forms download without a code. An administrator can add codes in Admin Portal → Mga R4-02 Hakbang.</p>
             @endif
             <div class="r402-summary-wrap">
                 <table class="r402-table r402-summary-table">
@@ -324,17 +342,18 @@
                                     @if ($hakbangList->isEmpty())
                                         <span class="r402-muted">Not configured</span>
                                     @else
-                                        <select class="r402-input" name="hakbang_code" form="r402Gen{{ $gi }}" data-code required aria-label="Hakbang code for {{ $group['name'] }}">
-                                            <option value="">Select code</option>
+                                        <select class="r402-input" name="hakbang_code" form="r402Gen{{ $gi }}" data-code aria-label="Hakbang code for {{ $group['name'] }} (optional)">
+                                            <option value="">No code</option>
                                             @foreach ($hakbangList as $hakbang)
                                                 <option value="{{ $hakbang->code }}" title="{{ $hakbang->description }}">{{ $hakbang->code }} — {{ $hakbang->description }}</option>
                                             @endforeach
                                         </select>
+                                        <span class="r402-split-note" data-split-note hidden>Set per row below</span>
                                         <label class="r402-split">
-                                            <input type="checkbox" name="split_codes" value="1" form="r402Gen{{ $gi }}" data-split>
-                                            Different codes by row numbers
+                                            <input type="checkbox" name="split_codes" value="1" form="r402Gen{{ $gi }}" data-split aria-controls="r402Rules{{ $gi }}">
+                                            Different codes by row
                                         </label>
-                                        <input class="r402-input r402-assign" type="text" name="code_assignments" form="r402Gen{{ $gi }}" data-assign placeholder="1-3=1-7;5,7=1-8" aria-label="Row-to-code assignments for {{ $group['name'] }}" hidden>
+                                        <input type="hidden" name="code_assignments" form="r402Gen{{ $gi }}" data-assign>
                                     @endif
                                 </td>
                                 <td><input class="r402-input" type="date" name="date_of_dalaw" form="r402Gen{{ $gi }}" aria-label="Date of Dalaw for {{ $group['name'] }}"></td>
@@ -346,10 +365,42 @@
                                     </div>
                                 </td>
                             </tr>
+                            @if ($hakbangList->isNotEmpty())
+                                <tr class="r402-split-row" id="r402Rules{{ $gi }}" data-split-row="{{ $gi }}" hidden>
+                                    <td colspan="6">
+                                        <div class="r402-rules">
+                                            <div class="r402-rules-head">
+                                                <strong>Codes by row · {{ $group['name'] }}</strong>
+                                                <span class="r402-muted">Use row numbers from the list above. Selected rows without a rule get no code.</span>
+                                            </div>
+                                            <div data-rules></div>
+                                            <div class="r402-rules-foot">
+                                                <button type="button" class="r402-rule-add" data-rule-add>+ Add rule</button>
+                                                <span class="r402-rule-summary" data-rule-summary aria-live="polite"></span>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            @endif
                         @endforeach
                     </tbody>
                 </table>
             </div>
+            @if ($hakbangList->isNotEmpty())
+                <template id="r402RuleTemplate">
+                    <div class="r402-rule" data-rule>
+                        <input class="r402-input" type="text" inputmode="numeric" autocomplete="off" placeholder="Rows, e.g. 1-3, 5" aria-label="Rows" data-rule-rows>
+                        <select class="r402-input" aria-label="Code for these rows" data-rule-code>
+                            <option value="">Choose a code</option>
+                            @foreach ($hakbangList as $hakbang)
+                                <option value="{{ $hakbang->code }}" title="{{ $hakbang->description }}">{{ $hakbang->code }} — {{ $hakbang->description }}</option>
+                            @endforeach
+                        </select>
+                        <button type="button" class="r402-rule-remove" data-rule-remove aria-label="Remove this rule">Remove</button>
+                        <p class="r402-rule-msg" data-rule-msg role="alert"></p>
+                    </div>
+                </template>
+            @endif
             <div class="r402-forms">
                 @foreach ($groups as $gi => $group)
                     <form id="r402Gen{{ $gi }}" method="POST" action="{{ route('forms.weekly.r4-02', ['purok' => $group['number'], 'kalagayan' => $selectedStatus]) }}">
@@ -514,7 +565,10 @@
                 outputs: Array.from(summary.querySelectorAll('[data-output]')),
                 code: summary.querySelector('[data-code]'),
                 split: summary.querySelector('[data-split]'),
+                splitNote: summary.querySelector('[data-split-note]'),
                 assign: summary.querySelector('[data-assign]'),
+                rulesRow: document.querySelector('[data-split-row="' + i + '"]'),
+                rulesOk: true,
             };
         });
 
@@ -548,6 +602,60 @@
             return { nums, bad };
         };
 
+        const ruleTemplate = document.getElementById('r402RuleTemplate');
+        const isSplit = (g) => Boolean(g.split && g.split.checked);
+        const plural = (nums) => (nums.length === 1 ? 'Row ' : 'Rows ') + compress(new Set(nums)).join(', ');
+
+        // Checks every per-row rule against the selected rows, shows what is wrong next to the rule,
+        // and writes the valid rules into the hidden code_assignments field ("1-3=1-7;5=1-8").
+        const checkRules = (g, set) => {
+            g.rulesOk = true;
+            if (!g.rulesRow) return;
+            if (!isSplit(g)) { g.assign.value = ''; return; }
+            const taken = new Map();
+            const parts = [];
+            const summary = [];
+            g.rulesRow.querySelectorAll('[data-rule]').forEach((rule) => {
+                const rowsInput = rule.querySelector('[data-rule-rows]');
+                const codeSelect = rule.querySelector('[data-rule-code]');
+                const msg = rule.querySelector('[data-rule-msg]');
+                const text = rowsInput.value.trim();
+                const code = codeSelect.value;
+                const problems = [];
+                let rowsBad = false;
+                if (text === '' && code === '') { rowsInput.removeAttribute('aria-invalid'); codeSelect.removeAttribute('aria-invalid'); msg.textContent = ''; return; }
+                const { nums, bad } = parse(text);
+                const list = Array.from(nums).sort((a, b) => a - b);
+                if (text === '') { problems.push('Enter the row numbers.'); rowsBad = true; }
+                if (bad.length) { problems.push('Not a row number: ' + bad.join(', ') + '.'); rowsBad = true; }
+                const unselected = list.filter((n) => !set.has(n));
+                if (unselected.length) { problems.push(plural(unselected) + (unselected.length === 1 ? ' is' : ' are') + ' not selected.'); rowsBad = true; }
+                const twice = list.filter((n) => taken.has(n));
+                if (twice.length) { problems.push(plural(twice) + ' already ' + (twice.length === 1 ? 'has' : 'have') + ' a code in another rule.'); rowsBad = true; }
+                if (code === '') problems.push('Choose a code.');
+                rowsInput.toggleAttribute('aria-invalid', rowsBad);
+                if (rowsBad) rowsInput.setAttribute('aria-invalid', 'true');
+                if (code === '') codeSelect.setAttribute('aria-invalid', 'true'); else codeSelect.removeAttribute('aria-invalid');
+                msg.textContent = problems.join(' ');
+                if (problems.length) { g.rulesOk = false; return; }
+                list.forEach((n) => taken.set(n, code));
+                parts.push(compress(nums).join(',') + '=' + code);
+                summary.push(plural(list) + ' → ' + code);
+            });
+            const uncoded = Array.from(set).filter((n) => !taken.has(n)).sort((a, b) => a - b);
+            if (uncoded.length) summary.push(plural(uncoded) + ' → no code');
+            g.assign.value = g.rulesOk ? parts.join(';') : '';
+            g.rulesRow.querySelector('[data-rule-summary]').textContent = g.rulesOk
+                ? (set.size ? summary.join(' · ') : 'Select rows in the list above first.')
+                : 'Fix the highlighted rule to download.';
+        };
+
+        const addRule = (g) => {
+            const rule = ruleTemplate.content.firstElementChild.cloneNode(true);
+            g.rulesRow.querySelector('[data-rules]').append(rule);
+            return rule;
+        };
+
         const render = () => {
             let total = 0;
             groups.forEach((g, i) => {
@@ -569,7 +677,9 @@
                     .filter((row) => set.has(Number(row.dataset.row)))
                     .map((row) => row.dataset.row + ':' + row.dataset.key)
                     .join(',');
-                g.outputs.forEach((button) => { button.disabled = set.size === 0 || !g.code; });
+                checkRules(g, set);
+                // A code is optional; only a broken per-row rule blocks the download.
+                g.outputs.forEach((button) => { button.disabled = set.size === 0 || !g.rulesOk; });
             });
             totalEl.textContent = total ? total + ' selected' : 'None selected';
         };
@@ -610,11 +720,27 @@
                 state[i] = g.all.checked ? new Set(g.rows.map((row) => Number(row.dataset.row))) : new Set();
                 render();
             });
-            if (g.split && g.code && g.assign) {
+            if (g.split && g.code && g.rulesRow) {
                 g.split.addEventListener('change', () => {
-                    g.assign.hidden = !g.split.checked;
-                    g.code.required = !g.split.checked;
-                    g.assign.required = g.split.checked;
+                    const on = g.split.checked;
+                    // One code for the whole Purok, or codes per row: never both.
+                    g.code.disabled = on;
+                    g.splitNote.hidden = !on;
+                    g.rulesRow.hidden = !on;
+                    if (on && !g.rulesRow.querySelector('[data-rule]')) addRule(g).querySelector('[data-rule-rows]').focus();
+                    render();
+                });
+                g.rulesRow.addEventListener('input', render);
+                g.rulesRow.addEventListener('change', render);
+                g.rulesRow.querySelector('[data-rule-add]').addEventListener('click', () => {
+                    addRule(g).querySelector('[data-rule-rows]').focus();
+                    render();
+                });
+                g.rulesRow.addEventListener('click', (event) => {
+                    const remove = event.target.closest('[data-rule-remove]');
+                    if (!remove) return;
+                    remove.closest('[data-rule]').remove();
+                    render();
                 });
             }
         });

@@ -160,6 +160,7 @@
     .fbnh-pagination .fbnh-btn { height: 30px; font-size: .78rem; }
 
     /* BNH toolbar: search on the left, export on the right */
+    .fbnh-head-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
     .fbnh-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1rem; margin-bottom: .85rem; }
     .fbnh-search-row { flex: 1 1 260px; max-width: 360px; }
     .fbnh-bar .fbnh-btn { margin-left: auto; }
@@ -199,6 +200,8 @@
         .fbnh-pagination { align-items: flex-start; flex-direction: column; }
         .fbnh-search-row { max-width: none; }
         .fbnh-bar .fbnh-btn { width: 100%; margin-left: 0; }
+        .fbnh-head-actions { width: 100%; }
+        .fbnh-head-actions .fbnh-btn { flex: 1 1 auto; }
     }
 </style>
 @endpush
@@ -212,6 +215,7 @@
     data-checks-url="{{ url('/filter-bnh-helper/records') }}"
     data-word-url="{{ route('filter-bnh-helper.bnh-word') }}"
     data-counts-word-url="{{ route('filter-bnh-helper.counts-word') }}"
+    data-names-word-url="{{ route('filter-bnh-helper.names-word') }}"
     data-can-view-mk="{{ $canViewMk ? 'true' : 'false' }}"
     data-csrf="{{ csrf_token() }}">
 
@@ -361,7 +365,10 @@
                 <h2 class="fbnh-h2">BNH Helper Form Resumen</h2>
                 <p class="fbnh-sub">Qualified members have both BNH checks. Total minuses is the selected MS, UWP, and/or MK count minus those qualified members.</p>
             </div>
-            <button type="button" class="fbnh-btn fbnh-btn-primary" id="fbnhDownloadCounts"><span class="fbnh-btn-label">Download Resumen</span></button>
+            <div class="fbnh-head-actions">
+                <button type="button" class="fbnh-btn" id="fbnhDownloadNames"><span class="fbnh-btn-label">Download Names</span></button>
+                <button type="button" class="fbnh-btn fbnh-btn-primary" id="fbnhDownloadCounts"><span class="fbnh-btn-label">Download Resumen</span></button>
+            </div>
         </div>
         <div class="fbnh-toolbar">
             <span class="fbnh-group-text" id="fbnhModeLabel">Show counts</span>
@@ -882,7 +889,7 @@
     }
 
     function updateDownloadState() {
-        for (const id of ['fbnhDownloadList', 'fbnhDownloadCounts']) {
+        for (const id of ['fbnhDownloadList', 'fbnhDownloadCounts', 'fbnhDownloadNames']) {
             const button = $(id);
             button.disabled = !hasSelection() || button.dataset.busy === '1';
         }
@@ -895,6 +902,11 @@
             show_qualified: countsMode() !== 'minuses' ? '1' : '0',
             show_minuses: countsMode() !== 'qualified' ? '1' : '0',
         })}`, 'BNH-Resumen.docx', 'fbnhCountsStatus'));
+    $('fbnhDownloadNames').addEventListener('click', () => download(
+        $('fbnhDownloadNames'), `${app.dataset.namesWordUrl}?${query({
+            show_qualified: countsMode() !== 'minuses' ? '1' : '0',
+            show_minuses: countsMode() !== 'qualified' ? '1' : '0',
+        })}`, 'BNH-Resumen-Names.doc', 'fbnhCountsStatus'));
 
     /* ---------------- Tabs: load only what is visible ---------------- */
     const loaders = { matrix: loadMatrix, list: loadBnhRecords, resumen: loadQualifiedCounts };

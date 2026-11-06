@@ -21,6 +21,7 @@
 <main class="r402-print">
     <nav class="r402-print-tools">
         <a href="{{ route('forms.weekly.r4-02', ['purok' => $purokToken ?? $generatedForm->purok_number, 'kalagayan' => $generatedForm->kalagayan]) }}">Back to R4-02 Generator</a>
+        <a href="{{ route('forms.weekly.r4-03.print', ['kalagayan' => $generatedForm->kalagayan]) }}">Open R4-03 ({{ $generatedForm->kalagayan }})</a>
         <button type="button" onclick="window.print()">Print / Save as PDF</button>
     </nav>
     <h1>R4-02</h1>

@@ -1,0 +1,17 @@
+* [33mf7dd8dd[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m)[m Claude Fixes
+* [33m1bc2a67[m[33m ([m[1;31morigin/master[m[33m, [m[1;31morigin/HEAD[m[33m)[m Need ng Filter sa BNH next claude session
+* [33mbd308dc[m Done, R4-02, R4-03 left
+* [33md2dbaed[m May Facebook na
+* [33m715b83a[m After Claude's Optimization 1
+* [33maa0ab11[m UI and Superadmin done
+* [33m9c23da9[m Before modying the bot UI
+* [33m5fe8863[m Oct 23, 2026 madaling araw commit
+* [33mc7fcde1[m Oct 22, 2026 first commit of the day
+* [33m2489956[m fix: default authentication policies to disabled
+* [33m01d5279[m fix: use white logo favicon
+* [33m86a5b31[m fix: restore launcher mode and server menus
+*   [33m59b7191[m chore: publish LSPDMS 2.0 launcher setup
+[32m|[m[33m\[m  
+[32m|[m * [33m7870946[m migrating data all to laragon, requiring laragon, pushing the fixed migration
+* [33m|[m [33mc151569[m Chatbot done, final touches and R4-02, R4-03 only missing
+[33m|[m[33m/[m  

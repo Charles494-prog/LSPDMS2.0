@@ -29,7 +29,7 @@ class AssignedTaskTest extends TestCase
         $taskId = $this->as($head)->postJson(route('assigned-tasks.store'), [
             'title' => 'Update the Purok 3 registry',
             'body' => 'Check the missing baptism dates.',
-            'due_date' => '2026-11-05',
+            'due_date' => now('Asia/Manila')->addWeek()->toDateString(), // must not be in the past
             'members' => [
                 ['id' => $ana->id, 'can_comment' => true, 'can_complete' => true],
                 ['id' => $ben->id, 'can_comment' => false, 'can_complete' => false],

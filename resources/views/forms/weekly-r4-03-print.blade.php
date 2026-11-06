@@ -20,7 +20,7 @@
 </style>
 <main class="r403-print">
     <nav class="r403-tools">
-        <a href="{{ route('forms.weekly.r4-03', ['kalagayan' => $selectedStatus]) }}">Back to R4-03 Generator</a>
+        <a href="{{ route('forms.weekly.r4-02', in_array($selectedStatus, ['MS', 'UWP'], true) ? ['kalagayan' => $selectedStatus] : []) }}">Back to R4-02 &amp; R4-03 Generator</a>
         <button type="button" onclick="window.print()">Print / Save as PDF</button>
     </nav>
     <h1>R4-03</h1>

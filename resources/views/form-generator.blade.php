@@ -10,8 +10,7 @@
     // Generate Forms: the weekly and monthly reports. Deliberation is its own section below.
     $generateGroups = [
         ['id' => 'generate-weekly', 'label' => 'Weekly Forms', 'text' => 'Weekly reporting forms and summaries.', 'cards' => [
-            ['url' => route('forms.weekly.r4-02'), 'icon' => $doc, 'title' => 'R4-02 Generator', 'text' => 'Filter R4-01 members, assign configured Hakbang codes, and save a printable R4-02.', 'tag' => 'Open R4-02 Maker'],
-            ['url' => route('forms.weekly.r4-03'), 'icon' => '<path d="M7 3h7l5 5v13H5V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5M8 13h8M8 17h5"/>', 'title' => 'R4-03 Generator', 'text' => 'Summarize saved R4-02 forms, grouped only by Puroks with generated reports.', 'tag' => 'Open R4-03 Maker'],
+            ['url' => route('forms.weekly.r4-02'), 'icon' => $doc, 'title' => 'R4-02 & R4-03 Generator', 'text' => 'Filter R4-01 members, add Hakbang codes if needed, and download the R4-02 and R4-03.', 'tag' => 'Open R4-02 & R4-03'],
         ]],
         ['id' => 'generate-monthly', 'label' => 'Monthly Forms', 'text' => 'This month\'s Resumen and R4-01, and the saved snapshots.', 'cards' => [
             ['url' => route('forms.monthly.generators'), 'icon' => '<path d="M4 19V5m0 14h16M8 15l3-4 3 2 5-6"/>', 'title' => 'Resumen & R4-01 Generator (This Month)', 'text' => 'Open both monthly generators together, with Resumen first and R4-01 below.', 'tag' => 'Open Monthly Generators'],

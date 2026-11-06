@@ -28,11 +28,11 @@ class FormGeneratorTest extends TestCase
         $this->withSession(['login_user' => ['id' => $user->id]])
             ->get(route('form-generator'))
             ->assertOk()
-            ->assertSeeInOrder(['id="generate-forms"', 'id="generate-weekly"', 'R4-02 Generator', 'R4-03 Generator',
+            ->assertSeeInOrder(['id="generate-forms"', 'id="generate-weekly"', 'R4-02 &amp; R4-03 Generator',
                 'id="generate-monthly"', 'Resumen &amp; R4-01 Generator (This Month)', 'R4-01 Snapshots',
                 'id="deliberation"', 'Add', 'Subtract', 'Modify'], false)
             ->assertSee(route('forms.weekly.r4-02'), false)
-            ->assertSee(route('forms.weekly.r4-03'), false)
+            ->assertDontSee(route('forms.weekly.r4-03').'"', false)
             ->assertSee(route('forms.monthly.generators'), false)
             ->assertSee(route('forms.monthly.r4-01.snapshots'), false)
             ->assertSee(route('forms.monthly.deliberation', ['mode' => 'subtract']), false)
@@ -61,7 +61,7 @@ class FormGeneratorTest extends TestCase
         $this->withSession(['login_user' => ['id' => $user->id]])
             ->get(route('forms.weekly.r4-03'))
             ->assertOk()
-            ->assertSeeInOrder(['aria-label="Breadcrumb"', 'Form Generator', 'Generate Forms', 'Weekly', 'R4-03 Generator'], false);
+            ->assertSeeInOrder(['aria-label="Breadcrumb"', 'Form Generator', 'Generate Forms', 'Weekly', 'R4-02 &amp; R4-03 Generator'], false);
 
         $this->withSession(['login_user' => ['id' => $user->id]])
             ->get(route('forms.monthly.deliberation', ['mode' => 'subtract']))

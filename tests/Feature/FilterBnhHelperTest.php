@@ -544,6 +544,53 @@ class FilterBnhHelperTest extends TestCase
         $this->assertSame(1, substr_count($all, 'Verdict = Qualified for BNH'));
     }
 
+    public function test_resumen_names_download_lists_members_by_purok_grupo_and_follows_show_counts(): void
+    {
+        [$purok2a] = $this->makeSplitPuroks();
+        $this->makeRecord(['full_name' => 'Ana Qualified', 'purok' => '2', 'grupo' => '1', 'gender' => 'Female', 'status' => 'MS', 'is_valid1' => true, 'is_valid2' => true]);
+        $this->makeRecord(['full_name' => 'Ben Halfway', 'purok' => '2', 'grupo' => '1', 'gender' => 'Male', 'status' => 'UWP', 'is_valid1' => true]);
+        $this->makeRecord(['full_name' => 'Cora Unchecked', 'purok' => '2', 'grupo' => '2', 'gender' => 'Female', 'status' => 'MS']);
+        $session = ['login_user' => ['id' => 9005]];
+        $filters = ['purok_id' => $purok2a->id, 'status' => 'ALL'];
+        $qualifiedHeading = '<h3>Kwalipikado sa Pagtanggap ng BNH</h3>';
+        $minusesHeading = '<h3>Hindi Kwalipikado sa Pagtanggap ng BNH</h3>';
+
+        $both = $this->withSession($session)
+            ->get(route('filter-bnh-helper.names-word', $filters))
+            ->assertOk()
+            ->assertHeader('content-type', 'application/msword; charset=UTF-8')
+            ->streamedContent();
+        $order = array_map(fn (string $text): int|false => strpos($both, $text), [
+            '<h2>2a-1</h2>', $qualifiedHeading, '1. Ana Qualified', $minusesHeading, '1. Ben Halfway', '<h2>2a-2</h2>', '1. Cora Unchecked',
+        ]);
+        $this->assertNotContains(false, $order);
+        $sorted = $order;
+        sort($sorted);
+        $this->assertSame($sorted, $order);
+        // 2a-2 has nobody qualified: its qualified list says so instead of being blank.
+        $this->assertSame(1, substr_count($both, '<p class="none">Wala</p>'));
+
+        $qualified = $this->withSession($session)
+            ->get(route('filter-bnh-helper.names-word', $filters + ['show_qualified' => 1, 'show_minuses' => 0]))
+            ->streamedContent();
+        $this->assertStringContainsString('1. Ana Qualified', $qualified);
+        $this->assertStringNotContainsString($minusesHeading, $qualified);
+        $this->assertStringNotContainsString('Ben Halfway', $qualified);
+        $this->assertStringNotContainsString('2a-2', $qualified);
+
+        $minuses = $this->withSession($session)
+            ->get(route('filter-bnh-helper.names-word', $filters + ['show_qualified' => 0, 'show_minuses' => 1]))
+            ->streamedContent();
+        $this->assertStringNotContainsString($qualifiedHeading, $minuses);
+        $this->assertStringNotContainsString('Ana Qualified', $minuses);
+        $this->assertStringContainsString('1. Ben Halfway', $minuses);
+        $this->assertStringContainsString('1. Cora Unchecked', $minuses);
+
+        $this->withSession($session)
+            ->get(route('filter-bnh-helper.names-word', $filters + ['show_qualified' => 0, 'show_minuses' => 0]))
+            ->assertStatus(422);
+    }
+
     /**
      * @return array{0: Purok, 1: Purok}
      */
