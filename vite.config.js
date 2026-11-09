@@ -29,7 +29,9 @@ export default defineConfig(({ mode }) => {
                 host: viteHost,
             },
             watch: {
-                ignored: ['**/storage/framework/views/**'],
+                // Nothing under storage is front-end code. Saved report .html files (and the test suite's
+                // temporary copies) would otherwise make every open page reload.
+                ignored: ['**/storage/**'],
             },
             fs: {
                 // Pages only ever load the front-end sources and packages; without this Vite would
